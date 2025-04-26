@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ynab-unlinked"
+dynamic = ["version"]
+description = ''
+readme = "README.md"
+requires-python = ">=3.13"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "Juanpe Araque", email = "erjuanpea@gmail.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "ynab",
+  "typer",
+  "rapidfuzz",
+  "unidecode"
+]
+
+[project.scripts]
+ynab-unlinked = "ynab_unlinked:main"
+
+[project.urls]
+Documentation = "https://github.com/Juanpe Araque/ynab-unlinked#readme"
+Issues = "https://github.com/Juanpe Araque/ynab-unlinked/issues"
+Source = "https://github.com/Juanpe Araque/ynab-unlinked"
+
+[tool.hatch.version]
+path = "src/ynab_unlinked/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/ynab_unlinked tests}"
+
+[tool.hatch.envs.default.scripts]
+cli = "python src/ynab_unlinked {args}"
+
+[tool.coverage.run]
+source_pkgs = ["ynab_unlinked", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/ynab_unlinked/__about__.py",
+]
+
+[tool.coverage.paths]
+ynab_unlinked = ["src/ynab_unlinked", "*/ynab-unlinked/src/ynab_unlinked"]
+tests = ["tests", "*/ynab-unlinked/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
