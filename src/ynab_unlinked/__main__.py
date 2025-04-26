@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from pathlib import Path
 from typing_extensions import Annotated
 from typing import assert_never
@@ -11,6 +12,7 @@ from ynab_unlinked.config import ensure_config, Config
 from ynab_unlinked.client import Client
 from ynab_unlinked.parsers import SabadellParser, Parser, ParserType, InputType
 from ynab_unlinked import display, utils
+from ynab_unlinked.models import Transaction
 
 
 app = typer.Typer(name="ynab-unlinked", no_args_is_help=True)
@@ -67,6 +69,18 @@ def get_parser(parser_type: ParserType) -> Parser:
             assert_never(never)
 
 
+def filter_transactions(
+    transactions: list[Transaction], config: Config
+) -> Generator[Transaction, None, None]:
+    if config.checkpoint is None:
+        yield from transactions
+        return
+
+    yield from (
+        t for t in transactions if t.date >= config.checkpoint.latest_date_processed
+    )
+
+
 @app.command()
 def cli(
     input_file: Annotated[
@@ -114,7 +128,10 @@ def cli(
         raise typer.Exit()
 
     parsed_input = sorted(
-        _parser.parse(input_file, config),
+        filter_transactions(
+            _parser.parse(input_file, config),
+            config,
+        ),
         key=lambda t: t.date,
         reverse=True,
     )
@@ -148,6 +165,7 @@ def cli(
 
     if not new_transactions and not transactions_to_update:
         print("[bold blue]🎉 All done! Nothing to do.")
+        config.update_and_save(parsed_input[0])
         raise typer.Exit()
 
     print(f"[bold]New transactions:      {len(new_transactions)}")
@@ -158,7 +176,7 @@ def cli(
             client.create_transactions(new_transactions)
             client.update_transactions(transactions_to_update)
 
-        config.update_and_save(parsed_input[-1])
+    config.update_and_save(parsed_input[0])
 
     print("[bold blue]🎉 All done!")
 

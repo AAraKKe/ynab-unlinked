@@ -26,11 +26,11 @@ class Config(BaseModel):
         CONFIG_PATH.write_text(self.model_dump_json(indent=4))
 
     def update_and_save(self, last_transaction: Transaction):
-        if self.checkpoint is None:
-            self.checkpoint = Checkpoint(
-                latest_date_processed=last_transaction.date,
-                latest_transaction_hash=hash(last_transaction),
-            )
+        self.checkpoint = Checkpoint(
+            # Keep one day of context
+            latest_date_processed=last_transaction.date - dt.timedelta(days=1),
+            latest_transaction_hash=hash(last_transaction),
+        )
         self.save()
 
     @staticmethod
