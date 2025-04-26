@@ -46,7 +46,7 @@ extra-dependencies = [
 check = "mypy --install-types --non-interactive {args:src/ynab_unlinked tests}"
 
 [tool.hatch.envs.default.scripts]
-cli = "python src/ynab_unlinked {args}"
+yul = "python src/ynab_unlinked {args}"
 
 [tool.coverage.run]
 source_pkgs = ["ynab_unlinked", "tests"]

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from ynab_unlinked.models import Transaction
 
 
-CONFIG_PATH = Path.home() / ".config/yna_unlinked/config.json"
+CONFIG_PATH = Path.home() / ".config/ynab_unlinked/config.json"
 
 
 class Checkpoint(BaseModel):
