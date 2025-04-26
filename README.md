@@ -2,7 +2,7 @@
 
 YNAB Unlinked is a CLI tools that allows creating transactions in your YNAB account from any input file.
 
-You only need a [Parser](src/ynab_unlinked/parser.py) that knows how to parse your specific file and the tool will take care of the rest.
+You only need a [Parser](src/ynab_unlinked/parsers/_protocol.py) that knows how to parse your specific file and the tool will take care of the rest.
 
 ## Usage
 
