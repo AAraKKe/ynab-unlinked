@@ -104,6 +104,10 @@ def cli(
     config = Config.load() if ensure_config() else prompt_for_config()
 
     _parser = get_parser(parser)
+    if not _parser.is_valid_input_type(input_type):
+        print(f"[bold red]The parser '{parser}' does not support input type '{input_type}'")
+        raise typer.Exit()
+
     parsed_input = _parser.parse(input_file, config)
 
     if parse_only:
