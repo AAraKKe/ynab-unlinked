@@ -42,7 +42,7 @@ class SabadellParser:
             else:
                 start = False
 
-        return sorted(transactions, key=lambda t: t.date)
+        return transactions
 
     def __parse_date(self, raw: str) -> dt.date:
         current_year = dt.date.today().year

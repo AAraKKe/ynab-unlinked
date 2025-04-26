@@ -31,6 +31,7 @@ class Config(BaseModel):
                 latest_date_processed=last_transaction.date,
                 latest_transaction_hash=hash(last_transaction),
             )
+        self.save()
 
     @staticmethod
     def load() -> Config:

@@ -46,6 +46,7 @@ class Client:
                 payee_name=t.ynab_payee,
                 cleared=t.ynab_cleared_status,
                 amount=int(t.amount * 1000),
+                approved=True,
             )
             for t in transactions
         ]
@@ -62,7 +63,9 @@ class Client:
 
         transactions_to_update = [
             ynab.SaveTransactionWithIdOrImportId(
-                id=t.ynab_id, cleared=t.ynab_cleared_status
+                id=t.ynab_id,
+                cleared=t.ynab_cleared_status,
+                approved=True,
             )
             for t in transactions
         ]

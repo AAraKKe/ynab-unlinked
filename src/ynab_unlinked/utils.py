@@ -18,7 +18,9 @@ def preprocess_payee(value: str) -> str:
 
 
 def match_transactions(
-    transactions: list[Transaction], ynab_transactions: list[TransactionDetail]
+    transactions: list[Transaction],
+    ynab_transactions: list[TransactionDetail],
+    reconcile: bool,
 ):
     """Add transacation id to the transaction if it is found in ynab"""
 
@@ -31,7 +33,7 @@ def match_transactions(
                 abs((t.var_date - transaction.date).days) <= TIME_WINDOW_MATCH_DAYS
             )
 
-            fuzz_raio = fuzz.ratio(
+            fuzz_raio = fuzz.partial_ratio(
                 transaction.payee,
                 t.payee_name,
                 score_cutoff=FUZZY_MATCH_THRESHOLD,
@@ -43,9 +45,11 @@ def match_transactions(
 
             if date_window and similar_payee and same_amount:
                 transaction.ynab_id = t.id
-                transaction.reconciled = True
-                if t.cleared is not TransactionClearedStatus.RECONCILED:
-                    transaction.needs_update = True
+                transaction.reconcile_from_ynab(t.cleared)
+                if reconcile:
+                    transaction.reconciled = True
+                    if t.cleared is not TransactionClearedStatus.RECONCILED:
+                        transaction.needs_update = True
                 return
 
     for t in transactions:
@@ -59,7 +63,7 @@ def add_payee(transactions: list[Transaction], client: Client):
     def match_payee(transaction: Transaction):
         for p in payees:
             if (
-                fuzz.ratio(
+                fuzz.partial_ratio(
                     transaction.payee,
                     p.name,
                     score_cutoff=FUZZY_MATCH_THRESHOLD,
@@ -80,6 +84,7 @@ def augmnet_transactions(
     transactions: list[Transaction],
     ynab_transactions: list[TransactionDetail],
     client: Client,
+    reconcile: bool,
 ):
-    match_transactions(transactions, ynab_transactions)
+    match_transactions(transactions, ynab_transactions, reconcile)
     add_payee(transactions, client)

@@ -89,6 +89,9 @@ def cli(
     parse_only: Annotated[
         bool, typer.Option(help="Just parse the input to view transactions")
     ] = False,
+    reconcile: Annotated[
+        bool, typer.Option(help="Reconcile cleared transactions")
+    ] = False,
 ):
     """
     Create transations in your YNAB account from a list of transactions from Sbadell export of a credit card.
@@ -105,10 +108,16 @@ def cli(
 
     _parser = get_parser(parser)
     if not _parser.is_valid_input_type(input_type):
-        print(f"[bold red]The parser '{parser}' does not support input type '{input_type}'")
+        print(
+            f"[bold red]The parser '{parser}' does not support input type '{input_type}'"
+        )
         raise typer.Exit()
 
-    parsed_input = _parser.parse(input_file, config)
+    parsed_input = sorted(
+        _parser.parse(input_file, config),
+        key=lambda t: t.date,
+        reverse=True,
+    )
 
     if parse_only:
         display.transaction_table(parsed_input)
@@ -125,7 +134,7 @@ def cli(
     print("[bold green]✔ Transactions read")
 
     with Status("Augmenting transactions..."):
-        utils.augmnet_transactions(parsed_input, ynab_transactions, client)
+        utils.augmnet_transactions(parsed_input, ynab_transactions, client, reconcile)
     print("[bold green]✔ Transactions augmneted with YNAB information")
 
     with Status("Preparing transactions to upload..."):
@@ -137,9 +146,12 @@ def cli(
 
     display.transactions_to_upload(parsed_input)
 
-    if len(new_transactions) == 0 and len(transactions_to_update) == 0:
+    if not new_transactions and not transactions_to_update:
         print("[bold blue]🎉 All done! Nothing to do.")
         raise typer.Exit()
+
+    print(f"[bold]New transactions:      {len(new_transactions)}")
+    print(f"[bold]Transactions to update {len(transactions_to_update)}")
 
     if Confirm.ask("Do you want to continue and create the transactions?"):
         with Status("Creating/Updating transactions..."):

@@ -1,5 +1,6 @@
 import datetime as dt
 from dataclasses import dataclass
+from typing import assert_never
 
 from ynab.models.transaction_cleared_status import TransactionClearedStatus
 
@@ -43,6 +44,20 @@ class Transaction:
     @property
     def needs_creation(self) -> bool:
         return not (self.ynab_id or self.needs_update)
+
+    def reconcile_from_ynab(self, ynab_cleared: TransactionClearedStatus):
+        match ynab_cleared:
+            case TransactionClearedStatus.RECONCILED:
+                self.reconciled = True
+                self.cleared = True
+            case TransactionClearedStatus.CLEARED:
+                self.reconciled = False
+                self.cleared = True
+            case TransactionClearedStatus.UNCLEARED:
+                self.reconciled = False
+                self.cleared = False
+            case _:
+                assert_never(ynab_cleared)
 
     def __str__(self) -> str:
         return f"{self.date:%m-%d-%Y} | {self.pretty_payee:<20} | {self.pretty_amount:>10} | {self.cleared_status:<15}"
