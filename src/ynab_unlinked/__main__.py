@@ -180,8 +180,8 @@ def cli(
         config.update_and_save(transactions[0])
         raise typer.Exit()
 
-    print(f"[bold]New transactions:      {len(new_transactions)}")
-    print(f"[bold]Transactions to update {len(transactions_to_update)}")
+    print(f"[bold]New transactions:       {len(new_transactions)}")
+    print(f"[bold]Transactions to update: {len(transactions_to_update)}")
 
     if Confirm.ask("Do you want to continue and create the transactions?"):
         with Status("Creating/Updating transactions..."):
