@@ -99,29 +99,37 @@ def cli(
             dir_okay=False,
             readable=True,
             help="The input file with the CC transations",
+            show_default=False,
         ),
     ],
     parser: Annotated[
         ParserType,
-        typer.Option(help="Parser to parse the input file"),
+        typer.Option(
+            "--parser",
+            "-p",
+            help="Select the parser that represents the entity that generated the input file.",
+        ),
     ] = ParserType.SABADELL,
     input_type: Annotated[
-        InputType, typer.Option(help="The type of the input file.")
+        InputType,
+        typer.Option(
+            "--type",
+            "-t",
+            help="The input file type. Not all parsers support all input types.",
+        ),
     ] = InputType.TXT,
-    parse_only: Annotated[
-        bool, typer.Option(help="Just parse the input to view transactions")
+    show: Annotated[
+        bool,
+        typer.Option(help="Just show the transactions available in the input file."),
     ] = False,
     reconcile: Annotated[
-        bool, typer.Option(help="Reconcile cleared transactions")
+        bool, typer.Option("-r", "--reconcile", help="Reconcile cleared transactions")
     ] = False,
 ):
     """
-    Create transations in your YNAB account from a list of transactions from Sbadell export of a credit card.
+    Create transations in your YNAB account from a bank export of your extract.
     \n
 
-    Process INPUT-FILE, that contains a list of credit card transactions from Sabadell, and create transactions in your ynab account.
-
-    \n
     The first time the command is run you will be asked some questions to setup your YNAB connection. After that,
     transaction processing won't require any input unless there are some actions to take for specific transactions.
     """
@@ -142,7 +150,7 @@ def cli(
     )
     preprocess_transactions(parsed_input, config)
 
-    if parse_only:
+    if show:
         display.transaction_table(parsed_input)
         raise typer.Exit()
 

@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ynab-unlinked = "ynab_unlinked:main"
+yul = "ynab_unlinked.__main__:main"
 
 [project.urls]
 Documentation = "https://github.com/Juanpe Araque/ynab-unlinked#readme"
