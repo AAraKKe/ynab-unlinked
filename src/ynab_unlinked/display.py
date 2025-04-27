@@ -57,8 +57,9 @@ def transactions_to_upload(transactions: list[TransactionWithYnabData]):
     ]
     table = Table(
         *columns,
-        title="Transactions to crate/update",
-        caption="Final set of transactions to be added to YNAB. [blue bold]To update[/] and [bold green]create.",
+        title="Recent Transactions",
+        caption="Transactions to [blue bold]update[/] and [bold green]create[/]. Only most recent transactions are shown.",
+        box=box.SIMPLE,
     )
 
     for transaction in transactions:
