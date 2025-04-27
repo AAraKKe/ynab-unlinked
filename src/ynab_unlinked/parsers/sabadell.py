@@ -25,11 +25,9 @@ class SabadellParser:
                 continue
 
             if groups := TRANSACTION_PATTER.match(line):
-                parsed_date = self.__parse_date(groups[1])
-
                 transactions.append(
                     Transaction(
-                        date=parsed_date,
+                        date=self.__parse_date(groups[1]),
                         payee=self.__parse_payee(groups[2]),
                         amount=-self.__parse_amount(groups[3]),
                     )
