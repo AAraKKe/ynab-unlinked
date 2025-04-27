@@ -9,7 +9,7 @@ You only need a [Parser](src/ynab_unlinked/parsers/_protocol.py) that knows how 
 Just run
 
 ```bash
-hatch run cli --help
+hatch run yul --help
 ```
 
 ## Supported Parsers
