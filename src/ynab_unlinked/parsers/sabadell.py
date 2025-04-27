@@ -26,17 +26,12 @@ class SabadellParser:
 
             if groups := TRANSACTION_PATTER.match(line):
                 parsed_date = self.__parse_date(groups[1])
-                past_transaction = (
-                    config.checkpoint is not None
-                    and parsed_date < config.checkpoint.latest_date_processed
-                )
 
                 transactions.append(
                     Transaction(
                         date=parsed_date,
                         payee=self.__parse_payee(groups[2]),
                         amount=-self.__parse_amount(groups[3]),
-                        past=past_transaction,
                     )
                 )
             else:
@@ -54,6 +49,6 @@ class SabadellParser:
     def __parse_amount(self, raw: str) -> float:
         return float(raw.replace("EUR", "").replace(",", "."))
 
-    def is_valid_input_type(self, input_type: InputType) -> bool:
+    def supports_input_type(self, input_type: InputType) -> bool:
         """Only supports TXT for now"""
         return input_type is InputType.TXT

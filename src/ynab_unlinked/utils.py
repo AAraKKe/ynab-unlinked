@@ -4,7 +4,7 @@ from rapidfuzz import fuzz
 
 from ynab.models.transaction_detail import TransactionDetail
 from ynab.models.transaction_cleared_status import TransactionClearedStatus
-from ynab_unlinked.models import Transaction
+from ynab_unlinked.models import TransactionWithYnabData
 from ynab_unlinked.client import Client
 
 
@@ -18,13 +18,13 @@ def preprocess_payee(value: str) -> str:
 
 
 def match_transactions(
-    transactions: list[Transaction],
+    transactions: list[TransactionWithYnabData],
     ynab_transactions: list[TransactionDetail],
     reconcile: bool,
 ):
     """Add transacation id to the transaction if it is found in ynab"""
 
-    def match_single_transaction(transaction: Transaction):
+    def match_single_transaction(transaction: TransactionWithYnabData):
         for t in ynab_transactions:
             if t.payee_name is None:
                 continue
@@ -45,22 +45,29 @@ def match_transactions(
 
             if date_window and similar_payee and same_amount:
                 transaction.ynab_id = t.id
-                transaction.reconcile_from_ynab(t.cleared)
+                transaction.cleared = t.cleared  # Remove the default value
+                # If it is uncleared, clear it
+                if t.cleared is TransactionClearedStatus.UNCLEARED:
+                    transaction.cleared = TransactionClearedStatus.CLEARED
+
+                # If we are requesting to reconcile matching transactions, set them
                 if reconcile:
-                    transaction.reconciled = True
-                    if t.cleared is not TransactionClearedStatus.RECONCILED:
-                        transaction.needs_update = True
+                    transaction.cleared = TransactionClearedStatus.RECONCILED
+
+                # Mark for update any update on the cleared status
+                if transaction.cleared is not t.cleared:
+                    transaction.needs_update = True
                 return
 
     for t in transactions:
         match_single_transaction(t)
 
 
-def add_payee(transactions: list[Transaction], client: Client):
+def add_payee(transactions: list[TransactionWithYnabData], client: Client):
     """Try to identify the payee in the transaction with an existing payee in YNAB"""
     payees = client.payees()
 
-    def match_payee(transaction: Transaction):
+    def match_payee(transaction: TransactionWithYnabData):
         for p in payees:
             if (
                 fuzz.partial_ratio(
@@ -72,7 +79,7 @@ def add_payee(transactions: list[Transaction], client: Client):
                 > 0
             ):
                 transaction.ynab_payee = p.name
-                transaction.payee_id = p.id
+                transaction.ynab_payee_id = p.id
                 return
         transaction.ynab_payee = transaction.payee
 
@@ -81,7 +88,7 @@ def add_payee(transactions: list[Transaction], client: Client):
 
 
 def augmnet_transactions(
-    transactions: list[Transaction],
+    transactions: list[TransactionWithYnabData],
     ynab_transactions: list[TransactionDetail],
     client: Client,
     reconcile: bool,

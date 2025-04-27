@@ -1,4 +1,5 @@
 from collections.abc import Generator
+import datetime as dt
 from pathlib import Path
 from typing_extensions import Annotated
 from typing import assert_never
@@ -8,11 +9,11 @@ from rich import print
 from rich.status import Status
 from rich.prompt import Prompt, Confirm
 
-from ynab_unlinked.config import ensure_config, Config
+from ynab_unlinked.config import ensure_config, Config, TRANSACTION_GRACE_PERIOD_DAYS
 from ynab_unlinked.client import Client
-from ynab_unlinked.parsers import SabadellParser, Parser, ParserType, InputType
+from ynab_unlinked.parsers import ParserType, InputType, get_parser
 from ynab_unlinked import display, utils
-from ynab_unlinked.models import Transaction
+from ynab_unlinked.models import Transaction, TransactionWithYnabData
 
 
 app = typer.Typer(name="ynab-unlinked", no_args_is_help=True)
@@ -61,14 +62,6 @@ def prompt_for_config():
     return config
 
 
-def get_parser(parser_type: ParserType) -> Parser:
-    match parser_type:
-        case ParserType.SABADELL:
-            return SabadellParser()
-        case _ as never:
-            assert_never(never)
-
-
 def filter_transactions(
     transactions: list[Transaction], config: Config
 ) -> Generator[Transaction, None, None]:
@@ -79,6 +72,21 @@ def filter_transactions(
     yield from (
         t for t in transactions if t.date >= config.checkpoint.latest_date_processed
     )
+
+
+def add_past_to_transactions(transactions: list[Transaction], config: Config):
+    if config.checkpoint is None:
+        return
+
+    for t in transactions:
+        if t.date < config.checkpoint.latest_date_processed + dt.timedelta(
+            days=TRANSACTION_GRACE_PERIOD_DAYS
+        ):
+            t.past = True
+
+
+def preprocess_transactions(transactions: list[Transaction], config: Config):
+    add_past_to_transactions(transactions, config)
 
 
 @app.command()
@@ -121,25 +129,30 @@ def cli(
     config = Config.load() if ensure_config() else prompt_for_config()
 
     _parser = get_parser(parser)
-    if not _parser.is_valid_input_type(input_type):
+    if not _parser.supports_input_type(input_type):
         print(
             f"[bold red]The parser '{parser}' does not support input type '{input_type}'"
         )
         raise typer.Exit()
 
     parsed_input = sorted(
-        filter_transactions(
-            _parser.parse(input_file, config),
-            config,
-        ),
+        _parser.parse(input_file, config),
         key=lambda t: t.date,
         reverse=True,
     )
+    preprocess_transactions(parsed_input, config)
 
     if parse_only:
         display.transaction_table(parsed_input)
         raise typer.Exit()
 
+    transactions = [
+        TransactionWithYnabData(t)
+        for t in filter_transactions(
+            _parser.parse(input_file, config),
+            config,
+        )
+    ]
     client = Client(config)
 
     with Status("Reading transactions..."):
@@ -151,21 +164,20 @@ def cli(
     print("[bold green]✔ Transactions read")
 
     with Status("Augmenting transactions..."):
-        utils.augmnet_transactions(parsed_input, ynab_transactions, client, reconcile)
+        utils.augmnet_transactions(transactions, ynab_transactions, client, reconcile)
     print("[bold green]✔ Transactions augmneted with YNAB information")
 
     with Status("Preparing transactions to upload..."):
-        pass
+        new_transactions = [t for t in transactions if t.needs_creation]
+        transactions_to_update = [t for t in transactions if t.needs_update]
+
     print("[bold green]✔ Transactions prepared")
 
-    new_transactions = [t for t in parsed_input if t.needs_creation]
-    transactions_to_update = [t for t in parsed_input if t.needs_update]
-
-    display.transactions_to_upload(parsed_input)
+    display.transactions_to_upload(transactions)
 
     if not new_transactions and not transactions_to_update:
         print("[bold blue]🎉 All done! Nothing to do.")
-        config.update_and_save(parsed_input[0])
+        config.update_and_save(transactions[0])
         raise typer.Exit()
 
     print(f"[bold]New transactions:      {len(new_transactions)}")
@@ -176,7 +188,7 @@ def cli(
             client.create_transactions(new_transactions)
             client.update_transactions(transactions_to_update)
 
-    config.update_and_save(parsed_input[0])
+    config.update_and_save(transactions[0])
 
     print("[bold blue]🎉 All done!")
 

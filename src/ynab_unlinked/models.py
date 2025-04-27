@@ -10,13 +10,7 @@ class Transaction:
     date: dt.date
     payee: str
     amount: float
-    past: bool
-    cleared: bool = True
-    reconciled: bool = False
-    ynab_id: str | None = None
-    payee_id: str | None = None
-    needs_update: bool = False
-    ynab_payee: str | None = None
+    past: bool = False
 
     @property
     def pretty_payee(self) -> str:
@@ -26,41 +20,36 @@ class Transaction:
     def pretty_amount(self) -> str:
         return f"{self.amount:.2f}€"
 
-    @property
-    def cleared_status(self) -> str:
-        if self.reconciled:
-            return "🔒 Reconciled"
+    def __hash__(self) -> int:
+        return hash(f"{self.date:%m-%d-%Y}{self.payee}{self.amount}")
 
-        return "✅ Cleared" if self.cleared else "Uncleared"
 
-    @property
-    def ynab_cleared_status(self) -> TransactionClearedStatus:
-        if self.reconciled:
-            return TransactionClearedStatus.RECONCILED
-        if self.cleared:
-            return TransactionClearedStatus.CLEARED
-        return TransactionClearedStatus.UNCLEARED
+class TransactionWithYnabData(Transaction):
+    def __init__(self, transaction: Transaction):
+        super().__init__(
+            date=transaction.date,
+            payee=transaction.payee,
+            amount=transaction.amount,
+            past=transaction.past,
+        )
+        self.ynab_id: str | None = None
+        self.ynab_payee_id: str | None = None
+        self.ynab_payee: str | None = None
+        self.cleared: TransactionClearedStatus = TransactionClearedStatus.UNCLEARED
+        self.needs_update: bool = False
 
     @property
     def needs_creation(self) -> bool:
         return not (self.ynab_id or self.needs_update)
 
-    def reconcile_from_ynab(self, ynab_cleared: TransactionClearedStatus):
-        match ynab_cleared:
+    @property
+    def cleared_status(self) -> str:
+        match self.cleared:
             case TransactionClearedStatus.RECONCILED:
-                self.reconciled = True
-                self.cleared = True
+                return "🔒 Reconciled"
             case TransactionClearedStatus.CLEARED:
-                self.reconciled = False
-                self.cleared = True
+                return "✅ Cleared"
             case TransactionClearedStatus.UNCLEARED:
-                self.reconciled = False
-                self.cleared = False
-            case _:
-                assert_never(ynab_cleared)
-
-    def __str__(self) -> str:
-        return f"{self.date:%m-%d-%Y} | {self.pretty_payee:<20} | {self.pretty_amount:>10} | {self.cleared_status:<15}"
-
-    def __hash__(self) -> int:
-        return hash(f"{self.date:%m-%d-%Y}{self.payee}{self.amount}")
+                return "Uncleared"
+            case _ as never:
+                assert_never(never)

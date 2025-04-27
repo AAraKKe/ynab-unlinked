@@ -12,5 +12,25 @@ class InputType(StrEnum):
 
 
 class Parser(Protocol):
-    def parse(self, input_file: Path, config: Config) -> list[Transaction]: ...
-    def is_valid_input_type(self, input_type: InputType) -> bool: ...
+    def parse(self, input_file: Path, config: Config) -> list[Transaction]:
+        """
+        Parse an input file into a list of Transaction objects.
+
+        This is the main method of the Parser protocol. Any input file can be converted
+        into an abstraction of Transaction objects. These objects only contain information
+        related with the transactions themselves:
+        - Date
+        - Payee
+        - Amount
+
+        `ynab-unlinked` will understand these transactions and enrich them when necesary to
+        ensure the best matching when pushing them to YNAB.
+        """
+        ...
+
+    def supports_input_type(self, input_type: InputType) -> bool:
+        """
+        Returns True if the parser ipmlementing this protocol is able to process
+        a given input type.
+        """
+        ...

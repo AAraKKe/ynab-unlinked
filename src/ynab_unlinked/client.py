@@ -2,7 +2,7 @@ import datetime as dt
 import ynab
 
 from ynab_unlinked.config import Config
-from ynab_unlinked.models import Transaction
+from ynab_unlinked.models import TransactionWithYnabData
 
 
 class Client:
@@ -32,7 +32,7 @@ class Client:
         response = api.get_payees(self.config.budget_id)
         return response.data.payees
 
-    def create_transactions(self, transactions: list[Transaction]):
+    def create_transactions(self, transactions: list[TransactionWithYnabData]):
         if not transactions:
             return
 
@@ -42,9 +42,9 @@ class Client:
             ynab.NewTransaction(
                 account_id=self.config.account_id,
                 date=t.date,
-                payee_id=t.payee_id,
+                payee_id=t.ynab_payee_id,
                 payee_name=t.ynab_payee,
-                cleared=t.ynab_cleared_status,
+                cleared=t.cleared,
                 amount=int(t.amount * 1000),
                 approved=True,
             )
@@ -55,7 +55,7 @@ class Client:
             data=ynab.PostTransactionsWrapper(transactions=transactions_to_create),
         )
 
-    def update_transactions(self, transactions: list[Transaction]):
+    def update_transactions(self, transactions: list[TransactionWithYnabData]):
         if not transactions:
             return
 
@@ -64,7 +64,7 @@ class Client:
         transactions_to_update = [
             ynab.SaveTransactionWithIdOrImportId(
                 id=t.ynab_id,
-                cleared=t.ynab_cleared_status,
+                cleared=t.cleared,
                 approved=True,
             )
             for t in transactions

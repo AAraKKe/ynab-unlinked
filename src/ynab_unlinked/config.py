@@ -9,6 +9,7 @@ from ynab_unlinked.models import Transaction
 
 
 CONFIG_PATH = Path.home() / ".config/ynab_unlinked/config.json"
+TRANSACTION_GRACE_PERIOD_DAYS = 1
 
 
 class Checkpoint(BaseModel):
@@ -27,8 +28,9 @@ class Config(BaseModel):
 
     def update_and_save(self, last_transaction: Transaction):
         self.checkpoint = Checkpoint(
-            # Keep one day of context
-            latest_date_processed=last_transaction.date - dt.timedelta(days=1),
+            latest_date_processed=(
+                last_transaction.date - dt.timedelta(days=TRANSACTION_GRACE_PERIOD_DAYS)
+            ),
             latest_transaction_hash=hash(last_transaction),
         )
         self.save()
