@@ -2,10 +2,9 @@ import unidecode
 
 from rapidfuzz import fuzz
 
-from ynab.models.transaction_detail import TransactionDetail
-from ynab.models.transaction_cleared_status import TransactionClearedStatus
-from ynab_unlinked.models import TransactionWithYnabData
-from ynab_unlinked.client import Client
+from ynab import TransactionDetail, TransactionClearedStatus
+from ynab_unlinked.models import MatchStatus, TransactionWithYnabData
+from ynab_unlinked.ynab_api.client import Client
 
 
 TIME_WINDOW_MATCH_DAYS = 2
@@ -43,9 +42,11 @@ def match_transactions(
 
             same_amount = t.amount / 1000 == transaction.amount
 
-            if date_window and similar_payee and same_amount:
+            if date_window and same_amount:
                 transaction.ynab_id = t.id
                 transaction.cleared = t.cleared  # Remove the default value
+                transaction.ynab_cleared = t.cleared # Keep track of the status before the match
+                transaction.partial_match = t
                 # If it is uncleared, clear it
                 if t.cleared is TransactionClearedStatus.UNCLEARED:
                     transaction.cleared = TransactionClearedStatus.CLEARED
@@ -54,10 +55,11 @@ def match_transactions(
                 if reconcile:
                     transaction.cleared = TransactionClearedStatus.RECONCILED
 
-                # Mark for update any update on the cleared status
-                if transaction.cleared is not t.cleared:
-                    transaction.needs_update = True
-                return
+                # If we are able to match the payee then we mark them as matched right away
+                if similar_payee:
+                    transaction.match_status = MatchStatus.MATCHED
+                else:
+                    transaction.match_status = MatchStatus.PARTIAL_MATCH
 
     for t in transactions:
         match_single_transaction(t)
@@ -68,6 +70,12 @@ def add_payee(transactions: list[TransactionWithYnabData], client: Client):
     payees = client.payees()
 
     def match_payee(transaction: TransactionWithYnabData):
+        # If we have a partial match, use it
+        if transaction.partial_match is not None:
+            transaction.ynab_payee = transaction.partial_match.payee_name
+            transaction.ynab_payee_id = transaction.partial_match.payee_id
+            return
+
         for p in payees:
             if (
                 fuzz.partial_ratio(

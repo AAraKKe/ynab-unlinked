@@ -9,7 +9,7 @@ from ynab_unlinked.models import Transaction
 
 
 CONFIG_PATH = Path.home() / ".config/ynab_unlinked/config.json"
-TRANSACTION_GRACE_PERIOD_DAYS = 1
+TRANSACTION_GRACE_PERIOD_DAYS = 60
 
 
 class Checkpoint(BaseModel):

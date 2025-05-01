@@ -1,4 +1,5 @@
 import datetime as dt
+
 import ynab
 
 from ynab_unlinked.config import Config
@@ -50,6 +51,7 @@ class Client:
             )
             for t in transactions
         ]
+
         api.create_transaction(
             self.config.budget_id,
             data=ynab.PostTransactionsWrapper(transactions=transactions_to_create),

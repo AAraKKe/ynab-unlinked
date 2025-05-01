@@ -1,22 +1,12 @@
-from collections.abc import Generator
-import datetime as dt
-from pathlib import Path
-from typing_extensions import Annotated
-from typing import assert_never
-
 import typer
 from rich import print
+from rich.prompt import Prompt
 from rich.status import Status
-from rich.prompt import Prompt, Confirm
 
-from ynab_unlinked.config import ensure_config, Config, TRANSACTION_GRACE_PERIOD_DAYS
-from ynab_unlinked.client import Client
-from ynab_unlinked.parsers import ParserType, InputType, get_parser
-from ynab_unlinked import display, utils
-from ynab_unlinked.models import Transaction, TransactionWithYnabData
-
-
-app = typer.Typer(name="ynab-unlinked", no_args_is_help=True)
+from ynab_unlinked import app
+from ynab_unlinked.config import Config, ensure_config
+from ynab_unlinked.context_object import YnabUnlinkedCommandObject
+from ynab_unlinked.ynab_api.client import Client
 
 
 def prompt_for_config():
@@ -62,70 +52,8 @@ def prompt_for_config():
     return config
 
 
-def filter_transactions(
-    transactions: list[Transaction], config: Config
-) -> Generator[Transaction, None, None]:
-    if config.checkpoint is None:
-        yield from transactions
-        return
-
-    yield from (
-        t for t in transactions if t.date >= config.checkpoint.latest_date_processed
-    )
-
-
-def add_past_to_transactions(transactions: list[Transaction], config: Config):
-    if config.checkpoint is None:
-        return
-
-    for t in transactions:
-        if t.date < config.checkpoint.latest_date_processed + dt.timedelta(
-            days=TRANSACTION_GRACE_PERIOD_DAYS
-        ):
-            t.past = True
-
-
-def preprocess_transactions(transactions: list[Transaction], config: Config):
-    add_past_to_transactions(transactions, config)
-
-
-@app.command()
-def cli(
-    input_file: Annotated[
-        Path,
-        typer.Argument(
-            exists=True,
-            file_okay=True,
-            dir_okay=False,
-            readable=True,
-            help="The input file with the CC transations",
-            show_default=False,
-        ),
-    ],
-    parser: Annotated[
-        ParserType,
-        typer.Option(
-            "--parser",
-            "-p",
-            help="Select the parser that represents the entity that generated the input file.",
-        ),
-    ] = ParserType.SABADELL,
-    input_type: Annotated[
-        InputType,
-        typer.Option(
-            "--type",
-            "-t",
-            help="The input file type. Not all parsers support all input types.",
-        ),
-    ] = InputType.TXT,
-    show: Annotated[
-        bool,
-        typer.Option(help="Just show the transactions available in the input file."),
-    ] = False,
-    reconcile: Annotated[
-        bool, typer.Option("-r", "--reconcile", help="Reconcile cleared transactions")
-    ] = False,
-):
+@app.callback(no_args_is_help=True)
+def cli(context: typer.Context):
     """
     Create transations in your YNAB account from a bank export of your extract.
     \n
@@ -135,73 +63,13 @@ def cli(
     """
 
     config = Config.load() if ensure_config() else prompt_for_config()
-
-    _parser = get_parser(parser)
-    if not _parser.supports_input_type(input_type):
-        print(
-            f"[bold red]The parser '{parser}' does not support input type '{input_type}'"
-        )
-        raise typer.Exit()
-
-    parsed_input = sorted(
-        _parser.parse(input_file, config),
-        key=lambda t: t.date,
-        reverse=True,
-    )
-    preprocess_transactions(parsed_input, config)
-
-    if show:
-        display.transaction_table(parsed_input)
-        raise typer.Exit()
-
-    transactions = [
-        TransactionWithYnabData(t)
-        for t in filter_transactions(
-            _parser.parse(input_file, config),
-            config,
-        )
-    ]
-    client = Client(config)
-
-    with Status("Reading transactions..."):
-        ynab_transactions = client.transactions(
-            since_date=(
-                config.checkpoint.latest_date_processed if config.checkpoint else None
-            )
-        )
-    print("[bold green]✔ Transactions read")
-
-    with Status("Augmenting transactions..."):
-        utils.augmnet_transactions(transactions, ynab_transactions, client, reconcile)
-    print("[bold green]✔ Transactions augmneted with YNAB information")
-
-    with Status("Preparing transactions to upload..."):
-        new_transactions = [t for t in transactions if t.needs_creation]
-        transactions_to_update = [t for t in transactions if t.needs_update]
-
-    print("[bold green]✔ Transactions prepared")
-
-    display.transactions_to_upload(transactions)
-
-    if not new_transactions and not transactions_to_update:
-        print("[bold blue]🎉 All done! Nothing to do.")
-        config.update_and_save(transactions[0])
-        raise typer.Exit()
-
-    print(f"[bold]New transactions:       {len(new_transactions)}")
-    print(f"[bold]Transactions to update: {len(transactions_to_update)}")
-
-    if Confirm.ask("Do you want to continue and create the transactions?"):
-        with Status("Creating/Updating transactions..."):
-            client.create_transactions(new_transactions)
-            client.update_transactions(transactions_to_update)
-
-    config.update_and_save(transactions[0])
-
-    print("[bold blue]🎉 All done!")
+    context.obj = YnabUnlinkedCommandObject(config=config)
 
 
 def main():
+    # Load all entities
+    import ynab_unlinked.entities  # noqa: F401
+
     app()
 
 

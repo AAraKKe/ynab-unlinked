@@ -5,7 +5,7 @@ import datetime as dt
 from ynab_unlinked.models import Transaction
 from ynab_unlinked.config import Config
 
-from . import InputType
+from .. import InputType
 
 ANCHOR_LINE = "FECHA|CONCEPTO|LOCALIDAD|IMPORTE"
 TRANSACTION_PATTER = re.compile(r"^(\d{2}/\d{2})\|([\w\s]+?)\|[\w\s]+?\|(.*EUR).*")
