@@ -1,13 +1,14 @@
 import datetime as dt
 from collections.abc import Generator
-from typing import List
+from pathlib import Path
 
 from rich import print
-from rich.prompt import Confirm
+from rich.prompt import Confirm, Prompt
 from rich.status import Status
 
 from ynab_unlinked import display, utils
-from ynab_unlinked.config import TRANSACTION_GRACE_PERIOD_DAYS, Config
+from ynab_unlinked.config import TRANSACTION_GRACE_PERIOD_DAYS, Config, EntityConfig
+from ynab_unlinked.entities import Entity
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.ynab_api.client import Client
 
@@ -43,8 +44,36 @@ def filter_transactions(
     )
 
 
+def get_or_prompt_account_id(config: Config, entity_name: str) -> str:
+    if entity_name in config.entities:
+        return config.entities[entity_name].account_id
+
+    print(f"Lets select the account for {entity_name.capitalize()}:")
+    client = Client(config)
+
+    accounts = [acc for acc in client.accounts() if not acc.closed]
+
+    for idx, acc in enumerate(accounts):
+        print(f" - {idx + 1}. {acc.name}")
+
+    acc_num = Prompt.ask(
+        "What account are the transactions going to be imported to? (By number)",
+        choices=[str(i) for i in range(1, len(accounts) + 1)],
+        show_choices=False,
+    )
+    account = accounts[int(acc_num) - 1]
+
+    print(f"[bold]Account selected: {account.name}")
+
+    config.entities[entity_name] = EntityConfig(account_id=account.id)
+    config.save()
+
+    return account.id
+
+
 def process_transactions(
-    parsed_input: List[Transaction],
+    entity: Entity,
+    input_file: Path,
     config: Config,
     show: bool,
     reconcile: bool,
@@ -52,12 +81,14 @@ def process_transactions(
     """
     Process the transactions from the input file, match them with YNAB data, and upload them to YNAB.
 
-    Args:
-        parsed_input: List of transactions from the input file
-        config: YNAB configuration
-        reconcile: Whether to reconcile cleared transactions
-        show: Just show the transactions without processing them
+    If the Entity calling this method does not have a config stored, the user will be prompted to select an account
+    this entity should publish transactions to. This account will be used moving forward when using this entity.
+
+    If the user called `yul -a` the user will always be promptped to select
+    and account and the selected account won't be saved for this particular entity.
     """
+
+    parsed_input = entity.parse(input_file, config)
 
     preprocess_transactions(parsed_input, config)
 
@@ -72,10 +103,14 @@ def process_transactions(
             config,
         )
     ]
+
+    acount_id = get_or_prompt_account_id(config, entity.name())
+
     client = Client(config)
 
     with Status("Reading transactions..."):
         ynab_transactions = client.transactions(
+            account_id=acount_id,
             since_date=(
                 config.checkpoint.latest_date_processed
                 - dt.timedelta(days=TRANSACTIONS_DAYES_BEFORE_LAST_EXTRACTION)
@@ -122,7 +157,7 @@ def process_transactions(
 
     if Confirm.ask("Do you want to continue and create the transactions?"):
         with Status("Creating/Updating transactions..."):
-            client.create_transactions(new_transactions)
+            client.create_transactions(acount_id, new_transactions)
             client.update_transactions(transactions_to_update)
 
     config.update_and_save(transactions[0])

@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 from ynab_unlinked.models import Transaction
 
-
 CONFIG_PATH = Path.home() / ".config/ynab_unlinked/config.json"
 TRANSACTION_GRACE_PERIOD_DAYS = 60
 
@@ -17,10 +16,14 @@ class Checkpoint(BaseModel):
     latest_transaction_hash: int
 
 
+class EntityConfig(BaseModel):
+    account_id: str
+
+
 class Config(BaseModel):
     api_key: str
     budget_id: str
-    account_id: str
+    entities: dict[str, EntityConfig]
     checkpoint: Checkpoint | None = None
 
     def save(self):

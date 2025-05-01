@@ -16,7 +16,7 @@ app.add_typer(load, name="load")
 def prompt_for_config():
     print("[bold]Welcome to ynab-unlinked! Lets setup your connection")
     api_key = Prompt.ask("What is the API Key to connect to YNAB?", password=True)
-    client = Client(Config(api_key=api_key, budget_id="", account_id=""))
+    client = Client(Config(api_key=api_key, budget_id="", entities={}))
 
     with Status("Getting budgets..."):
         budgets = client.budgets()
@@ -35,26 +35,11 @@ def prompt_for_config():
 
     print(f"[bold]Selected budget: {budget.name}")
 
-    print("The budget contains the following accounts:")
-    accounts = [acc for acc in budget.accounts if not acc.closed]
-    for idx, acc in enumerate(accounts):
-        print(f" - {idx + 1}. {acc.name}")
-
-    acc_num = Prompt.ask(
-        "What account are the transactions going to be imported to? (By number)",
-        choices=[str(i) for i in range(1, len(accounts) + 1)],
-        show_choices=False,
-    )
-    account = accounts[int(acc_num) - 1]
-
-    print(f"[bold]Account selected: {account.name}")
-
-    config = Config(api_key=api_key, budget_id=budget.id, account_id=account.id)
+    config = Config(api_key=api_key, budget_id=budget.id, entities={})
     config.save()
 
     print("[bold green]All done!")
     return config
-
 
 @app.callback(no_args_is_help=True)
 def cli(context: typer.Context):

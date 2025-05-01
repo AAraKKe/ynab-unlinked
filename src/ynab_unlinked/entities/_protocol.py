@@ -34,3 +34,9 @@ class Entity(Protocol):
         a given input type.
         """
         ...
+
+    def name(self) -> str:
+        """
+        Returns the name of the entity.
+        """
+        ...

@@ -50,3 +50,6 @@ class SabadellParser:
     def supports_input_type(self, input_type: InputType) -> bool:
         """Only supports TXT for now"""
         return input_type is InputType.TXT
+
+    def name(self) -> str:
+        return "sabadell"
