@@ -5,11 +5,9 @@ from typing_extensions import Annotated
 
 from ynab_unlinked.context_object import YnabUnlinkedCommandObject
 from ynab_unlinked.process import process_transactions
-from ynab_unlinked import app
 
 
-@app.command(no_args_is_help=True)
-def sabadell(
+def command(
     context: typer.Context,
     input_file: Annotated[
         Path,
@@ -28,7 +26,10 @@ def sabadell(
     ] = False,
 ):
     """
-    Parse a Sabadell txt input file.
+    Inputs transactions from a Sabadell txt file.
+
+    From your Sabadell Credit Card statement, you can download a txt file with the transactions.
+    At the moment only txt format is supported.
     """
     from .sabadell import SabadellParser
 

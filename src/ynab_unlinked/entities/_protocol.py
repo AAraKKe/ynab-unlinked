@@ -11,7 +11,7 @@ class InputType(StrEnum):
     CSV = "csv"
 
 
-class EntityParser(Protocol):
+class Entity(Protocol):
     def parse(self, input_file: Path, config: Config) -> list[Transaction]:
         """
         Parse an input file into a list of Transaction objects.

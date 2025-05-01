@@ -8,7 +8,6 @@ from rich.status import Status
 
 from ynab_unlinked import display, utils
 from ynab_unlinked.config import TRANSACTION_GRACE_PERIOD_DAYS, Config
-from ynab_unlinked.context_object import YnabUnlinkedCommandObject
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.ynab_api.client import Client
 
@@ -87,9 +86,7 @@ def process_transactions(
     print("[bold green]✔ Transactions read")
 
     with Status("Augmenting transactions..."):
-        utils.augmnet_transactions(
-            transactions, ynab_transactions, client, reconcile
-        )
+        utils.augmnet_transactions(transactions, ynab_transactions, client, reconcile)
     print("[bold green]✔ Transactions augmneted with YNAB information")
 
     display.transactions_to_upload(transactions)

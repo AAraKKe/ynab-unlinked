@@ -1,4 +1,3 @@
-from .sabadell import SabadellParser
-from .main import sabadell
+from .main import command
 
-__all__ = ["SabadellParser", "sabadell"]
+__all__ = ["command"]

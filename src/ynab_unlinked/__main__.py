@@ -3,10 +3,14 @@ from rich import print
 from rich.prompt import Prompt
 from rich.status import Status
 
-from ynab_unlinked import app
 from ynab_unlinked.config import Config, ensure_config
 from ynab_unlinked.context_object import YnabUnlinkedCommandObject
+from ynab_unlinked.load import load
 from ynab_unlinked.ynab_api.client import Client
+
+app = typer.Typer()
+
+app.add_typer(load, name="load")
 
 
 def prompt_for_config():
@@ -67,10 +71,7 @@ def cli(context: typer.Context):
 
 
 def main():
-    # Load all entities
-    import ynab_unlinked.entities  # noqa: F401
-
-    app()
+    app(prog_name="yul")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from ._protocol import EntityParser, InputType
-from .sabadell import sabadell
+from ._protocol import Entity, InputType
+from . import sabadell
 
-__all__ = ["sabadell", "EntityParser", "InputType"]
+__all__ = ["sabadell", "Entity", "InputType"]
