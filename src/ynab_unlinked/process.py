@@ -160,6 +160,6 @@ def process_transactions(
             client.create_transactions(acount_id, new_transactions)
             client.update_transactions(transactions_to_update)
 
-    config.update_and_save(transactions[0], entity.name())
+        config.update_and_save(transactions[0], entity.name())
 
     print("[bold blue]🎉 All done!")
