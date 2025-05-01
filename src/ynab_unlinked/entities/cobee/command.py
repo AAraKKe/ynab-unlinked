@@ -1,0 +1,46 @@
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from ynab_unlinked.context_object import YnabUnlinkedCommandObject
+from ynab_unlinked.process import process_transactions
+
+from .cobee import Cobee
+
+def command(
+    context: typer.Context,
+    input_file: Annotated[
+        Path,
+        typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
+    ],
+    show: Annotated[
+        bool,
+        typer.Option(
+            "-s",
+            "--show",
+            help="Just show the transactions available in the input file.",
+        ),
+    ] = False,
+    reconcile: Annotated[
+        bool, typer.Option("-r", "--reconcile", help="Reconcile cleared transactions")
+    ] = False,
+):
+    """
+    Inputs transactions from a Cobee HTML file.
+
+    Cobee that not support exporting transactions. To use the Cobee entity, form the website,
+    find the list of transactions of the month you want to import into YNAB and save the page as HTML.
+
+    You cando this by Right Click > Save as, and select where you want to save the file.
+    """
+
+    ctx: YnabUnlinkedCommandObject = context.obj
+
+    process_transactions(
+        entity=Cobee(),
+        input_file=input_file,
+        config=ctx.config,
+        show=show,
+        reconcile=reconcile,
+    )
