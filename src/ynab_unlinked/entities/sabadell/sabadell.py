@@ -1,11 +1,9 @@
-from pathlib import Path
-import re
 import datetime as dt
+import re
+from pathlib import Path
 
-from ynab_unlinked.models import Transaction
 from ynab_unlinked.config import Config
-
-from .. import InputType
+from ynab_unlinked.models import Transaction
 
 ANCHOR_LINE = "FECHA|CONCEPTO|LOCALIDAD|IMPORTE"
 TRANSACTION_PATTER = re.compile(r"^(\d{2}/\d{2})\|([\w\s]+?)\|[\w\s]+?\|(.*EUR).*")
@@ -46,10 +44,6 @@ class SabadellParser:
 
     def __parse_amount(self, raw: str) -> float:
         return float(raw.replace("EUR", "").replace(",", "."))
-
-    def supports_input_type(self, input_type: InputType) -> bool:
-        """Only supports TXT for now"""
-        return input_type is InputType.TXT
 
     def name(self) -> str:
         return "sabadell"

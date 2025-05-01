@@ -10,9 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
 keywords = []
-authors = [
-  { name = "Juanpe Araque", email = "erjuanpea@gmail.com" },
-]
+authors = [{ name = "Juanpe Araque", email = "erjuanpea@gmail.com" }]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
@@ -24,7 +22,9 @@ dependencies = [
   "ynab",
   "typer",
   "rapidfuzz",
-  "unidecode"
+  "unidecode",
+  "html-text",
+  "pydantic >= 2.0.0",
 ]
 
 [project.scripts]
@@ -39,9 +39,7 @@ Source = "https://github.com/Juanpe Araque/ynab-unlinked"
 path = "src/ynab_unlinked/__about__.py"
 
 [tool.hatch.envs.types]
-extra-dependencies = [
-  "mypy>=1.0.0",
-]
+extra-dependencies = ["mypy>=1.0.0"]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:src/ynab_unlinked tests}"
 
@@ -52,17 +50,11 @@ yul = "python src/ynab_unlinked {args}"
 source_pkgs = ["ynab_unlinked", "tests"]
 branch = true
 parallel = true
-omit = [
-  "src/ynab_unlinked/__about__.py",
-]
+omit = ["src/ynab_unlinked/__about__.py"]
 
 [tool.coverage.paths]
 ynab_unlinked = ["src/ynab_unlinked", "*/ynab-unlinked/src/ynab_unlinked"]
 tests = ["tests", "*/ynab-unlinked/tests"]
 
 [tool.coverage.report]
-exclude_lines = [
-  "no cov",
-  "if __name__ == .__main__.:",
-  "if TYPE_CHECKING:",
-]
+exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]

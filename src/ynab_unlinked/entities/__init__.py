@@ -1,4 +1,12 @@
-from ._protocol import Entity, InputType
-from . import sabadell
+from enum import StrEnum
 
-__all__ = ["sabadell", "Entity", "InputType"]
+from ._protocol import Entity
+
+
+class InputType(StrEnum):
+    TXT = "txt"
+    CSV = "csv"
+    HTML = "html"
+
+
+__all__ = ["Entity", "InputType"]
