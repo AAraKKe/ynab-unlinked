@@ -7,7 +7,7 @@ from rich.prompt import Confirm, Prompt
 from rich.status import Status
 
 from ynab_unlinked import display, utils
-from ynab_unlinked.config import TRANSACTION_GRACE_PERIOD_DAYS, Config, EntityConfig
+from ynab_unlinked.config import Checkpoint, TRANSACTION_GRACE_PERIOD_DAYS, Config, EntityConfig
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.ynab_api.client import Client
@@ -16,31 +16,30 @@ from ynab_unlinked.ynab_api.client import Client
 TRANSACTIONS_DAYES_BEFORE_LAST_EXTRACTION = 10
 
 
-def add_past_to_transactions(transactions: list[Transaction], config: Config):
-    if config.checkpoint is None:
+def add_past_to_transactions(transactions: list[Transaction], checkpoint: Checkpoint | None):
+    if checkpoint is None:
         return
 
     for t in transactions:
-        if t.date < config.checkpoint.latest_date_processed + dt.timedelta(
+        if t.date < checkpoint.latest_date_processed + dt.timedelta(
             days=TRANSACTION_GRACE_PERIOD_DAYS
         ):
             t.past = True
 
 
-def preprocess_transactions(transactions: list[Transaction], config: Config):
-    add_past_to_transactions(transactions, config)
+def preprocess_transactions(transactions: list[Transaction], checkpoint: Checkpoint | None):
+    add_past_to_transactions(transactions, checkpoint)
 
 
 def filter_transactions(
-    transactions: list[Transaction], config: Config
+    transactions: list[Transaction], checkpoint: Checkpoint | None
 ) -> Generator[Transaction, None, None]:
-    #    if config.checkpoint is None:
-    yield from transactions
-    return
+    if checkpoint is None:
+        yield from transactions
+        return
 
-    # This is dead code due to the early return above, kept for future implementation
     yield from (
-        t for t in transactions if t.date >= config.checkpoint.latest_date_processed
+        t for t in transactions if t.date >= checkpoint.latest_date_processed
     )
 
 
@@ -89,8 +88,9 @@ def process_transactions(
     """
 
     parsed_input = entity.parse(input_file, config)
+    checkpoint = config.entities[entity.name()].checkpoint
 
-    preprocess_transactions(parsed_input, config)
+    preprocess_transactions(parsed_input, checkpoint)
 
     if show:
         display.transaction_table(parsed_input)
@@ -100,7 +100,7 @@ def process_transactions(
         TransactionWithYnabData(t)
         for t in filter_transactions(
             parsed_input,
-            config,
+            checkpoint,
         )
     ]
 
@@ -112,9 +112,9 @@ def process_transactions(
         ynab_transactions = client.transactions(
             account_id=acount_id,
             since_date=(
-                config.checkpoint.latest_date_processed
+                checkpoint.latest_date_processed
                 - dt.timedelta(days=TRANSACTIONS_DAYES_BEFORE_LAST_EXTRACTION)
-                if config.checkpoint
+                if checkpoint
                 else None
             )
         )
@@ -128,7 +128,7 @@ def process_transactions(
 
     if not any(t.needs_creation or t.needs_update for t in transactions):
         print("[bold blue]🎉 All done! Nothing to do.")
-        config.update_and_save(transactions[0])
+        config.update_and_save(transactions[0], entity.name())
         return
 
     if any(t.match_status == MatchStatus.PARTIAL_MATCH for t in transactions):
@@ -160,6 +160,6 @@ def process_transactions(
             client.create_transactions(acount_id, new_transactions)
             client.update_transactions(transactions_to_update)
 
-    config.update_and_save(transactions[0])
+    config.update_and_save(transactions[0], entity.name())
 
     print("[bold blue]🎉 All done!")

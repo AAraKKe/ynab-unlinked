@@ -18,24 +18,27 @@ class Checkpoint(BaseModel):
 
 class EntityConfig(BaseModel):
     account_id: str
+    checkpoint: Checkpoint | None = None
 
 
 class Config(BaseModel):
     api_key: str
     budget_id: str
     entities: dict[str, EntityConfig]
-    checkpoint: Checkpoint | None = None
 
     def save(self):
         CONFIG_PATH.write_text(self.model_dump_json(indent=4))
 
-    def update_and_save(self, last_transaction: Transaction):
-        self.checkpoint = Checkpoint(
+    def update_and_save(self, last_transaction: Transaction, entity_name: str):
+        checkpoint = Checkpoint(
             latest_date_processed=(
                 last_transaction.date - dt.timedelta(days=TRANSACTION_GRACE_PERIOD_DAYS)
             ),
             latest_transaction_hash=hash(last_transaction),
         )
+
+        self.entities[entity_name].checkpoint = checkpoint
+
         self.save()
 
     @staticmethod
