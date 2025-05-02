@@ -2,6 +2,7 @@ import datetime as dt
 import re
 from pathlib import Path
 
+from ynab_unlinked.config import Config
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.models import Transaction
 

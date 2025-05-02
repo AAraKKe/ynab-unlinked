@@ -134,7 +134,7 @@ def process_transactions(
 
     with Status("Augmenting transactions..."):
         match_transactions(transactions, ynab_transactions, reconcile)
-        set_payee_from_ynab(transactions, client)
+        set_payee_from_ynab(transactions, client, config)
     print("[bold green]✔ Transactions augmneted with YNAB information")
 
     display.transactions_to_upload(transactions)
@@ -144,11 +144,14 @@ def process_transactions(
         config.update_and_save(transactions[0], entity.name())
         return
 
-    if any(
-        t.match_status is MatchStatus.PARTIAL_MATCH and t.needs_update
+    partial_matches = [
+        t
         for t in transactions
-    ):
-        display.partial_matches(transactions)
+        if t.match_status is MatchStatus.PARTIAL_MATCH and t.needs_update
+    ]
+
+    if partial_matches:
+        display.partial_matches(partial_matches)
         print(
             "\nIf these partial matches are ok, you can accept them and update the transactions in YNAB.\n"
             "If you don't accept them, new transactions will be created instead."
@@ -158,11 +161,14 @@ def process_transactions(
             if Confirm.ask("Do you want to accept these matches?")
             else MatchStatus.UNMATCHED
         )
-        for t in transactions:
-            if t.match_status == MatchStatus.PARTIAL_MATCH and t.needs_update:
-                t.match_status = final_matching
-                if final_matching == MatchStatus.UNMATCHED:
-                    t.reset_matching()
+        for t in partial_matches:
+            t.match_status = final_matching
+            if final_matching == MatchStatus.UNMATCHED:
+                t.reset_matching()
+
+        if final_matching == MatchStatus.MATCHED:
+            # If the user agreed to match these, add renaming rules to config
+            config.add_payee_rules(partial_matches)
 
     with Status("Preparing transactions to upload..."):
         new_transactions = [t for t in transactions if t.needs_creation]

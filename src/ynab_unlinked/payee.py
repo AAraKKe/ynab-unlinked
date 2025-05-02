@@ -4,6 +4,7 @@ import unidecode
 from rapidfuzz import fuzz
 from ynab import Payee, TransactionDetail
 
+from ynab_unlinked.config import Config
 from ynab_unlinked.models import TransactionWithYnabData
 from ynab_unlinked.ynab_api import Client
 
@@ -68,11 +69,19 @@ def __match_from_payee_list(transaction: TransactionWithYnabData, payees: list[P
     transaction.ynab_payee = transaction.payee
 
 
-def set_payee_from_ynab(transactions: list[TransactionWithYnabData], client: Client):
+def set_payee_from_ynab(transactions: list[TransactionWithYnabData], client: Client, config: Config):
     """
     Compare each transaction payee with an existing YNAB payee and set the payee from YNAB if a match is found
     """
-    payees = client.payees()
-
+    payees = None
     for t in transactions:
+        # First check if we have previous naming rules
+        if payee := config.payee_from_fules(t.payee):
+            t.ynab_payee = payee
+            continue
+
+        # Only call once but do not call unless we have not found a match
+        if payees is None:
+            payees = client.payees()
+
         __match_from_payee_list(t, payees)
