@@ -101,7 +101,8 @@ class TransactionWithYnabData(Transaction):
     def update_cleared_from_ynab(
         self, ynab_transaction: TransactionDetail, reconcile: bool
     ):
-        if reconcile:
+        if ynab_transaction.cleared is TransactionClearedStatus.RECONCILED or reconcile:
             self.cleared = TransactionClearedStatus.RECONCILED
         elif ynab_transaction.cleared is TransactionClearedStatus.UNCLEARED:
             self.cleared = TransactionClearedStatus.CLEARED
+

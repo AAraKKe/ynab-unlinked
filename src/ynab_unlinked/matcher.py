@@ -1,4 +1,4 @@
-from ynab import TransactionClearedStatus, TransactionDetail
+from ynab import TransactionDetail
 
 from ynab_unlinked.models import MatchStatus, TransactionWithYnabData
 from ynab_unlinked.payee import payee_matches
@@ -27,9 +27,6 @@ def __match_single_transaction(
     reconcile: bool,
 ):
     for t in ynab_transactions:
-        if t.cleared is TransactionClearedStatus.RECONCILED:
-            continue
-
         date_window = __match_date(transaction, t)
         similar_payee = payee_matches(transaction, t)
         same_amount = __match_amount(transaction, t)
