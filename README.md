@@ -2,21 +2,8 @@
 
 YNAB Unlinked is a CLI tools that allows creating transactions in your YNAB account from any input file.
 
-You only need a [Parser](src/ynab_unlinked/parsers/_protocol.py) that knows how to parse your specific file and the tool will take care of the rest.
+Want to know more? Check out our [wiki](https://github.com/AAraKKe/ynab-unlinked/wiki) where you'll find all the details on how to get started, add new entities, and make the most of this tool. It's pretty straightforward once you get the hang of it!
 
-## Usage
-
-Just run
-
-```bash
-hatch run yul --help
-```
-
-## Supported Parsers
-
-At the moment, the following parsers are supported:
-
-- [TXT from Banco Sabadell](/src/ynab_unlinked/parsers/sabadell.py)
 
 ## License
 
