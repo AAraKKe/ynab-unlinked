@@ -31,7 +31,6 @@ def prompt_for_config():
         show_choices=False,
     )
     budget = budgets[int(budget_num) - 1]
-    assert budget.accounts is not None, "Unexpeted. Budget does not have accounts"
 
     print(f"[bold]Selected budget: {budget.name}")
 
