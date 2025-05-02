@@ -4,7 +4,7 @@ YNAB Unlinked is a CLI tools that allows creating transactions in your YNAB acco
 
 Want to know more? Check out our [wiki](https://github.com/AAraKKe/ynab-unlinked/wiki) where you'll find all the details on how to get started, add new entities, and make the most of this tool. It's pretty straightforward once you get the hang of it!
 
-> [!INFO]
+> [!IMPORTANT]
 > This project just started and open to contributions!
 
 ## License
