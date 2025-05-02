@@ -8,6 +8,7 @@ from ynab_unlinked.process import process_transactions
 
 from .cobee import Cobee
 
+
 def command(
     context: typer.Context,
     input_file: Annotated[

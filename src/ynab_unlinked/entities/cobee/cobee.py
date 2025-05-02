@@ -6,10 +6,12 @@ from pathlib import Path
 from ynab_unlinked.config import Config
 from ynab_unlinked.models import Transaction
 
+
 class ParseState(Enum):
     DATE = auto()
     PAYEE = auto()
     AMOUNT = auto()
+
 
 DATE_REGEX = re.compile(r"(\d{1,2}) (\w{3}) (\d{4})")
 
@@ -30,6 +32,7 @@ MONTHS_NUMBERS = {
     "Nov": 11,
     "Dec": 12,
 }
+
 
 def parse_date(date_str: str) -> dt.date | None:
     if (groups := DATE_REGEX.match(date_str)) is None:
@@ -60,7 +63,6 @@ class Cobee:
         amount: float | None = None
 
         for line in text.splitlines():
-
             if not line:
                 continue
 
@@ -90,7 +92,9 @@ class Cobee:
 
                 amount = float(amount_str)
                 if date is None or payee is None:
-                    raise ValueError(f"The input file is not valid. The amount {amount} has been found without a date or payee.")
+                    raise ValueError(
+                        f"The input file is not valid. The amount {amount} has been found without a date or payee."
+                    )
 
                 transactions.append(Transaction(date=date, payee=payee, amount=amount))
 

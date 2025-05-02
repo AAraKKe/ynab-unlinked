@@ -1,4 +1,5 @@
 from rich import box, print
+from rich.rule import Rule
 from rich.style import Style
 from rich.table import Column, Table
 
@@ -49,7 +50,7 @@ def transactions_to_upload(transactions: list[TransactionWithYnabData]):
     columns = [
         Column(header="Match", justify="center", width=5),
         Column(header="Date", justify="left", max_width=10),
-        Column(header="Payee", justify="left", width=50),
+        Column(header="Payee", justify="left", width=70),
         Column(header="Inflow", justify="right", max_width=15),
         Column(header="Outflow", justify="right", max_width=15),
         Column(header="Cleared Status", justify="left", width=15),
@@ -57,7 +58,7 @@ def transactions_to_upload(transactions: list[TransactionWithYnabData]):
     table = Table(
         *columns,
         title="Recent Transactions",
-        caption="Transactions to [blue bold]update[/] and [bold green]create[/]. Only most recent transactions are shown.",
+        caption="Transactions to [cyan bold]update[/] and [bold green]create[/].",
         box=box.SIMPLE,
     )
 
@@ -66,25 +67,43 @@ def transactions_to_upload(transactions: list[TransactionWithYnabData]):
         inflow = transaction.pretty_amount if transaction.amount > 0 else None
 
         if transaction.needs_creation:
-            style = "bold green"
+            style = "green"
         elif transaction.needs_update:
             if transaction.match_status == MatchStatus.PARTIAL_MATCH:
-                style = "bold yellow"
+                style = "yellow"
             else:
-                style = "bold blue"
+                style = "cyan"
         else:
             style = "default"
+
+        if transaction.payee == transaction.ynab_payee:
+            payee_line = transaction.ynab_payee
+        else:
+            payee_line = f"{transaction.ynab_payee} [gray37] [Original payee: {transaction.payee}][/gray37]"
 
         table.add_row(
             transaction.match_emoji,
             transaction.date.strftime("%m/%d/%Y"),
-            transaction.ynab_payee,
+            payee_line,
             inflow,
             outflow,
-            transaction.ynab_cleared_status,
+            transaction.cleared_status,
             style=style,
         )
 
+    print(Rule("Transactions to be processed"))
+    print(
+        "The table below shows the transactaions to be loaded into YNAB. The transactions in the input file have been matched with existing transactions in YNAB.\n"
+        " - The [green]green[/] rows are new transactions to be created.\n"
+        " - The [cyan]blue[/] rows are existing transactions to be updated. These are transactions that have \n"
+        "   been matched with an existing transaction in YNAB by date, amount and payee name. \n"
+        "   The original payee name is shown in [gray37]gray[/] next to the updated payee name.\n"
+        " - The [yellow]yellow[/] rows are existing transactions that have been partially matched with existing\n"
+        "   transactions in YNAB. This means that the amount and dates found in the input transaction match those of an existing transaction in YNAB.\n"
+        "   However, the payee for the transaction in the input file cannot be easily matched with an existing payee in YNAB.\n"
+        "   These transactions need to be validated to ensure that the correct transaction is being updated.\n"
+        "The cleared status column shows how the transaction will be loaded to YNAB, not the current status if the transaction was already in YNAB."
+    )
     print(table)
 
 

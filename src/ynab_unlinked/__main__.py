@@ -41,6 +41,7 @@ def prompt_for_config():
     print("[bold green]All done!")
     return config
 
+
 @app.callback(no_args_is_help=True)
 def cli(context: typer.Context):
     """

@@ -6,17 +6,26 @@ from rich import print
 from rich.prompt import Confirm, Prompt
 from rich.status import Status
 
-from ynab_unlinked import display, utils
-from ynab_unlinked.config import Checkpoint, TRANSACTION_GRACE_PERIOD_DAYS, Config, EntityConfig
+from ynab_unlinked import display
+from ynab_unlinked.config import (
+    TRANSACTION_GRACE_PERIOD_DAYS,
+    Checkpoint,
+    Config,
+    EntityConfig,
+)
 from ynab_unlinked.entities import Entity
+from ynab_unlinked.matcher import match_transactions
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
+from ynab_unlinked.payee import set_payee_from_ynab
 from ynab_unlinked.ynab_api.client import Client
 
 # Request transactions to the YNAB API from the last checkpoint date minus 10 days for buffer
 TRANSACTIONS_DAYES_BEFORE_LAST_EXTRACTION = 10
 
 
-def add_past_to_transactions(transactions: list[Transaction], checkpoint: Checkpoint | None):
+def add_past_to_transactions(
+    transactions: list[Transaction], checkpoint: Checkpoint | None
+):
     if checkpoint is None:
         return
 
@@ -27,7 +36,9 @@ def add_past_to_transactions(transactions: list[Transaction], checkpoint: Checkp
             t.past = True
 
 
-def preprocess_transactions(transactions: list[Transaction], checkpoint: Checkpoint | None):
+def preprocess_transactions(
+    transactions: list[Transaction], checkpoint: Checkpoint | None
+):
     add_past_to_transactions(transactions, checkpoint)
 
 
@@ -38,9 +49,7 @@ def filter_transactions(
         yield from transactions
         return
 
-    yield from (
-        t for t in transactions if t.date >= checkpoint.latest_date_processed
-    )
+    yield from (t for t in transactions if t.date >= checkpoint.latest_date_processed)
 
 
 def get_or_prompt_account_id(config: Config, entity_name: str) -> str:
@@ -116,12 +125,13 @@ def process_transactions(
                 - dt.timedelta(days=TRANSACTIONS_DAYES_BEFORE_LAST_EXTRACTION)
                 if checkpoint
                 else None
-            )
+            ),
         )
     print("[bold green]✔ Transactions read")
 
     with Status("Augmenting transactions..."):
-        utils.augmnet_transactions(transactions, ynab_transactions, client, reconcile)
+        match_transactions(transactions, ynab_transactions, reconcile)
+        set_payee_from_ynab(transactions, client)
     print("[bold green]✔ Transactions augmneted with YNAB information")
 
     display.transactions_to_upload(transactions)

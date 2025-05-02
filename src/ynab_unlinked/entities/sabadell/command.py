@@ -35,7 +35,6 @@ def command(
 
     ctx: YnabUnlinkedCommandObject = context.obj
 
-
     process_transactions(
         entity=SabadellParser(),
         input_file=input_file,

@@ -54,7 +54,10 @@ class TransactionWithYnabData(Transaction):
 
     @property
     def needs_update(self) -> bool:
-        return self.match_status is not MatchStatus.UNMATCHED and self.ynab_cleared is not self.cleared
+        return (
+            self.match_status is not MatchStatus.UNMATCHED
+            and self.ynab_cleared is not self.cleared
+        )
 
     @property
     def cleared_status(self) -> str:
@@ -94,3 +97,11 @@ class TransactionWithYnabData(Transaction):
         self.partial_match = None
         self.ynab_payee = self.payee
         self.ynab_payee_id = None
+
+    def update_cleared_from_ynab(
+        self, ynab_transaction: TransactionDetail, reconcile: bool
+    ):
+        if reconcile:
+            self.cleared = TransactionClearedStatus.RECONCILED
+        elif ynab_transaction.cleared is TransactionClearedStatus.UNCLEARED:
+            self.cleared = TransactionClearedStatus.CLEARED
