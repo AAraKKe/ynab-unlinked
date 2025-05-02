@@ -3,7 +3,7 @@ import datetime as dt
 from enum import Enum, auto
 from pathlib import Path
 
-from ynab_unlinked.config import Config
+from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.models import Transaction
 
 
@@ -49,7 +49,7 @@ def parse_date(date_str: str) -> dt.date | None:
 
 
 class Cobee:
-    def parse(self, input_file: Path, config: Config) -> list[Transaction]:
+    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
         # Import now the html parser
         import html_text
 

@@ -3,7 +3,7 @@ from typing import Annotated
 
 import typer
 
-from ynab_unlinked.context_object import YnabUnlinkedCommandObject
+from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.process import process_transactions
 
 from .cobee import Cobee
@@ -36,12 +36,13 @@ def command(
     You cando this by Right Click > Save as, and select where you want to save the file.
     """
 
-    ctx: YnabUnlinkedCommandObject = context.obj
+    ctx: YnabUnlinkedContext = context.obj
+
+    ctx.show = show
+    ctx.reconcile = reconcile
 
     process_transactions(
         entity=Cobee(),
         input_file=input_file,
-        config=ctx.config,
-        show=show,
-        reconcile=reconcile,
+        context=ctx,
     )

@@ -13,6 +13,7 @@ from ynab_unlinked.config import (
     Config,
     EntityConfig,
 )
+from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.matcher import match_transactions
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
@@ -82,9 +83,7 @@ def get_or_prompt_account_id(config: Config, entity_name: str) -> str:
 def process_transactions(
     entity: Entity,
     input_file: Path,
-    config: Config,
-    show: bool,
-    reconcile: bool,
+    context: YnabUnlinkedContext,
 ) -> None:
     """
     Process the transactions from the input file, match them with YNAB data, and upload them to YNAB.
@@ -96,7 +95,11 @@ def process_transactions(
     and account and the selected account won't be saved for this particular entity.
     """
 
-    parsed_input = entity.parse(input_file, config)
+    config = context.config
+    show = context.show
+    reconcile = context.reconcile
+
+    parsed_input = entity.parse(input_file, context)
     checkpoint = config.entities[entity.name()].checkpoint
 
     preprocess_transactions(parsed_input, checkpoint)

@@ -1,10 +1,11 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ynab_unlinked.config import Config
-from ynab_unlinked.models import Transaction
 
 
 @dataclass
-class YnabUnlinkedCommandObject:
+class YnabUnlinkedContext[T]:
     config: Config
-    transactions: list[Transaction] = field(default_factory=list)
+    extras: T 
+    show: bool = False
+    reconcile: bool = False

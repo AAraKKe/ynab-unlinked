@@ -3,7 +3,7 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from ynab_unlinked.context_object import YnabUnlinkedCommandObject
+from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.process import process_transactions
 
 
@@ -33,12 +33,13 @@ def command(
     """
     from .sabadell import SabadellParser
 
-    ctx: YnabUnlinkedCommandObject = context.obj
+    ctx: YnabUnlinkedContext = context.obj
+
+    ctx.show = show
+    ctx.reconcile = reconcile
 
     process_transactions(
         entity=SabadellParser(),
         input_file=input_file,
-        config=ctx.config,
-        show=show,
-        reconcile=reconcile,
+        context=ctx,
     )

@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 
 from ynab_unlinked.config import Config
+from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.models import Transaction
 
 ANCHOR_LINE = "FECHA|CONCEPTO|LOCALIDAD|IMPORTE"
@@ -10,7 +11,7 @@ TRANSACTION_PATTER = re.compile(r"^(\d{2}/\d{2})\|([\w\s]+?)\|[\w\s]+?\|(.*EUR).
 
 
 class SabadellParser:
-    def parse(self, input_file: Path, config: Config) -> list[Transaction]:
+    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
         lines = input_file.read_text(encoding="cp1252").splitlines()
         start = False
         transactions: list[Transaction] = []

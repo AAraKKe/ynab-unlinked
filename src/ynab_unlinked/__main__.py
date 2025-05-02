@@ -4,7 +4,7 @@ from rich.prompt import Prompt
 from rich.status import Status
 
 from ynab_unlinked.config import Config, ensure_config
-from ynab_unlinked.context_object import YnabUnlinkedCommandObject
+from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.load import load
 from ynab_unlinked.ynab_api.client import Client
 
@@ -53,7 +53,7 @@ def cli(context: typer.Context):
     """
 
     config = Config.load() if ensure_config() else prompt_for_config()
-    context.obj = YnabUnlinkedCommandObject(config=config)
+    context.obj = YnabUnlinkedContext(config=config, extras=None)
 
 
 def main():
