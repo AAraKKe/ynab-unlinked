@@ -18,18 +18,19 @@ def __preprocess_payee(value: str) -> str:
 
 @overload
 def payee_matches(
-    transaction: TransactionWithYnabData, payee_source: TransactionDetail
+    transaction: TransactionWithYnabData, config: Config, payee_source: TransactionDetail
 ) -> bool: ...
 
 
 @overload
 def payee_matches(
-    transaction: TransactionWithYnabData, payee_source: Payee
+    transaction: TransactionWithYnabData, config: Config, payee_source: Payee
 ) -> bool: ...
 
 
 def payee_matches(
     transaction: TransactionWithYnabData,
+    config: Config,
     payee_source: TransactionDetail | Payee,
 ) -> bool:
     if isinstance(payee_source, TransactionDetail):
@@ -39,9 +40,11 @@ def payee_matches(
     else:
         payee_name = payee_source.name
 
-    if payee_name is None:
-        return False
+    if payee_name == transaction.payee:
+        return True
 
+    if config.payee_from_fules(transaction.payee) == payee_name:
+        return True
     return (
         fuzz.partial_ratio(
             transaction.payee,
@@ -53,7 +56,7 @@ def payee_matches(
     )
 
 
-def __match_from_payee_list(transaction: TransactionWithYnabData, payees: list[Payee]):
+def __match_from_payee_list(transaction: TransactionWithYnabData, payees: list[Payee], config: Config):
     # If we have a partial match, use it
     if transaction.partial_match is not None:
         transaction.ynab_payee = transaction.partial_match.payee_name
@@ -61,7 +64,7 @@ def __match_from_payee_list(transaction: TransactionWithYnabData, payees: list[P
         return
 
     for p in payees:
-        if payee_matches(transaction, p):
+        if payee_matches(transaction, config, p):
             transaction.ynab_payee = p.name
             transaction.ynab_payee_id = p.id
             return
@@ -84,4 +87,4 @@ def set_payee_from_ynab(transactions: list[TransactionWithYnabData], client: Cli
         if payees is None:
             payees = client.payees()
 
-        __match_from_payee_list(t, payees)
+        __match_from_payee_list(t, payees, config)

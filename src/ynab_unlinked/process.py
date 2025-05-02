@@ -133,8 +133,8 @@ def process_transactions(
     print("[bold green]✔ Transactions read")
 
     with Status("Augmenting transactions..."):
-        match_transactions(transactions, ynab_transactions, reconcile)
         set_payee_from_ynab(transactions, client, config)
+        match_transactions(transactions, ynab_transactions, reconcile, config)
     print("[bold green]✔ Transactions augmneted with YNAB information")
 
     display.transactions_to_upload(transactions)

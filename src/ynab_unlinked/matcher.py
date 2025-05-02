@@ -1,5 +1,6 @@
 from ynab import TransactionDetail
 
+from ynab_unlinked.config import Config
 from ynab_unlinked.models import MatchStatus, TransactionWithYnabData
 from ynab_unlinked.payee import payee_matches
 
@@ -25,10 +26,11 @@ def __match_single_transaction(
     transaction: TransactionWithYnabData,
     ynab_transactions: list[TransactionDetail],
     reconcile: bool,
+    config: Config,
 ):
     for t in ynab_transactions:
         date_window = __match_date(transaction, t)
-        similar_payee = payee_matches(transaction, t)
+        similar_payee = payee_matches(transaction, config, t)
         same_amount = __match_amount(transaction, t)
 
         if date_window and same_amount:
@@ -44,14 +46,16 @@ def __match_single_transaction(
             transaction.match_status = (
                 MatchStatus.MATCHED if similar_payee else MatchStatus.PARTIAL_MATCH
             )
+            return
 
 
 def match_transactions(
     transactions: list[TransactionWithYnabData],
     ynab_transactions: list[TransactionDetail],
     reconcile: bool,
+    config: Config,
 ):
     """Add transacation id to the transaction if it is found in ynab"""
 
     for t in transactions:
-        __match_single_transaction(t, ynab_transactions, reconcile)
+        __match_single_transaction(t, ynab_transactions, reconcile, config)
