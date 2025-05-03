@@ -1,12 +1,9 @@
 import typer
-from rich import print
-from rich.prompt import Prompt
-from rich.status import Status
 
 from ynab_unlinked.config import Config, ensure_config
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.commands import load, config
-from ynab_unlinked.ynab_api.client import Client
+from ynab_unlinked.display import prompt_for_api_key, prompt_for_budget
 
 app = typer.Typer()
 
@@ -14,32 +11,19 @@ app.add_typer(load, name="load")
 app.add_typer(config, name="config")
 
 
-def prompt_for_config():
+@app.command(name="setup")
+def setup_command():
+    """Setup YNAB Unlinked"""
     print("[bold]Welcome to ynab-unlinked! Lets setup your connection")
-    api_key = Prompt.ask("What is the API Key to connect to YNAB?", password=True)
-    client = Client(Config(api_key=api_key, budget_id="", entities={}))
+    api_key = prompt_for_api_key()
+    config = Config(api_key=api_key, budget_id="")
+    config.save()
 
-    with Status("Getting budgets..."):
-        budgets = client.budgets()
-
-    print("Available budgets:")
-    for idx, budget in enumerate(budgets):
-        print(f" - {idx + 1}. {budget.name}")
-
-    budget_num = Prompt.ask(
-        "What budget do you want to use? (By number)",
-        choices=[str(i) for i in range(1, len(budgets) + 1)],
-        show_choices=False,
-    )
-    budget = budgets[int(budget_num) - 1]
-
-    print(f"[bold]Selected budget: {budget.name}")
-
-    config = Config(api_key=api_key, budget_id=budget.id, entities={})
+    budget_id = prompt_for_budget()
+    config.budget_id = budget_id
     config.save()
 
     print("[bold green]All done!")
-    return config
 
 
 @app.callback(no_args_is_help=True)
@@ -52,7 +36,13 @@ def cli(context: typer.Context):
     transaction processing won't require any input unless there are some actions to take for specific transactions.
     """
 
-    config = Config.load() if ensure_config() else prompt_for_config()
+    if context.invoked_subcommand == "setup":
+        # If we are running setup there is nothing to do here
+        return
+
+    if not ensure_config():
+        setup_command()
+    config = Config.load()
     context.obj = YnabUnlinkedContext(config=config, extras=None)
 
 
