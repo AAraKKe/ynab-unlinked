@@ -5,12 +5,13 @@ from rich.status import Status
 
 from ynab_unlinked.config import Config, ensure_config
 from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.load import load
+from ynab_unlinked.commands import load, config
 from ynab_unlinked.ynab_api.client import Client
 
 app = typer.Typer()
 
 app.add_typer(load, name="load")
+app.add_typer(config, name="config")
 
 
 def prompt_for_config():

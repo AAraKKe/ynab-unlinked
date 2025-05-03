@@ -1,13 +1,36 @@
 import pkgutil
 import importlib
+from typing_extensions import Annotated
 
 import typer
 
 from ynab_unlinked import entities
+from ynab_unlinked.context_object import YnabUnlinkedContext
 
 load = typer.Typer(
     help="Load transactions from a bank statement into your YNAB account.",
 )
+
+
+@load.callback()
+def load_callback(
+    context: typer.Context,
+    show: Annotated[
+        bool,
+        typer.Option(
+            "-s",
+            "--show",
+            help="Just show the transactions available in the input file.",
+        ),
+    ] = False,
+    reconcile: Annotated[
+        bool, typer.Option("-r", "--reconcile", help="Reconcile cleared transactions")
+    ] = False,
+):
+    obj: YnabUnlinkedContext = context.obj
+
+    obj.show = show
+    obj.reconcile = reconcile
 
 
 # Dynamically load all entities commands when present

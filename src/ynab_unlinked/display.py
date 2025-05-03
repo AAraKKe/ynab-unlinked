@@ -2,10 +2,45 @@ from rich import box, print
 from rich.rule import Rule
 from rich.style import Style
 from rich.table import Column, Table
+from rich.prompt import Prompt
+from rich.status import Status
 
+from ynab_unlinked.config import Config, ensure_config
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
+from ynab_unlinked.ynab_api.client import Client
 
 MAX_PAST_TRANSACTIONS_SHOWN = 3
+
+
+def prompt_for_api_key() -> str:
+    return Prompt.ask("What is the API Key to connect to YNAB?", password=True)
+
+
+def prompt_for_budget() -> str:
+    if ensure_config():
+        client = Client(Config.load())
+    else:
+        api_key = prompt_for_api_key()
+        config = Config(api_key=api_key, budget_id="")
+        config.save()
+        client = Client(config)
+
+    with Status("Getting budgets..."):
+        budgets = client.budgets()
+
+    print("Available budgets:")
+    for idx, budget in enumerate(budgets):
+        print(f" - {idx + 1}. {budget.name}")
+
+    budget_num = Prompt.ask(
+        "What budget do you want to use? (By number)",
+        choices=[str(i) for i in range(1, len(budgets) + 1)],
+        show_choices=False,
+    )
+    budget = budgets[int(budget_num) - 1]
+
+    print(f"[bold]Selected budget: {budget.name}")
+    return budget.id
 
 
 def transaction_table(transactions: list[Transaction]):

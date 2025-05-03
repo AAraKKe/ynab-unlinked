@@ -99,6 +99,8 @@ def process_transactions(
     show = context.show
     reconcile = context.reconcile
 
+    acount_id = get_or_prompt_account_id(config, entity.name())
+    
     parsed_input = entity.parse(input_file, context)
     checkpoint = config.entities[entity.name()].checkpoint
 
@@ -115,8 +117,6 @@ def process_transactions(
             checkpoint,
         )
     ]
-
-    acount_id = get_or_prompt_account_id(config, entity.name())
 
     client = Client(config)
 

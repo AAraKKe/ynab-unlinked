@@ -6,6 +6,6 @@ from ynab_unlinked.config import Config
 @dataclass
 class YnabUnlinkedContext[T]:
     config: Config
-    extras: T 
+    extras: T
     show: bool = False
     reconcile: bool = False

@@ -13,17 +13,6 @@ def command(
         Path,
         typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
     ],
-    show: Annotated[
-        bool,
-        typer.Option(
-            "-s",
-            "--show",
-            help="Just show the transactions available in the input file.",
-        ),
-    ] = False,
-    reconcile: Annotated[
-        bool, typer.Option("-r", "--reconcile", help="Reconcile cleared transactions")
-    ] = False,
 ):
     """
     Inputs transactions from a Sabadell txt file.
@@ -34,9 +23,6 @@ def command(
     from .sabadell import SabadellParser
 
     ctx: YnabUnlinkedContext = context.obj
-
-    ctx.show = show
-    ctx.reconcile = reconcile
 
     process_transactions(
         entity=SabadellParser(),
