@@ -82,7 +82,6 @@ def transaction_table(transactions: list[Transaction]):
 
 
 def payee_line(transaction: TransactionWithYnabData) -> str:
-    print(transaction)
     if (
         transaction.ynab_payee is not None
         and transaction.payee == transaction.ynab_payee
