@@ -6,7 +6,7 @@ import typer
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.process import process_transactions
 
-from .cobee import Cobee
+from .cobee import Cobee, Language, CobeeContext
 
 
 def command(
@@ -15,6 +15,14 @@ def command(
         Path,
         typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
     ],
+    language: Annotated[
+        Language,
+        typer.Option(
+            "-l",
+            "--lang",
+            help="Language used when exporting the HTML webisite",
+        ),
+    ] = Language.ES,
 ):
     """
     Inputs transactions from a Cobee HTML file.
@@ -26,6 +34,7 @@ def command(
     """
 
     ctx: YnabUnlinkedContext = context.obj
+    ctx.extras = CobeeContext(language=language)
 
     process_transactions(
         entity=Cobee(),

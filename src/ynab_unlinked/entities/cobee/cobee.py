@@ -1,4 +1,7 @@
+from typing_extensions import assert_never
+from dataclasses import dataclass
 import datetime as dt
+from enum import StrEnum
 import re
 from pathlib import Path
 
@@ -26,6 +29,24 @@ MONTHS_NUMBERS = {
 }
 
 
+class Language(StrEnum):
+    ES = "es"
+    EN = "en"
+    PT = "pt"
+
+
+@dataclass
+class CobeeContext:
+    language: Language
+
+
+@dataclass
+class Identifiers:
+    transactions_line: str
+    rejected: str
+    cancelled: str
+
+
 def parse_date(date_str: str) -> dt.date | None:
     if (groups := DATE_REGEX.match(date_str)) is None:
         return None
@@ -40,9 +61,33 @@ def parse_date(date_str: str) -> dt.date | None:
     return dt.date(int(year), int(month), int(day))
 
 
+def identifers_by_language(language: Language) -> Identifiers:
+    match language:
+        case Language.ES:
+            return Identifiers(
+                transactions_line="Transacciones",
+                rejected="Rechazada",
+                cancelled="Anulada",
+            )
+        case Language.EN:
+            return Identifiers(
+                transactions_line="Transactions",
+                rejected="Rejected",
+                cancelled="Cancelled",
+            )
+        case Language.PT:
+            return Identifiers(
+                transactions_line="Transações",
+                rejected="Recusada",
+                cancelled="Anulada",
+            )
+        case never:
+            assert_never(never)
+
+
 class Cobee:
     def parse(
-        self, input_file: Path, context: YnabUnlinkedContext
+        self, input_file: Path, context: YnabUnlinkedContext[CobeeContext]
     ) -> list[Transaction]:
         # Import now the html parser
         import html_text
@@ -55,6 +100,7 @@ class Cobee:
         date: dt.date | None = None
         payee: str | None = None
         amount: float | None = None
+        identifiers = identifers_by_language(context.extras.language)
 
         for line in text.splitlines():
             line = line.strip()
@@ -62,7 +108,7 @@ class Cobee:
             if not line:
                 continue
 
-            if "Transacciones" in line:
+            if identifiers.transactions_line in line:
                 start = True
                 continue
 
@@ -92,7 +138,7 @@ class Cobee:
                 transactions.append(Transaction(date=date, payee=payee, amount=amount))
                 continue
 
-            if "Anulada" in line or "Rechazada" in line:
+            if identifiers.cancelled in line or identifiers.rejected in line:
                 # These are transactions that didn't went through.
                 transactions.pop()
                 continue
