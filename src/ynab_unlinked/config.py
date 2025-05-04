@@ -62,6 +62,7 @@ class Config(BaseModel):
                 continue
 
             self.payee_rules.setdefault(ynab_payee, set()).add(imported_payee)
+            self.save()
 
     def payee_from_fules(self, payee: str) -> str | None:
         return next(

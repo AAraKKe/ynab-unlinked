@@ -1,4 +1,4 @@
-from ynab import TransactionDetail
+from ynab import TransactionDetail, TransactionClearedStatus
 
 from ynab_unlinked.config import Config
 from ynab_unlinked.models import MatchStatus, TransactionWithYnabData
@@ -29,17 +29,19 @@ def __match_single_transaction(
     reconcile: bool,
     config: Config,
 ):
-    for t in ynab_transactions:
-        if t.id in ynab_matched:
+    for ynab_transaction in ynab_transactions:
+        if ynab_transaction.id in ynab_matched:
             continue
 
-        date_window = __match_date(transaction, t)
-        similar_payee = payee_matches(transaction, config, t)
-        same_amount = __match_amount(transaction, t)
+        date_window = __match_date(transaction, ynab_transaction)
+        similar_payee = payee_matches(transaction, config, ynab_transaction)
+        same_amount = __match_amount(transaction, ynab_transaction)
 
         if date_window and same_amount:
-            ynab_matched.add(t.id)
-            return __finalize_match(transaction, t, reconcile, similar_payee)
+            ynab_matched.add(ynab_transaction.id)
+            return __finalize_match(
+                transaction, ynab_transaction, reconcile, similar_payee
+            )
 
 
 def __finalize_match(
@@ -77,5 +79,7 @@ def match_transactions(
     # to a single existing transaction in YNAB
     ynab_matched: set[str] = set()
 
-    for t in transactions:
-        __match_single_transaction(t, ynab_transactions, ynab_matched, reconcile, config)
+    for transaction in transactions:
+        __match_single_transaction(
+            transaction, ynab_transactions, ynab_matched, reconcile, config
+        )

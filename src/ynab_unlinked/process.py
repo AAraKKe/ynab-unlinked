@@ -148,13 +148,13 @@ def process_transactions(
     print("[bold green]✔ Transactions read")
 
     with Status("Augmenting transactions..."):
-        set_payee_from_ynab(transactions, client, config)
         match_transactions(transactions, ynab_transactions, reconcile, config)
+        set_payee_from_ynab(transactions, client, config)
     print("[bold green]✔ Transactions augmneted with YNAB information")
 
     display.transactions_to_upload(transactions)
 
-    if not any(t.needs_creation or t.needs_update for t in transactions):
+    if not any(t.needs_creation for t in transactions):
         print("[bold blue]🎉 All done! Nothing to do.")
         config.update_and_save(transactions[0], entity.name())
         return
@@ -162,12 +162,12 @@ def process_transactions(
     if partial_matches := [
         t
         for t in transactions
-        if t.match_status is MatchStatus.PARTIAL_MATCH and t.needs_update
+        if t.match_status is MatchStatus.PARTIAL_MATCH and t.needs_creation
     ]:
         display.partial_matches(partial_matches)
         print(
-            "\nIf these partial matches are ok, you can accept them and update the transactions in YNAB.\n"
-            "If you don't accept them, new transactions will be created instead."
+            "\nIf these partial matches are ok, you can accept them and we will keep track of the "
+            "payee name for future reference."
         )
         final_matching = (
             MatchStatus.MATCHED
@@ -185,15 +185,12 @@ def process_transactions(
 
     with Status("Preparing transactions to upload..."):
         new_transactions = [t for t in transactions if t.needs_creation]
-        transactions_to_update = [t for t in transactions if t.needs_update]
 
-    print(f"[bold]New transactions:       {len(new_transactions)}")
-    print(f"[bold]Transactions to update: {len(transactions_to_update)}")
+    print(f"[bold]Transactions to import:       {len(new_transactions)}")
 
     if Confirm.ask("Do you want to continue and create the transactions?"):
         with Status("Creating/Updating transactions..."):
             client.create_transactions(acount_id, new_transactions)
-            client.update_transactions(transactions_to_update)
 
         config.update_and_save(transactions[0], entity.name())
 

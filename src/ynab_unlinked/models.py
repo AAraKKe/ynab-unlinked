@@ -65,16 +65,25 @@ class TransactionWithYnabData(Transaction):
         self.cleared: TransactionClearedStatus = TransactionClearedStatus.CLEARED
         self.ynab_cleared: TransactionClearedStatus | None = None
 
-    @property
-    def needs_creation(self) -> bool:
-        return self.match_status is MatchStatus.UNMATCHED
+    def __repr__(self) -> str:
+        return (
+            f"Transaction(date={self.date}, payee={self.payee!r}, "
+            f"amount={self.amount}, past={self.past}, counter={self.counter}, "
+            f"match_status={self.match_status}, partial_match={self.partial_match!r}, "
+            f"ynab_id={self.ynab_id!r}, ynab_payee_id={self.ynab_payee_id!r}, "
+            f"ynab_payee={self.ynab_payee!r}, cleared={self.cleared}, "
+            f"ynab_cleared={self.ynab_cleared})"
+        )
 
     @property
-    def needs_update(self) -> bool:
-        return (
-            self.match_status is not MatchStatus.UNMATCHED
-            and self.ynab_cleared is not self.cleared
+    def needs_creation(self) -> bool:
+        match_uncleared = (
+            self.partial_match is not None
+            and self.partial_match.cleared is TransactionClearedStatus.UNCLEARED
         )
+        is_unmatched = self.match_status is MatchStatus.UNMATCHED
+
+        return is_unmatched or match_uncleared
 
     @property
     def cleared_status(self) -> str:
@@ -90,7 +99,13 @@ class TransactionWithYnabData(Transaction):
             case MatchStatus.MATCHED:
                 return "🔗"
             case MatchStatus.PARTIAL_MATCH:
-                return "🔍" if self.needs_update else "🔗"
+                assert (
+                    self.partial_match is not None
+                ), "Cannot have a partial match without a transaction"
+
+                if self.partial_match.cleared is TransactionClearedStatus.UNCLEARED:
+                    return "🔍"
+                return "🔗"
             case _:
                 return ""
 

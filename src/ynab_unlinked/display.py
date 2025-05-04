@@ -53,7 +53,7 @@ def transaction_table(transactions: list[Transaction]):
     table = Table(
         *columns,
         title="Transactions to process",
-        caption=f"Grayed out transactions have already been processed. Only {MAX_PAST_TRANSACTIONS_SHOWN} processed transactions are shown.",
+        caption=f"Only {MAX_PAST_TRANSACTIONS_SHOWN} processed transactions are shown.",
         box=box.SIMPLE,
     )
 
@@ -81,6 +81,38 @@ def transaction_table(transactions: list[Transaction]):
     print(table)
 
 
+def payee_line(transaction: TransactionWithYnabData) -> str:
+    print(transaction)
+    if (
+        transaction.ynab_payee is not None
+        and transaction.payee == transaction.ynab_payee
+    ):
+        return transaction.ynab_payee
+
+    return f"{transaction.ynab_payee} [gray37] [Original payee: {transaction.payee}][/gray37]"
+
+
+def updload_help_message(with_partial_matches=False) -> str:
+    main_message = (
+        "The table below shows the transactaions to be imported to YNAB. The transactions in the input file have been matched with existing transactions in YNAB.\n"
+        " - The [green]green[/] rows are new transactions to be imported.\n"
+    )
+    if with_partial_matches:
+        main_message += (
+            " - The [yellow]yellow[/] rows are transaction to be imported that match in date and amount with\n"
+            "   transations that exist in YNAB but for which teh payee name could not be matched.\n"
+            "   This is usually because the name from the import file is substantially different any payee present in YNAB.\n"
+            "   If you accept these transactions are valid, we will keep track of this naming for future imports."
+        )
+
+    main_message += (
+        "The cleared status column shows how the transaction will be loaded to YNAB, not the current "
+        "status if the transaction was already in YNAB."
+    )
+
+    return main_message
+
+
 def transactions_to_upload(transactions: list[TransactionWithYnabData]):
     columns = [
         Column(header="Match", justify="center", width=5),
@@ -97,61 +129,36 @@ def transactions_to_upload(transactions: list[TransactionWithYnabData]):
         box=box.SIMPLE,
     )
 
+    partial_matches = False
     for transaction in transactions:
         outflow = transaction.pretty_amount if transaction.amount < 0 else None
         inflow = transaction.pretty_amount if transaction.amount > 0 else None
 
         if transaction.needs_creation:
-            style = "green"
-        elif transaction.needs_update:
             if transaction.match_status == MatchStatus.PARTIAL_MATCH:
                 style = "yellow"
+                partial_matches = True
             else:
-                style = "cyan"
+                style = "green"
         else:
             style = "default"
-
-        if transaction.payee == transaction.ynab_payee:
-            payee_line = transaction.ynab_payee
-        else:
-            payee_line = f"{transaction.ynab_payee} [gray37] [Original payee: {transaction.payee}][/gray37]"
 
         table.add_row(
             transaction.match_emoji,
             transaction.date.strftime("%m/%d/%Y"),
-            payee_line,
+            payee_line(transaction),
             inflow,
             outflow,
             transaction.cleared_status,
             style=style,
         )
 
-    print(Rule("Transactions to be processed"))
-    print(
-        "The table below shows the transactaions to be loaded into YNAB. The transactions in the input file have been matched with existing transactions in YNAB.\n"
-        " - The [green]green[/] rows are new transactions to be created.\n"
-        " - The [cyan]blue[/] rows are existing transactions to be updated. These are transactions that have \n"
-        "   been matched with an existing transaction in YNAB by date, amount and payee name. \n"
-        "   The original payee name is shown in [gray37]gray[/] next to the updated payee name.\n"
-        " - The [yellow]yellow[/] rows are existing transactions that have been partially matched with existing\n"
-        "   transactions in YNAB. This means that the amount and dates found in the input transaction match those of an existing transaction in YNAB.\n"
-        "   However, the payee for the transaction in the input file cannot be easily matched with an existing payee in YNAB.\n"
-        "   These transactions need to be validated to ensure that the correct transaction is being updated.\n"
-        "The cleared status column shows how the transaction will be loaded to YNAB, not the current status if the transaction was already in YNAB."
-    )
+    print(Rule("Transactions to be imported"))
+    print(updload_help_message(partial_matches))
     print(table)
 
 
 def partial_matches(transactions: list[TransactionWithYnabData]):
-    print(
-        "\n[bold yellow]🚨 Some transactions have been partially matched and require an update![/]"
-        "\n\n"
-        "This means that the amount and dates found in the input transaction match those of an existing transaction in YNAB."
-        " However, the payee for the transaction in the input file cannot be easily matched with an existing payee in YNAB."
-        "\n"
-        "This is common if payees in your entity export and in YNAB are not very similar. \n"
-    )
-
     columns = [
         Column(header="Date", justify="left", max_width=10),
         Column(header="Payee", justify="left", width=50),
@@ -168,8 +175,8 @@ def partial_matches(transactions: list[TransactionWithYnabData]):
     )
 
     for transaction in transactions:
-        # If we do not need to update it, skip it
-        if not transaction.needs_update:
+        # If we do not need to import it, skip it
+        if not transaction.needs_creation:
             continue
 
         # Skip if no partial match
