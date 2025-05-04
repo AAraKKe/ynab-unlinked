@@ -37,11 +37,26 @@ def add_past_to_transactions(
             t.past = True
 
 
+def add_counter_to_existing_transactions(transactions: list[Transaction]):
+    """
+    This method check every transaction that has the same date, payee and amount
+    and increments its counter to ensure that they have a unique import ID when
+    being added to YNAB.
+    """
+    counters: dict[str, int] = {}
+    for t in transactions:
+        if t.id not in counters:
+            counters[t.id] = 0
+        else:
+            counters[t.id] += 1
+            t.counter = counters[t.id]
+
+
 def preprocess_transactions(
     transactions: list[Transaction], checkpoint: Checkpoint | None
 ):
     add_past_to_transactions(transactions, checkpoint)
-
+    add_counter_to_existing_transactions(transactions)
 
 def filter_transactions(
     transactions: list[Transaction], checkpoint: Checkpoint | None
@@ -100,7 +115,7 @@ def process_transactions(
     reconcile = context.reconcile
 
     acount_id = get_or_prompt_account_id(config, entity.name())
-    
+
     parsed_input = entity.parse(input_file, context)
     checkpoint = config.entities[entity.name()].checkpoint
 

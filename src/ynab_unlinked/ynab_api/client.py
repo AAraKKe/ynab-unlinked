@@ -55,6 +55,7 @@ class Client:
                 cleared=t.cleared,
                 amount=int(t.amount * 1000),
                 approved=True,
+                import_id=t.id,
             )
             for t in transactions
         ]

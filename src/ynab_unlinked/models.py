@@ -2,6 +2,7 @@ from enum import Enum
 import datetime as dt
 from dataclasses import dataclass
 from typing import assert_never
+from hashlib import sha256
 
 from ynab import TransactionClearedStatus, TransactionDetail
 
@@ -14,10 +15,15 @@ class MatchStatus(Enum):
 
 @dataclass
 class Transaction:
+    """Represents a transaction imported from a file by a given entity"""
+
     date: dt.date
     payee: str
     amount: float
-    past: bool = False
+
+    def __post_init__(self):
+        self.past = False
+        self.counter = 0
 
     @property
     def pretty_payee(self) -> str:
@@ -30,6 +36,18 @@ class Transaction:
     def __hash__(self) -> int:
         return hash(f"{self.date:%m-%d-%Y}{self.payee}{self.amount}")
 
+    @property
+    def id(self) -> str:
+        return sha256(
+            f"{self.date:%m-%d-%Y}{self.payee}{self.amount}{self.counter}".encode()
+        ).hexdigest()[:30]
+
+    def __repr__(self) -> str:
+        return (
+            f"Transaction(date={self.date}, payee={self.payee},"
+            f"amount={self.amount}, past={self.past}, counter={self.counter})"
+        )
+
 
 class TransactionWithYnabData(Transaction):
     def __init__(self, transaction: Transaction):
@@ -37,7 +55,6 @@ class TransactionWithYnabData(Transaction):
             date=transaction.date,
             payee=transaction.payee,
             amount=transaction.amount,
-            past=transaction.past,
         )
         self.match_status: MatchStatus = MatchStatus.UNMATCHED
         self.partial_match: TransactionDetail | None = None
@@ -105,4 +122,3 @@ class TransactionWithYnabData(Transaction):
             self.cleared = TransactionClearedStatus.RECONCILED
         elif ynab_transaction.cleared is TransactionClearedStatus.UNCLEARED:
             self.cleared = TransactionClearedStatus.CLEARED
-
