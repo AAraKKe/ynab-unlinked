@@ -159,13 +159,11 @@ def process_transactions(
         config.update_and_save(transactions[0], entity.name())
         return
 
-    partial_matches = [
+    if partial_matches := [
         t
         for t in transactions
         if t.match_status is MatchStatus.PARTIAL_MATCH and t.needs_update
-    ]
-
-    if partial_matches:
+    ]:
         display.partial_matches(partial_matches)
         print(
             "\nIf these partial matches are ok, you can accept them and update the transactions in YNAB.\n"

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from ynab_unlinked.models import Transaction, TransactionWithYnabData
 
 CONFIG_PATH = Path.home() / ".config/ynab_unlinked/config.json"
-TRANSACTION_GRACE_PERIOD_DAYS = 60
+TRANSACTION_GRACE_PERIOD_DAYS = 2
 
 
 class Checkpoint(BaseModel):
@@ -64,11 +64,14 @@ class Config(BaseModel):
             self.payee_rules.setdefault(ynab_payee, set()).add(imported_payee)
 
     def payee_from_fules(self, payee: str) -> str | None:
-        for ynab_payee, valid_names in self.payee_rules.items():
-            if payee in valid_names:
-                return ynab_payee
-
-        return None
+        return next(
+            (
+                ynab_payee
+                for ynab_payee, valid_names in self.payee_rules.items()
+                if payee in valid_names
+            ),
+            None,
+        )
 
 
 def ensure_config():

@@ -90,10 +90,7 @@ class TransactionWithYnabData(Transaction):
             case MatchStatus.MATCHED:
                 return "🔗"
             case MatchStatus.PARTIAL_MATCH:
-                if self.needs_update:
-                    return "🔍"
-                else:
-                    return "🔗"
+                return "🔍" if self.needs_update else "🔗"
             case _:
                 return ""
 
