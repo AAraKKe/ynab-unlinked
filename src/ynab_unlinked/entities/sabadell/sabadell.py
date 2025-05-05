@@ -6,7 +6,7 @@ from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.models import Transaction
 
 ANCHOR_LINE = "FECHA|CONCEPTO|LOCALIDAD|IMPORTE"
-TRANSACTION_PATTER = re.compile(r"^(\d{2}/\d{2})\|([\w\s]+?)\|[\w\s]+?\|(.*EUR).*")
+TRANSACTION_PATTER = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|(.*EUR).*")
 
 
 class SabadellParser:
