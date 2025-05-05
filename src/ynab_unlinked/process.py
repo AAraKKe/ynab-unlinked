@@ -5,6 +5,7 @@ from pathlib import Path
 from rich import print
 from rich.prompt import Confirm, Prompt
 from rich.status import Status
+import typer
 
 from ynab_unlinked import display
 from ynab_unlinked.config import (
@@ -19,6 +20,7 @@ from ynab_unlinked.matcher import match_transactions
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.payee import set_payee_from_ynab
 from ynab_unlinked.ynab_api.client import Client
+from ynab_unlinked.exceptions import ParsingError
 
 # Request transactions to the YNAB API from the last checkpoint date minus 10 days for buffer
 TRANSACTIONS_DAYES_BEFORE_LAST_EXTRACTION = 10
@@ -116,7 +118,13 @@ def process_transactions(
 
     acount_id = get_or_prompt_account_id(config, entity.name())
 
-    parsed_input = entity.parse(input_file, context)
+    try:
+        parsed_input = entity.parse(input_file, context)
+    except ParsingError as e:
+        print(f"[bold red] Error when parsing {e.input_file}")
+        print(f"  Message: {e.message}")
+        raise typer.Exit(1) from e
+
     checkpoint = config.entities[entity.name()].checkpoint
 
     preprocess_transactions(parsed_input, checkpoint)
