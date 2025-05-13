@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-and-publish:
-    if: startsWith(github.event.release.tag_name, 'yul-') && github.event.release.target_commitish == 'release'
+    if: startsWith(github.event.release.tag_name, 'yul-')
     name: Build and relase to PyPi
     runs-on: ubuntu-latest
     environment: release
