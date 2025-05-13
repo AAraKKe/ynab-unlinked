@@ -54,7 +54,7 @@ class Client:
                 payee_name=t.ynab_payee,
                 cleared=t.cleared,
                 amount=int(t.amount * 1000),
-                approved=True,
+                approved=False,
                 import_id=t.id,
             )
             for t in transactions
