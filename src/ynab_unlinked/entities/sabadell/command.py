@@ -1,7 +1,7 @@
 from pathlib import Path
+from typing import Annotated
 
 import typer
-from typing_extensions import Annotated
 
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.process import process_transactions

@@ -2,12 +2,13 @@ from typing import overload
 
 import unidecode
 from rapidfuzz import fuzz
-from ynab import Payee, TransactionDetail
+from rich import print
+from ynab.models.payee import Payee
+from ynab.models.transaction_detail import TransactionDetail
 
 from ynab_unlinked.config import Config
 from ynab_unlinked.models import TransactionWithYnabData
 from ynab_unlinked.ynab_api import Client
-from rich import print
 
 FUZZY_MATCH_THRESHOLD = 90
 

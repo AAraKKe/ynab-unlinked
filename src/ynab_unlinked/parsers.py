@@ -1,10 +1,9 @@
+import contextlib
+import io
 from collections.abc import Generator, Sequence
 from pathlib import Path
-from typing import Any, overload, Literal
-import warnings
-import contextlib
-import os
-import io
+from typing import Any, Literal, overload
+
 import rich
 
 from ynab_unlinked.exceptions import ParsingError
@@ -53,31 +52,32 @@ def pdf(
     # no impact that break the usage of the tool
     stderr_capture = io.StringIO()
 
-    with contextlib.redirect_stderr(stderr_capture):
-        with pdfplumber.open(input_file) as pdf:
-            for page_number, page in enumerate(pdf.pages):
-                table = page.extract_table(table_settings=table_settings or {})
-                if table is None:
+    with contextlib.redirect_stderr(stderr_capture), pdfplumber.open(input_file) as pdf:
+        for page_number, page in enumerate(pdf.pages):
+            table = page.extract_table(table_settings=table_settings or {})
+            if table is None:
+                raise ParsingError(
+                    input_file,
+                    f"No transaction table was found in page {page_number}",
+                )
+
+            for row in table:
+                if (
+                    expected_number_of_columns is not None
+                    and (n_columns := len(row)) != expected_number_of_columns
+                ):
                     raise ParsingError(
                         input_file,
-                        f"No transaction table was found in page {page_number}",
+                        f"Expected {expected_number_of_columns} but found {n_columns}",
                     )
 
-                for row in table:
-                    if expected_number_of_columns is not None:
-                        if (n_columns := len(row)) != expected_number_of_columns:
-                            raise ParsingError(
-                                input_file,
-                                f"Expected {expected_number_of_columns} but found {n_columns}",
-                            )
+                if any(c is None for c in row) and not allow_empty_columns:
+                    raise ParsingError(
+                        input_file,
+                        "Malformed Transaction Table: Expected no empty column but found at least one.",
+                    )
 
-                    if any(c is None for c in row) and not allow_empty_columns:
-                        raise ParsingError(
-                            input_file,
-                            "Malformed Transaction Table: Expected no empty column but found at least one.",
-                        )
-
-                    yield row
+                yield row
 
     if captured_output := stderr_capture.getvalue():
         cropbox_message = "CropBox missing from /Page, defaulting to MediaBox"

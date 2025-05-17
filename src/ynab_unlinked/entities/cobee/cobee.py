@@ -1,9 +1,9 @@
-from typing_extensions import assert_never
-from dataclasses import dataclass
 import datetime as dt
-from enum import StrEnum
 import re
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+from typing import assert_never
 
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.models import Transaction

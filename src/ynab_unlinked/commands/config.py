@@ -1,6 +1,5 @@
-from typing_extensions import Annotated
-from typing import assert_never
 from enum import StrEnum
+from typing import Annotated, assert_never
 
 import typer
 from rich import print

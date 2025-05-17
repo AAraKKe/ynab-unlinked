@@ -1,6 +1,17 @@
 import datetime as dt
 
-import ynab
+from ynab.api.accounts_api import AccountsApi
+from ynab.api.budgets_api import BudgetsApi
+from ynab.api.payees_api import PayeesApi
+from ynab.api.transactions_api import TransactionsApi
+from ynab.api_client import ApiClient
+from ynab.configuration import Configuration
+from ynab.models.account import Account
+from ynab.models.budget_summary import BudgetSummary
+from ynab.models.new_transaction import NewTransaction
+from ynab.models.payee import Payee
+from ynab.models.post_transactions_wrapper import PostTransactionsWrapper
+from ynab.models.transaction_detail import TransactionDetail
 
 from ynab_unlinked.config import Config
 from ynab_unlinked.models import TransactionWithYnabData
@@ -9,22 +20,22 @@ from ynab_unlinked.models import TransactionWithYnabData
 class Client:
     def __init__(self, config: Config):
         self.config = config
-        self.__client = ynab.ApiClient(ynab.Configuration(access_token=config.api_key))
+        self.__client = ApiClient(Configuration(access_token=config.api_key))
 
-    def budgets(self, include_accounts: bool = False) -> list[ynab.BudgetSummary]:
-        api = ynab.BudgetsApi(self.__client)
+    def budgets(self, include_accounts: bool = False) -> list[BudgetSummary]:
+        api = BudgetsApi(self.__client)
         response = api.get_budgets(include_accounts=include_accounts)
         return response.data.budgets
 
-    def accounts(self) -> list[ynab.Account]:
-        api = ynab.AccountsApi(self.__client)
+    def accounts(self) -> list[Account]:
+        api = AccountsApi(self.__client)
         response = api.get_accounts(self.config.budget_id)
         return response.data.accounts
 
     def transactions(
         self, account_id: str, since_date: dt.date | None = None
-    ) -> list[ynab.TransactionDetail]:
-        api = ynab.TransactionsApi(self.__client)
+    ) -> list[TransactionDetail]:
+        api = TransactionsApi(self.__client)
         response = api.get_transactions_by_account(
             budget_id=self.config.budget_id,
             account_id=account_id,
@@ -33,8 +44,8 @@ class Client:
 
         return response.data.transactions
 
-    def payees(self) -> list[ynab.Payee]:
-        api = ynab.PayeesApi(self.__client)
+    def payees(self) -> list[Payee]:
+        api = PayeesApi(self.__client)
         response = api.get_payees(self.config.budget_id)
         return response.data.payees
 
@@ -44,10 +55,10 @@ class Client:
         if not transactions:
             return
 
-        api = ynab.TransactionsApi(self.__client)
+        api = TransactionsApi(self.__client)
 
         transactions_to_create = [
-            ynab.NewTransaction(
+            NewTransaction(
                 account_id=account_id,
                 date=t.date,
                 payee_name=t.payee,
@@ -61,5 +72,5 @@ class Client:
 
         api.create_transaction(
             self.config.budget_id,
-            data=ynab.PostTransactionsWrapper(transactions=transactions_to_create),
+            data=PostTransactionsWrapper(transactions=transactions_to_create),
         )

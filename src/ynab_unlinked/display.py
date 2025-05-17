@@ -1,9 +1,9 @@
 from rich import box, print
+from rich.prompt import Prompt
 from rich.rule import Rule
+from rich.status import Status
 from rich.style import Style
 from rich.table import Column, Table
-from rich.prompt import Prompt
-from rich.status import Status
 
 from ynab_unlinked.config import Config, ensure_config
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
@@ -93,14 +93,16 @@ def payee_line(transaction: TransactionWithYnabData) -> str:
 
 def updload_help_message(with_partial_matches=False) -> str:
     main_message = (
-        "The table below shows the transactaions to be imported to YNAB. The transactions in the input file have been matched with existing transactions in YNAB.\n"
+        "The table below shows the transactaions to be imported to YNAB. The transactions in the input file "
+        "have been matched with existing transactions in YNAB.\n"
         " - The [green]green[/] rows are new transactions to be imported.\n"
     )
     if with_partial_matches:
         main_message += (
             " - The [yellow]yellow[/] rows are transaction to be imported that match in date and amount with\n"
             "   transations that exist in YNAB but for which teh payee name could not be matched.\n"
-            "   This is usually because the name from the import file is substantially different any payee present in YNAB.\n"
+            "   This is usually because the name from the import file is substantially different any payee "
+            "present in YNAB.\n"
             "   If you accept these transactions are valid, we will keep track of this naming for future imports."
         )
 
@@ -168,7 +170,10 @@ def partial_matches(transactions: list[TransactionWithYnabData]):
     table = Table(
         *columns,
         title="Partial Matches",
-        caption="Each pair of transactions shows the imported transaction (top) and the \npartial match in YNAB (bottom).",
+        caption=(
+            "Each pair of transactions shows the imported transaction (top) \n"
+            "and the partial match in YNAB (bottom)."
+        ),
         box=box.SIMPLE,
         row_styles=["", "gray70"],
     )

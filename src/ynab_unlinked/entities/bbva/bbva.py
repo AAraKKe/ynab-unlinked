@@ -1,6 +1,6 @@
 import datetime as dt
-from typing import cast
 from pathlib import Path
+from typing import cast
 
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities import Entity

@@ -1,6 +1,6 @@
-import pkgutil
 import importlib
-from typing_extensions import Annotated
+import pkgutil
+from typing import Annotated
 
 import typer
 
@@ -34,7 +34,7 @@ def load_callback(
 
 
 # Dynamically load all entities commands when present
-for finder, name, ispkg in pkgutil.iter_modules(entities.__path__):
+for _finder, name, ispkg in pkgutil.iter_modules(entities.__path__):
     if not ispkg:
         continue
 
@@ -42,7 +42,7 @@ for finder, name, ispkg in pkgutil.iter_modules(entities.__path__):
     if not hasattr(module, "command"):
         continue
 
-    command = getattr(module, "command")
+    command = module.command
 
     if callable(command):
         load.command(name=name, no_args_is_help=True)(command)

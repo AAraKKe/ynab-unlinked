@@ -6,7 +6,7 @@ import typer
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.process import process_transactions
 
-from .cobee import Cobee, Language, CobeeContext
+from .cobee import Cobee, CobeeContext, Language
 
 
 def command(

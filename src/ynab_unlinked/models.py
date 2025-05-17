@@ -1,10 +1,11 @@
-from enum import Enum
 import datetime as dt
 from dataclasses import dataclass
-from typing import assert_never
+from enum import Enum
 from hashlib import sha256
+from typing import assert_never
 
-from ynab import TransactionClearedStatus, TransactionDetail
+from ynab.models.transaction_cleared_status import TransactionClearedStatus
+from ynab.models.transaction_detail import TransactionDetail
 
 
 class MatchStatus(Enum):
