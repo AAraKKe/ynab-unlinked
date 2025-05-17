@@ -60,6 +60,7 @@ def preprocess_transactions(
     add_past_to_transactions(transactions, checkpoint)
     add_counter_to_existing_transactions(transactions)
 
+
 def filter_transactions(
     transactions: list[Transaction], checkpoint: Checkpoint | None
 ) -> Generator[Transaction, None, None]:

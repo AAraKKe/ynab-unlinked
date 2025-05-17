@@ -35,4 +35,4 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           # skip_existing: true # Uncomment if you want to skip publishing if the version already exists
-          print_hash: true
+          print-hash: true

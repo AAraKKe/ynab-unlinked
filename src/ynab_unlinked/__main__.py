@@ -1,13 +1,12 @@
 import typer
 
+from ynab_unlinked import app
 from ynab_unlinked.config import Config, ensure_config
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.commands import load, config
 from ynab_unlinked.display import prompt_for_api_key, prompt_for_budget
 
 from rich import print
-
-app = typer.Typer()
 
 app.add_typer(load, name="load")
 app.add_typer(config, name="config")

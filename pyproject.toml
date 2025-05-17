@@ -39,13 +39,16 @@ Source = "https://github.com/Juanpe Araque/ynab-unlinked"
 [tool.hatch.version]
 path = "src/ynab_unlinked/__about__.py"
 
-[tool.hatch.envs.types]
-extra-dependencies = ["mypy>=1.0.0"]
-[tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/ynab_unlinked tests}"
+# Environment for static analysis
+[tool.hatch.envs.st]
+installer = "uv"
+extra-dependencies = ["ruff>=0.11", "ty"]
 
-[tool.hatch.envs.default.scripts]
-yul = "python src/ynab_unlinked {args}"
+[tool.hatch.envs.st.scripts]
+format-check = "ruff format --check"
+type-check = "ty check"
+check = ["- format-check", "- type-check"]
+format = "ruff format"
 
 [tool.coverage.run]
 source_pkgs = ["ynab_unlinked", "tests"]

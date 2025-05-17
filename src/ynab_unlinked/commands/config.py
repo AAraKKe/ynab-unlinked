@@ -50,7 +50,9 @@ def set_command(
 @config.command(name="show")
 def show():
     if not ensure_config():
-        raise typer.Abort("YNAB Unlinked config not found. Run 'yul setup' to configure it.")
+        raise typer.Abort(
+            "YNAB Unlinked config not found. Run 'yul setup' to configure it."
+        )
 
     config = Config.load()
     print(config.model_dump_json(indent=2))

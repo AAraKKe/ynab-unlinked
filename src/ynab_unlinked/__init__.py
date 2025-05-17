@@ -4,4 +4,4 @@
 
 import typer
 
-app = typer.Typer(name="ynab-unlinked", no_args_is_help=True)
+app = typer.Typer(no_args_is_help=True)

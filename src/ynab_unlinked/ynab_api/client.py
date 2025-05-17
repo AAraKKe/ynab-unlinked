@@ -50,8 +50,7 @@ class Client:
             ynab.NewTransaction(
                 account_id=account_id,
                 date=t.date,
-                payee_id=t.ynab_payee_id,
-                payee_name=t.ynab_payee,
+                payee_name=t.payee,
                 cleared=t.cleared,
                 amount=int(t.amount * 1000),
                 approved=False,
@@ -63,23 +62,4 @@ class Client:
         api.create_transaction(
             self.config.budget_id,
             data=ynab.PostTransactionsWrapper(transactions=transactions_to_create),
-        )
-
-    def update_transactions(self, transactions: list[TransactionWithYnabData]):
-        if not transactions:
-            return
-
-        api = ynab.TransactionsApi(self.__client)
-
-        transactions_to_update = [
-            ynab.SaveTransactionWithIdOrImportId(
-                id=t.ynab_id,
-                cleared=t.cleared,
-                approved=True,
-            )
-            for t in transactions
-        ]
-        api.update_transactions(
-            self.config.budget_id,
-            data=ynab.PatchTransactionsWrapper(transactions=transactions_to_update),
         )

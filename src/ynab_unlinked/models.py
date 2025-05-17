@@ -99,9 +99,9 @@ class TransactionWithYnabData(Transaction):
             case MatchStatus.MATCHED:
                 return "🔗"
             case MatchStatus.PARTIAL_MATCH:
-                assert (
-                    self.partial_match is not None
-                ), "Cannot have a partial match without a transaction"
+                assert self.partial_match is not None, (
+                    "Cannot have a partial match without a transaction"
+                )
 
                 if self.partial_match.cleared is TransactionClearedStatus.UNCLEARED:
                     return "🔍"

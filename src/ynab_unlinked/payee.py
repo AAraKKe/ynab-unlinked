@@ -7,6 +7,7 @@ from ynab import Payee, TransactionDetail
 from ynab_unlinked.config import Config
 from ynab_unlinked.models import TransactionWithYnabData
 from ynab_unlinked.ynab_api import Client
+from rich import print
 
 FUZZY_MATCH_THRESHOLD = 90
 
@@ -18,7 +19,9 @@ def __preprocess_payee(value: str) -> str:
 
 @overload
 def payee_matches(
-    transaction: TransactionWithYnabData, config: Config, payee_source: TransactionDetail
+    transaction: TransactionWithYnabData,
+    config: Config,
+    payee_source: TransactionDetail,
 ) -> bool: ...
 
 
@@ -45,6 +48,7 @@ def payee_matches(
 
     if config.payee_from_fules(transaction.payee) == payee_name:
         return True
+
     return (
         fuzz.partial_ratio(
             transaction.payee,
@@ -56,11 +60,20 @@ def payee_matches(
     )
 
 
-def __match_from_payee_list(transaction: TransactionWithYnabData, payees: list[Payee], config: Config):
+def __match_from_payee_list(
+    transaction: TransactionWithYnabData, payees: list[Payee], config: Config
+):
     # If we have a partial match, use it
+    if transaction.amount == -44.99:
+        print(transaction)
+
     if transaction.partial_match is not None:
         transaction.ynab_payee = transaction.partial_match.payee_name
         transaction.ynab_payee_id = transaction.partial_match.payee_id
+        if transaction.amount == -44.99:
+            print("Partial match found")
+            print(f"YNAB Payee: {transaction.ynab_payee}")
+            print(f"Payee:      {transaction.payee}")
         return
 
     for p in payees:
@@ -72,7 +85,9 @@ def __match_from_payee_list(transaction: TransactionWithYnabData, payees: list[P
     transaction.ynab_payee = transaction.payee
 
 
-def set_payee_from_ynab(transactions: list[TransactionWithYnabData], client: Client, config: Config):
+def set_payee_from_ynab(
+    transactions: list[TransactionWithYnabData], client: Client, config: Config
+):
     """
     Compare each transaction payee with an existing YNAB payee and set the payee from YNAB if a match is found
     """

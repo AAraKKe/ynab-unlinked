@@ -16,7 +16,6 @@ def command(
         typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
     ],
 ):
-
     ctx: YnabUnlinkedContext = context.obj
 
     process_transactions(
