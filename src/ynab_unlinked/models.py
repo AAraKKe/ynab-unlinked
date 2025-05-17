@@ -110,7 +110,8 @@ class TransactionWithYnabData(Transaction):
             case _:
                 return ""
 
-    def cleared_str(self, cleared: TransactionClearedStatus) -> str:
+    @staticmethod
+    def cleared_str(cleared: TransactionClearedStatus) -> str:
         match cleared:
             case TransactionClearedStatus.RECONCILED:
                 return "🔒 Reconciled"

@@ -24,6 +24,7 @@ class EntityConfig(BaseModel):
 class Config(BaseModel):
     api_key: str
     budget_id: str
+    last_reconciliation_date: dt.date | None = None
     entities: dict[str, EntityConfig] = Field(default_factory=dict)
     payee_rules: dict[str, set[str]] = Field(default_factory=dict)
 

@@ -63,7 +63,7 @@ def preprocess_transactions(
 
 def filter_transactions(
     transactions: list[Transaction], checkpoint: Checkpoint | None
-) -> Generator[Transaction, None, None]:
+) -> Generator[Transaction]:
     if checkpoint is None:
         yield from transactions
         return

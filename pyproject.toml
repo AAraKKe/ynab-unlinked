@@ -7,14 +7,14 @@ name = "ynab-unlinked"
 dynamic = ["version"]
 description = ''
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = "==3.13"
 license = "MIT"
 keywords = []
 authors = [{ name = "Juanpe Araque", email = "juanpe@committhatline.com" }]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
@@ -42,13 +42,19 @@ path = "src/ynab_unlinked/__about__.py"
 # Environment for static analysis
 [tool.hatch.envs.st]
 installer = "uv"
-extra-dependencies = ["ruff>=0.11", "ty"]
+extra-dependencies = [
+  "ruff>=0.11",
+  "pyright~=1.1",
+]
 
 [tool.hatch.envs.st.scripts]
 format-check = "ruff format --check"
-type-check = "ty check"
-check = ["- format-check", "- type-check"]
+lint = "ruff check"
+type-check = "pyright src tests"
+check = ["- lint", "- format-check", "- type-check"]
 format = "ruff format"
+lint-fix = "ruff check --fix --unsafe-fixes"
+fix = ["format", "lint-fix"]
 
 [tool.coverage.run]
 source_pkgs = ["ynab_unlinked", "tests"]
@@ -62,3 +68,58 @@ tests = ["tests", "*/ynab-unlinked/tests"]
 
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+
+[tool.pyright]
+exclude = [
+    "**/.vscode/**",
+    "**/__pycache__/**",
+    "**/.egg-info/**",
+    "**/.git/**",
+    "**/.mypy_cache/**",
+    "**/.pytest_cache/**",
+    "**/.hatch/**",
+    "**/*.egg-info/**",
+    "dist",
+]
+ignore = [
+    "**/.vscode/**",
+    "**/__pycache__/**",
+    "**/.egg-info/**",
+    "**/.git/**",
+    "**/.mypy_cache/**",
+    "**/.pytest_cache/**",
+    "**/.hatch/**",
+    "**/*.egg-info/**",
+    "dist"
+]
+
+[tool.ruuf]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ynab_unlinked", "tests"]
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 120
+max-line-length = 120
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true

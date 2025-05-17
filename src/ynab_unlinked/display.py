@@ -1,15 +1,35 @@
+from itertools import groupby
+from typing import NamedTuple
+
 from rich import box, print
 from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.status import Status
 from rich.style import Style
 from rich.table import Column, Table
+from ynab.models.account import Account
+from ynab.models.transaction_detail import TransactionDetail
 
 from ynab_unlinked.config import Config, ensure_config
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.ynab_api.client import Client
 
 MAX_PAST_TRANSACTIONS_SHOWN = 3
+
+
+class YnabAmountFormatted(NamedTuple):
+    inflow: str
+    outflow: str
+    amount: str
+
+
+def format_ynab_amount(ynab_amount: int) -> YnabAmountFormatted:
+    value = ynab_amount / 1000
+    value_str = f"{value:.2f}€"
+    outflow = value_str if ynab_amount < 0 else ""
+    inflow = value_str if ynab_amount > 0 else ""
+
+    return YnabAmountFormatted(inflow=inflow, outflow=outflow, amount=value_str)
 
 
 def prompt_for_api_key() -> str:
@@ -195,10 +215,7 @@ def partial_matches(transactions: list[TransactionWithYnabData]):
         orig_inflow = transaction.pretty_amount if transaction.amount > 0 else None
 
         # YNAB transaction row (from partial_match)
-        ynab_amount = transaction.partial_match.amount / 1000
-        ynab_pretty_amount = f"{ynab_amount:.2f}€"
-        ynab_outflow = ynab_pretty_amount if ynab_amount < 0 else None
-        ynab_inflow = ynab_pretty_amount if ynab_amount > 0 else None
+        amount = format_ynab_amount(transaction.partial_match.amount)
 
         # Add the pair of rows
         table.add_row(
@@ -212,10 +229,79 @@ def partial_matches(transactions: list[TransactionWithYnabData]):
         table.add_row(
             transaction.partial_match.var_date.strftime("%m/%d/%Y"),
             transaction.partial_match.payee_name or "",
-            ynab_inflow,
-            ynab_outflow,
+            amount.inflow,
+            amount.inflow,
             transaction.partial_match.cleared.name.capitalize(),
             end_section=True,
         )
 
     print(table)
+
+
+class ReconciliationGroup(NamedTuple):
+    account_name: str
+    transactions: list[TransactionDetail]
+
+def reconciliation_table(
+    accounts: list[Account], transactions: list[TransactionDetail]
+) -> list[ReconciliationGroup]:
+    """
+    Print a table with the transactions to reconcile per account and return a list
+    of transaction groups as displayed in the table.
+
+    The first table is referenced as number one.
+    """
+    id_to_account = {acc.id: acc for acc in accounts}
+    sorted_transactions = sorted(transactions, key=lambda t: t.account_id)
+
+    groups = []
+    for counter, (account_id, transaction_group) in enumerate(groupby(
+        sorted_transactions, key=lambda t: t.account_id
+    ), start=1):
+        account = id_to_account[account_id]
+
+        cleared_balance = format_ynab_amount(account.cleared_balance).amount
+        uncleared_balance = format_ynab_amount(account.uncleared_balance).amount
+        balance = format_ynab_amount(account.balance).amount
+        account_name = account.name
+
+        columns = [
+            Column(header="Date", justify="left", max_width=10),
+            Column(header="Payee", justify="left", width=70),
+            Column(header="Inflow", justify="right", max_width=15),
+            Column(header="Outflow", justify="right", max_width=15),
+            Column(header="Cleared Status", justify="left", width=15),
+        ]
+        print(
+            Rule(
+                title=(
+                    f"[{counter}] "
+                    f"{account_name} - [Balance: [green]{balance}[/] = "
+                    f"[green]{cleared_balance}[/] (cleraed) + "
+                    f"{uncleared_balance} (uncleared)]"
+                ),
+                align="left",
+                style="bold blue"
+            )
+        )
+        table = Table(*columns)
+
+        group = []
+        for transaction in transaction_group:
+            group.append(transaction)
+
+            amount = format_ynab_amount(transaction.amount)
+
+            table.add_row(
+                transaction.var_date.strftime("%m/%d/%Y"),
+                transaction.payee_name,
+                amount.inflow,
+                amount.outflow,
+                TransactionWithYnabData.cleared_str(transaction.cleared),
+            )
+
+        print(table)
+        print("\n")
+
+        groups.append(ReconciliationGroup(account_name=account_name, transactions=group))
+    return groups

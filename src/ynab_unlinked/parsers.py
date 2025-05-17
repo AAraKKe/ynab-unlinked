@@ -15,7 +15,7 @@ def pdf(
     allow_empty_columns: Literal[False] = False,
     table_settings: dict[str, Any] | None = None,
     expected_number_of_columns: int | None = None,
-) -> Generator[Sequence[str], None, None]: ...
+) -> Generator[Sequence[str]]: ...
 
 
 @overload
@@ -24,7 +24,7 @@ def pdf(
     allow_empty_columns: Literal[True] = True,
     table_settings: dict[str, Any] | None = None,
     expected_number_of_columns: int | None = None,
-) -> Generator[Sequence[str | None], None, None]: ...
+) -> Generator[Sequence[str | None]]: ...
 
 
 def pdf(
@@ -32,7 +32,7 @@ def pdf(
     allow_empty_columns: bool = False,
     table_settings: dict[str, Any] | None = None,
     expected_number_of_columns: int | None = None,
-) -> Generator[Sequence[str | None], None, None]:
+) -> Generator[Sequence[str | None]]:
     """
     Parse a pdf and extract the main table from it. The table is extracted using
     [pdfplumber](https://github.com/jsvine/pdfplumber).
