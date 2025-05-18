@@ -90,17 +90,22 @@ def reconcile(
             if transaction.cleared in cleared_allowed
         ]
         accounts = client.accounts()
+        ids_to_account = {acc.id: acc for acc in accounts}
 
     if not transactions_to_reconcile:
         print("[bold gree]All accounts are already reconciled!")
         return
 
-    reconcile_groups = display.reconciliation_table(accounts, transactions_to_reconcile)
+    reconcile_groups = display.reconciliation_table(
+        ids_to_account, transactions_to_reconcile
+    )
 
     selection = indexes_to_reconcile(max=len(reconcile_groups))
 
     if selection == "all":
         selected_transactions = transactions_to_reconcile
+        selected_ids = {t.account_id for t in selected_transactions}
+        selected_accounts = [ids_to_account[acc_id].name for acc_id in selected_ids]
     else:
         selected_transactions = []
         selected_accounts = []
