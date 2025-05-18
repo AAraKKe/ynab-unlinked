@@ -1,4 +1,4 @@
 # SPDX-FileCopyrightText: 2025-present Juanpe Araque <juanpe@committhatline.com>
 #
 # SPDX-License-Identifier: MIT
-__version__ = "0.3.0"
+__version__ = "0.0.3"
