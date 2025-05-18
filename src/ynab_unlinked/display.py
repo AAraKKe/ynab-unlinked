@@ -242,6 +242,7 @@ class ReconciliationGroup(NamedTuple):
     account_name: str
     transactions: list[TransactionDetail]
 
+
 def reconciliation_table(
     accounts: list[Account], transactions: list[TransactionDetail]
 ) -> list[ReconciliationGroup]:
@@ -255,9 +256,9 @@ def reconciliation_table(
     sorted_transactions = sorted(transactions, key=lambda t: t.account_id)
 
     groups = []
-    for counter, (account_id, transaction_group) in enumerate(groupby(
-        sorted_transactions, key=lambda t: t.account_id
-    ), start=1):
+    for counter, (account_id, transaction_group) in enumerate(
+        groupby(sorted_transactions, key=lambda t: t.account_id), start=1
+    ):
         account = id_to_account[account_id]
 
         cleared_balance = format_ynab_amount(account.cleared_balance).amount
@@ -281,7 +282,7 @@ def reconciliation_table(
                     f"{uncleared_balance} (uncleared)]"
                 ),
                 align="left",
-                style="bold blue"
+                style="bold blue",
             )
         )
         table = Table(*columns)
@@ -303,5 +304,7 @@ def reconciliation_table(
         print(table)
         print("\n")
 
-        groups.append(ReconciliationGroup(account_name=account_name, transactions=group))
+        groups.append(
+            ReconciliationGroup(account_name=account_name, transactions=group)
+        )
     return groups
