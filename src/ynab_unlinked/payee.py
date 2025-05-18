@@ -6,7 +6,7 @@ from rich import print
 from ynab.models.payee import Payee
 from ynab.models.transaction_detail import TransactionDetail
 
-from ynab_unlinked.config import Config
+from ynab_unlinked.config import ConfigV1
 from ynab_unlinked.models import TransactionWithYnabData
 from ynab_unlinked.ynab_api import Client
 
@@ -21,20 +21,20 @@ def __preprocess_payee(value: str) -> str:
 @overload
 def payee_matches(
     transaction: TransactionWithYnabData,
-    config: Config,
+    config: ConfigV1,
     payee_source: TransactionDetail,
 ) -> bool: ...
 
 
 @overload
 def payee_matches(
-    transaction: TransactionWithYnabData, config: Config, payee_source: Payee
+    transaction: TransactionWithYnabData, config: ConfigV1, payee_source: Payee
 ) -> bool: ...
 
 
 def payee_matches(
     transaction: TransactionWithYnabData,
-    config: Config,
+    config: ConfigV1,
     payee_source: TransactionDetail | Payee,
 ) -> bool:
     if isinstance(payee_source, TransactionDetail):
@@ -62,7 +62,7 @@ def payee_matches(
 
 
 def __match_from_payee_list(
-    transaction: TransactionWithYnabData, payees: list[Payee], config: Config
+    transaction: TransactionWithYnabData, payees: list[Payee], config: ConfigV1
 ):
     # If we have a partial match, use it
     if transaction.amount == -44.99:
@@ -87,7 +87,7 @@ def __match_from_payee_list(
 
 
 def set_payee_from_ynab(
-    transactions: list[TransactionWithYnabData], client: Client, config: Config
+    transactions: list[TransactionWithYnabData], client: Client, config: ConfigV1
 ):
     """
     Compare each transaction payee with an existing YNAB payee and set the payee from YNAB if a match is found
@@ -101,6 +101,6 @@ def set_payee_from_ynab(
 
         # Only call once but do not call unless we have not found a match
         if payees is None:
-            payees = client.payees()
+            payees = client.payees(budget_id=config.budget_id)
 
         __match_from_payee_list(t, payees, config)

@@ -11,7 +11,7 @@ from ynab_unlinked import display
 from ynab_unlinked.config import (
     TRANSACTION_GRACE_PERIOD_DAYS,
     Checkpoint,
-    Config,
+    ConfigV1,
     EntityConfig,
 )
 from ynab_unlinked.context_object import YnabUnlinkedContext
@@ -71,14 +71,15 @@ def filter_transactions(
     yield from (t for t in transactions if t.date >= checkpoint.latest_date_processed)
 
 
-def get_or_prompt_account_id(config: Config, entity_name: str) -> str:
+def get_or_prompt_account_id(config: ConfigV1, entity_name: str) -> str:
     if entity_name in config.entities:
         return config.entities[entity_name].account_id
 
     print(f"Lets select the account for {entity_name.capitalize()}:")
-    client = Client(config)
+    client = Client(config.api_key)
+    budget_id = config.budget_id
 
-    accounts = [acc for acc in client.accounts() if not acc.closed]
+    accounts = [acc for acc in client.accounts(budget_id=budget_id) if not acc.closed]
 
     for idx, acc in enumerate(accounts):
         print(f" - {idx + 1}. {acc.name}")
@@ -142,10 +143,12 @@ def process_transactions(
         )
     ]
 
-    client = Client(config)
+    client = Client(config.api_key)
+    budget_id = config.budget_id
 
     with Status("Reading transactions..."):
         ynab_transactions = client.transactions(
+            budget_id=budget_id,
             account_id=acount_id,
             since_date=(
                 checkpoint.latest_date_processed
@@ -199,7 +202,11 @@ def process_transactions(
 
     if Confirm.ask("Do you want to continue and create the transactions?"):
         with Status("Creating/Updating transactions..."):
-            client.create_transactions(acount_id, new_transactions)
+            client.create_transactions(
+                budget_id=budget_id,
+                account_id=acount_id,
+                transactions=new_transactions,
+            )
 
         config.update_and_save(transactions[0], entity.name())
 

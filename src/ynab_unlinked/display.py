@@ -10,7 +10,7 @@ from rich.table import Column, Table
 from ynab.models.account import Account
 from ynab.models.transaction_detail import TransactionDetail
 
-from ynab_unlinked.config import Config, ensure_config
+from ynab_unlinked.config import ConfigV1, v1_config_path
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.ynab_api.client import Client
 
@@ -37,13 +37,14 @@ def prompt_for_api_key() -> str:
 
 
 def prompt_for_budget() -> str:
-    if ensure_config():
-        client = Client(Config.load())
+    if v1_config_path().exists():
+        config = ConfigV1.load()
     else:
         api_key = prompt_for_api_key()
-        config = Config(api_key=api_key, budget_id="")
+        config = ConfigV1(api_key=api_key, budget_id="")
         config.save()
-        client = Client(config)
+
+    client = Client(config.api_key)
 
     with Status("Getting budgets..."):
         budgets = client.budgets()

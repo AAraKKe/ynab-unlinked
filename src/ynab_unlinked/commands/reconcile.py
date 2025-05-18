@@ -74,10 +74,12 @@ def reconcile(
     """Help reconciling your accounts in one go"""
 
     ctx: YnabUnlinkedContext = context.obj
+    config = ctx.config
+    budget_id = config.budget_id
 
-    last_reconciliation_date = None if all else ctx.config.last_reconciliation_date
+    last_reconciliation_date = None if all else config.last_reconciliation_date
 
-    client = Client(ctx.config)
+    client = Client(api_key=config.api_key)
 
     cleared_allowed = {TransactionClearedStatus.CLEARED}
     if uncleared:
@@ -86,10 +88,12 @@ def reconcile(
     with Status("Getting transactions from YNAB"):
         transactions_to_reconcile = [
             transaction
-            for transaction in client.transactions(since_date=last_reconciliation_date)
+            for transaction in client.transactions(
+                budget_id=budget_id, since_date=last_reconciliation_date
+            )
             if transaction.cleared in cleared_allowed
         ]
-        accounts = client.accounts()
+        accounts = client.accounts(budget_id=budget_id)
         ids_to_account = {acc.id: acc for acc in accounts}
 
     if not transactions_to_reconcile:
@@ -129,7 +133,9 @@ def reconcile(
         transaction.cleared = TransactionClearedStatus.RECONCILED
 
     with Status("Updating transactions"):
-        client.update_transactions(selected_transactions)
+        client.update_transactions(
+            budget_id=budget_id, transactions=selected_transactions
+        )
 
     latest_date = max(t.var_date for t in selected_transactions)
     ctx.config.last_reconciliation_date = latest_date - dt.timedelta(

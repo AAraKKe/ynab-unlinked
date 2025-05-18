@@ -34,6 +34,7 @@ dependencies = [
   "html-text",
   "pdfplumber",
   "pydantic >= 2.0.0",
+  "platformdirs==4.3.8",
 ]
 
 [project.scripts]
@@ -47,12 +48,18 @@ Source = "https://github.com/Juanpe Araque/ynab-unlinked"
 [tool.hatch.version]
 path = "src/ynab_unlinked/__about__.py"
 
-# ------ Environment for static analysis ------
-[tool.hatch.envs.st]
+# ------ Development Environment ------
+[tool.hatch.envs.dev]
 installer = "uv"
-extra-dependencies = ["ruff==0.11.10", "pyright~=1.1"]
+extra-dependencies = [
+  "ruff==0.11.10",
+  "pyright~=1.1",
+  "pytest ~= 8.0",
+  "pytest-cov~=6.0",
+  "pytest-mock~=3.0",
+]
 
-[tool.hatch.envs.st.scripts]
+[tool.hatch.envs.dev.scripts]
 format-check = "ruff format --check"
 lint = "ruff check"
 type-check = "pyright src tests"
@@ -60,19 +67,8 @@ check = ["- lint", "- format-check", "- type-check"]
 format = "ruff format"
 lint-fix = "ruff check --fix --unsafe-fixes"
 fix = ["format", "lint-fix"]
+cov = ["pytest --cov=src --cov-report term-missing:skip-covered tests {args:}"]
 
-[tool.coverage.run]
-source_pkgs = ["ynab_unlinked", "tests"]
-branch = true
-parallel = true
-omit = ["src/ynab_unlinked/__about__.py"]
-
-[tool.coverage.paths]
-ynab_unlinked = ["src/ynab_unlinked", "*/ynab-unlinked/src/ynab_unlinked"]
-tests = ["tests", "*/ynab-unlinked/tests"]
-
-[tool.coverage.report]
-exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
 
 [tool.pyright]
 exclude = [
@@ -129,6 +125,40 @@ quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
 
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = "tests"
+markers = ["version: used to identify the Config version used in the test"]
+
+[tool.coverage.run]
+source_pkgs = ["ynab_unlinked", "tests"]
+branch = true
+parallel = true
+omit = ["src/ynab_unlinked/__about__.py"]
+
+[tool.coverage.report]
+exclude_also = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  # Exclude protocol classes since they have no logic
+  'class .*\bProtocol\):',
+  # Exclude assert_nevers since we will never hit them and should be flagged by type checkers
+  '^ +assert_never\(.*?\)$',
+  # Case statements should be exhaustive
+  '^ +case .*? as unreachable:$',
+  # Ignore @overload functions
+  '^ +@overload$',
+  # Ignore type checking imports
+  'if TYPE_CHECKING:',
+  # This breaks on import, cannot even test so there is no reason to cover
+  "__init_subclass__",
+  # No reason to cover abstract methods
+  "@abstractmethod",
+]
+
+[tool.coverage.paths]
+ynab_unlinked = ["src/ynab_unlinked"]
+tests = ["tests"]
 
 # ------ Environment to run towncrier ------
 [tool.hatch.envs.tc]

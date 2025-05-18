@@ -1,6 +1,6 @@
 from ynab.models.transaction_detail import TransactionDetail
 
-from ynab_unlinked.config import Config
+from ynab_unlinked.config import ConfigV1
 from ynab_unlinked.models import MatchStatus, TransactionWithYnabData
 from ynab_unlinked.payee import payee_matches
 
@@ -27,7 +27,7 @@ def __match_single_transaction(
     ynab_transactions: list[TransactionDetail],
     ynab_matched: set[str],
     reconcile: bool,
-    config: Config,
+    config: ConfigV1,
 ):
     for ynab_transaction in ynab_transactions:
         if ynab_transaction.id in ynab_matched:
@@ -69,7 +69,7 @@ def match_transactions(
     transactions: list[TransactionWithYnabData],
     ynab_transactions: list[TransactionDetail],
     reconcile: bool,
-    config: Config,
+    config: ConfigV1,
 ):
     """Match imported transactions to existing YNAB transactions"""
 

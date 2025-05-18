@@ -1,0 +1,44 @@
+{
+    "api_key": "my-api-key",
+    "budget": {
+        "id": "budget_id",
+        "name": "My Budget",
+        "date_format": {
+            "format": "DD/MM/YYYY"
+        },
+        "currency_format": {
+            "iso_code": "EUR",
+            "decimal_digits": 2,
+            "decimal_separator": ".",
+            "symbol_first": false,
+            "group_separator": ",",
+            "currency_symbol": "€",
+            "display_symbol": true
+        }
+    },
+    "entities": {
+        "sabadell": {
+            "account_id": "sabadell-account",
+            "checkpoint": {
+                "latest_date_processed": "2025-05-09",
+                "latest_transaction_hash": 8072884232664998446
+            }
+        },
+        "cobee": {
+            "account_id": "cobee-account",
+            "checkpoint": {
+                "latest_date_processed": "2025-05-15",
+                "latest_transaction_hash": 7824838563629386568
+            }
+        }
+    },
+    "payee_rules": {
+        "My Payee": [
+            "Something weird"
+        ],
+        "My Other Payee": [
+            "This makes no sense",
+            "And this even less"
+        ]
+    }
+}

@@ -3,7 +3,7 @@ from rich import print
 
 from ynab_unlinked import app
 from ynab_unlinked.commands import config, load
-from ynab_unlinked.config import Config, ensure_config
+from ynab_unlinked.config import ConfigV1, v1_config_path
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.display import prompt_for_api_key, prompt_for_budget
 
@@ -16,7 +16,7 @@ def setup_command():
     """Setup YNAB Unlinked"""
     print("[bold]Welcome to ynab-unlinked! Lets setup your connection")
     api_key = prompt_for_api_key()
-    config = Config(api_key=api_key, budget_id="")
+    config = ConfigV1(api_key=api_key, budget_id="")
     config.save()
 
     budget_id = prompt_for_budget()
@@ -40,9 +40,9 @@ def cli(context: typer.Context):
         # If we are running setup there is nothing to do here
         return
 
-    if not ensure_config():
+    if not v1_config_path().exists():
         setup_command()
-    config = Config.load()
+    config = ConfigV1.load()
     context.obj = YnabUnlinkedContext(config=config, extras=None)
 
 

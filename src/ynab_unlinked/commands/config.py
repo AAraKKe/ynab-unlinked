@@ -4,7 +4,7 @@ from typing import Annotated, assert_never
 import typer
 from rich import print
 
-from ynab_unlinked.config import Config, ensure_config
+from ynab_unlinked.config import ConfigV1, v1_config_path
 from ynab_unlinked.display import prompt_for_api_key, prompt_for_budget
 
 
@@ -28,17 +28,17 @@ def set_command(
         case ValidKeys.API_KEY:
             api_key = prompt_for_api_key()
             # If the config exist, just update it
-            if ensure_config():
-                config = Config.load()
+            if v1_config_path().exists():
+                config = ConfigV1.load()
                 config.api_key = api_key
             else:
-                config = Config(api_key=api_key, budget_id="")
+                config = ConfigV1(api_key=api_key, budget_id="")
 
             config.save()
             print("[bold green]🎉 The API key has been updated[/]")
         case ValidKeys.BUDGET:
             budget_id = prompt_for_budget()
-            config = Config.load()
+            config = ConfigV1.load()
             config.budget_id = budget_id
             config.save()
             print("[bold green]🎉 The budget has been updated[/]")
@@ -48,10 +48,10 @@ def set_command(
 
 @config.command(name="show")
 def show():
-    if not ensure_config():
+    if not v1_config_path().exists():
         raise typer.Abort(
             "YNAB Unlinked config not found. Run 'yul setup' to configure it."
         )
 
-    config = Config.load()
+    config = ConfigV1.load()
     print(config.model_dump_json(indent=2))
