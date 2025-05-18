@@ -96,7 +96,9 @@ def reconcile(
         print("[bold gree]All accounts are already reconciled!")
         return
 
-    reconcile_groups = display.reconciliation_table(ids_to_account, transactions_to_reconcile)
+    reconcile_groups = display.reconciliation_table(
+        ids_to_account, transactions_to_reconcile
+    )
 
     selection = indexes_to_reconcile(max=len(reconcile_groups))
 
