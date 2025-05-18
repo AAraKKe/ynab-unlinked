@@ -1,0 +1,40 @@
+{% macro render_news_item(text, values) %}
+{#-
+  This macro formats a single news item for the changelog.
+  It generates a Markdown list item.
+  Link text will be like [#123].
+  The GitHub URL is hardcoded in this macro.
+-#}
+{#-
+  Args:
+    text: The description of the change.
+    values: A list of issue identifiers (e.g., ["#123", "456"]).
+-#}
+* {% if values %}[{% for value in values|sort %}{% set issue_num = value[1:] if value.startswith('#') else value %}[#{{ issue_num }}](https://github.com/AAraKKe/ynab-unlinked/issues/{{ issue_num }}){% if not loop.last %}, {% endif %}{% endfor %}]{% endif %}{{ " " if values else "" }}{{ text }}
+{% endmacro %}
+
+{%- set first_header = true -%}
+
+{% for section_name, section_content in sections.items() %}
+{% if section_name %}
+{% if not first_header %}
+
+{% endif %}### {{ section_name }}
+{%- set first_header = false -%}
+{% endif -%}
+
+{% for category_type, category_definition in definitions.items() %}
+{% if category_type in section_content and section_content[category_type] %}
+{% if not first_header %}
+
+{% endif %}### {{ category_definition.name }}
+{% set first_header = false %}
+{% for text, values in section_content[category_type].items()|sort(attribute='0') %}
+{{ render_news_item(text, values) }}
+{%- if loop.last %}
+
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endfor %}

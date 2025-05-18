@@ -7,16 +7,24 @@ name = "ynab-unlinked"
 dynamic = ["version"]
 description = ''
 readme = "README.md"
-requires-python = "==3.13"
+requires-python = ">=3.13"
 license = "MIT"
 keywords = []
 authors = [{ name = "Juanpe Araque", email = "juanpe@committhatline.com" }]
 classifiers = [
   "Development Status :: 4 - Beta",
+  "Intended Audience :: End Users/Desktop",
+  "Intended Audience :: Developers",
   "Programming Language :: Python",
+  "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
+  # This is mostly because the config is handled. Once updated
+  # should be usable in any OS.
+  # https://github.com/AAraKKe/ynab-unlinked/issues/1
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
   "ynab",
@@ -39,13 +47,10 @@ Source = "https://github.com/Juanpe Araque/ynab-unlinked"
 [tool.hatch.version]
 path = "src/ynab_unlinked/__about__.py"
 
-# Environment for static analysis
+# ------ Environment for static analysis ------
 [tool.hatch.envs.st]
 installer = "uv"
-extra-dependencies = [
-  "ruff>=0.11",
-  "pyright~=1.1",
-]
+extra-dependencies = ["ruff==0.11.10", "pyright~=1.1"]
 
 [tool.hatch.envs.st.scripts]
 format-check = "ruff format --check"
@@ -71,26 +76,26 @@ exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
 
 [tool.pyright]
 exclude = [
-    "**/.vscode/**",
-    "**/__pycache__/**",
-    "**/.egg-info/**",
-    "**/.git/**",
-    "**/.mypy_cache/**",
-    "**/.pytest_cache/**",
-    "**/.hatch/**",
-    "**/*.egg-info/**",
-    "dist",
+  "**/.vscode/**",
+  "**/__pycache__/**",
+  "**/.egg-info/**",
+  "**/.git/**",
+  "**/.mypy_cache/**",
+  "**/.pytest_cache/**",
+  "**/.hatch/**",
+  "**/*.egg-info/**",
+  "dist",
 ]
 ignore = [
-    "**/.vscode/**",
-    "**/__pycache__/**",
-    "**/.egg-info/**",
-    "**/.git/**",
-    "**/.mypy_cache/**",
-    "**/.pytest_cache/**",
-    "**/.hatch/**",
-    "**/*.egg-info/**",
-    "dist"
+  "**/.vscode/**",
+  "**/__pycache__/**",
+  "**/.egg-info/**",
+  "**/.git/**",
+  "**/.mypy_cache/**",
+  "**/.pytest_cache/**",
+  "**/.hatch/**",
+  "**/*.egg-info/**",
+  "dist",
 ]
 
 [tool.ruuf]
@@ -98,18 +103,18 @@ line-length = 100
 
 [tool.ruff.lint]
 select = [
-    # pycodestyle
-    "E",
-    # Pyflakes
-    "F",
-    # pyupgrade
-    "UP",
-    # flake8-bugbear
-    "B",
-    # flake8-simplify
-    "SIM",
-    # isort
-    "I",
+  # pycodestyle
+  "E",
+  # Pyflakes
+  "F",
+  # pyupgrade
+  "UP",
+  # flake8-bugbear
+  "B",
+  # flake8-simplify
+  "SIM",
+  # isort
+  "I",
 ]
 
 [tool.ruff.lint.isort]
@@ -123,3 +128,89 @@ max-line-length = 120
 quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
+
+
+# ------ Environment to run towncrier ------
+[tool.hatch.envs.tc]
+installer = "uv"
+extra-dependencies = ["towncrier == 24.8.0"]
+
+[tool.hatch.envs.tc.scripts]
+check = "towncrier check"
+show = "towncrier build --draft"
+build = "towncrier build"
+removed = "towncrier create --edit {args:+}.removed.md"
+deprecated = "towncrier create --edit {args:+}.deprecated.md"
+added = "towncrier create --edit {args:+}.added.md"
+improved = "towncrier create --edit {args:+}.improved.md"
+bugfix = "towncrier create --edit {args:+}.bugfix.md"
+bumped = "towncrier create --edit {args:+}.bumped.md"
+doc = "towncrier create --edit {args:+}.doc.md"
+contrib = "towncrier create --edit {args:+}.contrib.md"
+misc = "towncrier create --edit {args:+}.misc.md"
+
+
+[tool.towncrier]
+package = "ynab_unlinked"
+package_dir = "src"
+underlines = ["", "", ""]
+filename = "CHANGELOG.md"
+directory = "changelog"
+title_format = "## ynab-unlinked {version} ({project_date})"
+template = "changelog/_template.jinja"
+
+[[tool.towncrier.type]]
+# When a feature is being removed. Should be messagaging
+# deprecation to users in previuos versions
+directory = "removed"
+name = "Gone but not forgotten (RIP Features)"
+showcontent = true
+
+[[tool.towncrier.type]]
+# Still not removed but added deprecation warnings
+directory = "deprecated"
+name = "On the Chopping Block (Use at your own risk!)"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Fresh Out of the Feature Oven"
+showcontent = true
+
+[[tool.towncrier.type]]
+# New behaviors in existing features.
+directory = "improved"
+name = "Polished Until It Shines"
+showcontent = true
+
+[[tool.towncrier.type]]
+# Something we deemed an improper undesired behavior that got corrected
+# in the release to match pre-agreed expectations.
+directory = "bugfix"
+name = "Bugs Squashed, Peace Restored"
+showcontent = true
+
+[[tool.towncrier.type]]
+# Updates regarding bundling dependencies.
+directory = "bumped"
+name = "Under the Hood Upgrades"
+showcontent = true
+
+[[tool.towncrier.type]]
+# Notable updates to the documentation structure or build process.
+directory = "doc"
+name = "Read All About It! (Docs Updates)"
+showcontent = true
+
+[[tool.towncrier.type]]
+# Stuff that affects the contributor experience. e.g. Running tests,
+# format checks, actions...
+directory = "contrib"
+name = "For the Builders: Dev Experience Upgrades"
+showcontent = true
+
+[[tool.towncrier.type]]
+# Changes that are hard to assign to any of the above categories.
+directory = "misc"
+name = "Secret Sauce (Other Changes)"
+showcontent = true
