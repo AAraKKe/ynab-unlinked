@@ -244,7 +244,7 @@ class ReconciliationGroup(NamedTuple):
 
 
 def reconciliation_table(
-    accounts: list[Account], transactions: list[TransactionDetail]
+    id_to_account: dict[str, Account], transactions: list[TransactionDetail]
 ) -> list[ReconciliationGroup]:
     """
     Print a table with the transactions to reconcile per account and return a list
@@ -252,7 +252,6 @@ def reconciliation_table(
 
     The first table is referenced as number one.
     """
-    id_to_account = {acc.id: acc for acc in accounts}
     sorted_transactions = sorted(transactions, key=lambda t: t.account_id)
 
     groups = []
