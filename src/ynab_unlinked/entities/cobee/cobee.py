@@ -45,6 +45,9 @@ class Identifiers:
     transactions_line: str
     rejected: str
     cancelled: str
+    # These are the transactions that adds to the wallet
+    # Should be ignored since additions should be handled from payroll
+    accumulation: str
 
 
 def parse_date(date_str: str) -> dt.date | None:
@@ -68,18 +71,21 @@ def identifers_by_language(language: Language) -> Identifiers:
                 transactions_line="Transacciones",
                 rejected="Rechazada",
                 cancelled="Anulada",
+                accumulation="Acumulación en tarjeta",
             )
         case Language.EN:
             return Identifiers(
                 transactions_line="Transactions",
                 rejected="Rejected",
                 cancelled="Cancelled",
+                accumulation="Accumulation on card",
             )
         case Language.PT:
             return Identifiers(
                 transactions_line="Transações",
                 rejected="Recusada",
                 cancelled="Anulada",
+                accumulation="Acumulado em cartão",
             )
         case never:
             assert_never(never)
@@ -134,6 +140,10 @@ class Cobee:
                     raise ValueError(
                         f"The input file is not valid. The amount {amount} has been found without a date or payee."
                     )
+
+                # If the payee is the accumulation line, we should skip it
+                if payee == identifiers.accumulation:
+                    continue
 
                 transactions.append(Transaction(date=date, payee=payee, amount=amount))
                 continue
