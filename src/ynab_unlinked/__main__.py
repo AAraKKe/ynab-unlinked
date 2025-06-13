@@ -1,29 +1,33 @@
+from typing import Final, cast
+
 import typer
-from rich import print
 
 from ynab_unlinked import app
-from ynab_unlinked.commands import config, load
-from ynab_unlinked.config import Config, ensure_config
+from ynab_unlinked.commands import config_app, load
+from ynab_unlinked.config import Config, ConfigV1, ConfigV2, get_config
 from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.display import prompt_for_api_key, prompt_for_budget
+from ynab_unlinked.display import bold, success
+from ynab_unlinked.utils import prompt_for_api_key, prompt_for_budget
 
 app.add_typer(load, name="load")
-app.add_typer(config, name="config")
+app.add_typer(config_app, name="config")
+
+VERSION_MAPPING: Final[dict[str, type[Config]]] = {
+    "V1": ConfigV1,
+    "V2": ConfigV2,
+}
 
 
 @app.command(name="setup")
 def setup_command():
     """Setup YNAB Unlinked"""
-    print("[bold]Welcome to ynab-unlinked! Lets setup your connection")
+    bold("Welcome to ynab-unlinked! Lets setup your connection")
     api_key = prompt_for_api_key()
-    config = Config(api_key=api_key, budget_id="")
+    budget = prompt_for_budget(api_key)
+    config = ConfigV2(api_key=api_key, budget=budget)
     config.save()
 
-    budget_id = prompt_for_budget()
-    config.budget_id = budget_id
-    config.save()
-
-    print("[bold green]All done!")
+    success("All done!")
 
 
 @app.callback(no_args_is_help=True)
@@ -40,10 +44,13 @@ def cli(context: typer.Context):
         # If we are running setup there is nothing to do here
         return
 
-    if not ensure_config():
+    # Load the proper config or run setup to create it
+    config = get_config()
+    if config is None:
         setup_command()
-    config = Config.load()
-    context.obj = YnabUnlinkedContext(config=config, extras=None)
+        config = get_config()
+
+    context.obj = YnabUnlinkedContext(config=cast(ConfigV2, config), extras=None)
 
 
 def main():

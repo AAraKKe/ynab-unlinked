@@ -5,31 +5,32 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
+from ynab_unlinked.config.migrations import Version
+from ynab_unlinked.config.paths import config_path
 from ynab_unlinked.models import Transaction, TransactionWithYnabData
 
-CONFIG_PATH = Path.home() / ".config/ynab_unlinked/config.json"
-TRANSACTION_GRACE_PERIOD_DAYS = 2
+from .shared import Checkpoint, EntityConfig
 
 
-class Checkpoint(BaseModel):
-    latest_date_processed: dt.date
-    latest_transaction_hash: int
-
-
-class EntityConfig(BaseModel):
-    account_id: str
-    checkpoint: Checkpoint | None = None
-
-
-class Config(BaseModel):
+class ConfigV1(BaseModel):
     api_key: str
     budget_id: str
     last_reconciliation_date: dt.date | None = None
     entities: dict[str, EntityConfig] = Field(default_factory=dict)
     payee_rules: dict[str, set[str]] = Field(default_factory=dict)
 
+    @staticmethod
+    def version() -> Version:
+        return Version("Config", "V1")
+
+    @staticmethod
+    def path() -> Path:
+        return config_path(ConfigV1.version().version)
+
     def save(self):
-        CONFIG_PATH.write_text(self.model_dump_json(indent=4))
+        self.path().parent.mkdir(parents=True, exist_ok=True)
+        self.path().write_text(self.model_dump_json(indent=4))
 
     def update_and_save(self, last_transaction: Transaction, entity_name: str):
         checkpoint = Checkpoint(
@@ -44,8 +45,12 @@ class Config(BaseModel):
         self.save()
 
     @staticmethod
-    def load() -> Config:
-        return Config.model_validate_json(CONFIG_PATH.read_text())
+    def load() -> ConfigV1:
+        return ConfigV1.model_validate_json(ConfigV1.path().read_text())
+
+    @staticmethod
+    def exists() -> bool:
+        return ConfigV1.path().is_file()
 
     def add_payee_rules(self, transactions: list[TransactionWithYnabData]):
         # For each transaction, add a rule that matches both payees
@@ -74,10 +79,3 @@ class Config(BaseModel):
             ),
             None,
         )
-
-
-def ensure_config():
-    if not CONFIG_PATH.is_file():
-        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        return False
-    return True

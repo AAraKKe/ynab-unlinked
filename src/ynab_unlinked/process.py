@@ -3,32 +3,30 @@ from collections.abc import Generator
 from pathlib import Path
 
 import typer
-from rich import print
-from rich.prompt import Confirm, Prompt
-from rich.status import Status
 
 from ynab_unlinked import display
-from ynab_unlinked.config import (
-    TRANSACTION_GRACE_PERIOD_DAYS,
-    Checkpoint,
-    Config,
-    EntityConfig,
-)
+from ynab_unlinked.config import ConfigV2
+from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
+from ynab_unlinked.config.models.shared import Checkpoint, EntityConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
+from ynab_unlinked.display import confirm, console, info, process, question
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.matcher import match_transactions
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.payee import set_payee_from_ynab
+from ynab_unlinked.utils import (
+    display_partial_matches,
+    display_transaction_table,
+    display_transactions_to_upload,
+)
 from ynab_unlinked.ynab_api.client import Client
 
 # Request transactions to the YNAB API from the last checkpoint date minus 10 days for buffer
 TRANSACTIONS_DAYES_BEFORE_LAST_EXTRACTION = 10
 
 
-def add_past_to_transactions(
-    transactions: list[Transaction], checkpoint: Checkpoint | None
-):
+def add_past_to_transactions(transactions: list[Transaction], checkpoint: Checkpoint | None):
     if checkpoint is None:
         return
 
@@ -54,9 +52,7 @@ def add_counter_to_existing_transactions(transactions: list[Transaction]):
             t.counter = counters[t.id]
 
 
-def preprocess_transactions(
-    transactions: list[Transaction], checkpoint: Checkpoint | None
-):
+def preprocess_transactions(transactions: list[Transaction], checkpoint: Checkpoint | None):
     add_past_to_transactions(transactions, checkpoint)
     add_counter_to_existing_transactions(transactions)
 
@@ -71,26 +67,27 @@ def filter_transactions(
     yield from (t for t in transactions if t.date >= checkpoint.latest_date_processed)
 
 
-def get_or_prompt_account_id(config: Config, entity_name: str) -> str:
+def get_or_prompt_account_id(config: ConfigV2, entity_name: str) -> str:
     if entity_name in config.entities:
         return config.entities[entity_name].account_id
 
-    print(f"Lets select the account for {entity_name.capitalize()}:")
-    client = Client(config)
+    display.info(f"Lets select the account for {entity_name.capitalize()}:")
+    client = Client(config.api_key)
+    budget_id = config.budget.id
 
-    accounts = [acc for acc in client.accounts() if not acc.closed]
+    accounts = [acc for acc in client.accounts(budget_id=budget_id) if not acc.closed]
 
     for idx, acc in enumerate(accounts):
-        print(f" - {idx + 1}. {acc.name}")
+        console().print(f" - {idx + 1}. {acc.name}")
 
-    acc_num = Prompt.ask(
+    acc_num = question(
         "What account are the transactions going to be imported to? (By number)",
         choices=[str(i) for i in range(1, len(accounts) + 1)],
         show_choices=False,
     )
     account = accounts[int(acc_num) - 1]
 
-    print(f"[bold]Account selected: {account.name}")
+    info(f"Account selected: {account.name}")
 
     config.entities[entity_name] = EntityConfig(account_id=account.id)
     config.save()
@@ -122,8 +119,8 @@ def process_transactions(
     try:
         parsed_input = entity.parse(input_file, context)
     except ParsingError as e:
-        print(f"[bold red] Error when parsing {e.input_file}")
-        print(f"  Message: {e.message}")
+        display.error(f"Error when parsing {e.input_file}")
+        display.console().print(f"  Message: {e.message}")
         raise typer.Exit(1) from e
 
     checkpoint = config.entities[entity.name()].checkpoint
@@ -131,7 +128,7 @@ def process_transactions(
     preprocess_transactions(parsed_input, checkpoint)
 
     if show:
-        display.transaction_table(parsed_input)
+        display_transaction_table(parsed_input)
         return
 
     transactions = [
@@ -142,10 +139,12 @@ def process_transactions(
         )
     ]
 
-    client = Client(config)
+    client = Client(config.api_key)
+    budget_id = config.budget.id
 
-    with Status("Reading transactions..."):
+    with process("Reading transactions..."):
         ynab_transactions = client.transactions(
+            budget_id=budget_id,
             account_id=acount_id,
             since_date=(
                 checkpoint.latest_date_processed
@@ -154,33 +153,31 @@ def process_transactions(
                 else None
             ),
         )
-    print("[bold green]✔ Transactions read")
+    display.success("✔ Transactions read")
 
-    with Status("Augmenting transactions..."):
+    with process("Augmenting transactions..."):
         match_transactions(transactions, ynab_transactions, reconcile, config)
         set_payee_from_ynab(transactions, client, config)
-    print("[bold green]✔ Transactions augmneted with YNAB information")
+    display.success("✔ Transactions augmneted with YNAB information")
 
-    display.transactions_to_upload(transactions)
+    display_transactions_to_upload(transactions)
 
     if not any(t.needs_creation for t in transactions):
-        print("[bold blue]🎉 All done! Nothing to do.")
+        info("🎉 All done! Nothing to do.")
         config.update_and_save(transactions[0], entity.name())
         return
 
     if partial_matches := [
-        t
-        for t in transactions
-        if t.match_status is MatchStatus.PARTIAL_MATCH and t.needs_creation
+        t for t in transactions if t.match_status is MatchStatus.PARTIAL_MATCH and t.needs_creation
     ]:
-        display.partial_matches(partial_matches)
-        print(
+        display_partial_matches(partial_matches)
+        display.info(
             "\nIf these partial matches are ok, you can accept them and we will keep track of the "
             "payee name for future reference."
         )
         final_matching = (
             MatchStatus.MATCHED
-            if Confirm.ask("Do you want to accept these matches?")
+            if confirm("Do you want to accept these matches?")
             else MatchStatus.UNMATCHED
         )
         for t in partial_matches:
@@ -192,15 +189,19 @@ def process_transactions(
             # If the user agreed to match these, add renaming rules to config
             config.add_payee_rules(partial_matches)
 
-    with Status("Preparing transactions to upload..."):
+    with process("Preparing transactions to upload..."):
         new_transactions = [t for t in transactions if t.needs_creation]
 
-    print(f"[bold]Transactions to import:       {len(new_transactions)}")
+    display.info(f"Transactions to import:       {len(new_transactions)}")
 
-    if Confirm.ask("Do you want to continue and create the transactions?"):
-        with Status("Creating/Updating transactions..."):
-            client.create_transactions(acount_id, new_transactions)
+    if confirm("Do you want to continue and create the transactions?"):
+        with process("Creating/Updating transactions..."):
+            client.create_transactions(
+                budget_id=budget_id,
+                account_id=acount_id,
+                transactions=new_transactions,
+            )
 
         config.update_and_save(transactions[0], entity.name())
 
-    print("[bold blue]🎉 All done!")
+    display.info("🎉 All done!")

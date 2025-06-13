@@ -10,14 +10,10 @@ from ynab_unlinked.parsers import pdf
 
 
 class BBVA(Entity):
-    def parse(
-        self, input_file: Path, context: YnabUnlinkedContext
-    ) -> list[Transaction]:
+    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
         transactions = []
 
-        for row in pdf(
-            input_file, allow_empty_columns=False, expected_number_of_columns=3
-        ):
+        for row in pdf(input_file, allow_empty_columns=False, expected_number_of_columns=3):
             parsed_row = self.__extract_fields_from_row(cast(list[str], row))
             if parsed_row is None:
                 raise ParsingError(
