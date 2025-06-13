@@ -2,27 +2,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from contextlib import nullcontext
 from functools import reduce
-from typing import NamedTuple, Protocol, cast
+from typing import cast
 
+from ynab_unlinked import display
 
-class Version(NamedTuple):
-    entity: str
-    version: str
-
-    def __ge__(self, value: tuple[str, ...]) -> bool:
-        return self.version >= value[1]
-
-    def __le__(self, value: tuple[str, ...]) -> bool:
-        return self.version <= value[1]
-
-    def __str__(self) -> str:
-        return f"{self.entity}:{self.version}"
-
-
-class Versioned(Protocol):
-    @staticmethod
-    def version() -> Version: ...
+from .types import Version, Versioned
 
 
 class Delta[V1: Versioned, V2: Versioned](ABC):
@@ -32,14 +18,10 @@ class Delta[V1: Versioned, V2: Versioned](ABC):
     def __init_subclass__(cls) -> None:
         class_name = cls.__name__
         if not hasattr(cls, "origin"):
-            raise ValueError(
-                f"Class {class_name} needs to define an 'origin' class variable."
-            )
+            raise ValueError(f"Class {class_name} needs to define an 'origin' class variable.")
 
         if not hasattr(cls, "destination"):
-            raise ValueError(
-                f"Class {class_name} needs to define an 'destination' class variable."
-            )
+            raise ValueError(f"Class {class_name} needs to define an 'destination' class variable.")
 
     @abstractmethod
     def on_migrate(self, origin: V1) -> V2: ...
@@ -85,9 +67,7 @@ class DeltaRegistry:
         self.origins[delta.origin.version] = delta
         self.destinations[delta.destination.version] = delta
 
-    def migration_sequence(
-        self, origin: Version, destination: Version
-    ) -> Sequence[Delta]:
+    def migration_sequence(self, origin: Version, destination: Version) -> Sequence[Delta]:
         """
         Returns a sequence of detlas to be chained to reach the version in `destination`
         from the `origin` version.
@@ -138,9 +118,7 @@ class MigrationEngine:
 
     def __init__(self, cls: str, *deltas: Delta):
         if cls in self.__class__._deltas:
-            raise ValueError(
-                f"The class {cls!r} has already been registered for migrations"
-            )
+            raise ValueError(f"The class {cls!r} has already been registered for migrations")
 
         registry = DeltaRegistry(cls)
         for delta in deltas:
@@ -148,9 +126,7 @@ class MigrationEngine:
 
         self.__class__._deltas[cls] = registry
 
-    def __prepare_sequence(
-        self, origin: Version, destination: Version
-    ) -> Sequence[Delta]:
+    def __prepare_sequence(self, origin: Version, destination: Version) -> Sequence[Delta]:
         origin_entity, _ = origin
         destination_entity, _ = destination
 
@@ -169,10 +145,13 @@ class MigrationEngine:
             origin.version(), to_type.version()
         )
 
-        # Use of cast because migrate does not produce the same type as output as its input and reduce expects that
-        result = cast(
-            V, reduce(lambda result, delta: delta.migrate(result), deltas, origin)
-        )
+        process_context = display.process if deltas else lambda *args, **kwargs: nullcontext()
+
+        with process_context(
+            f"Migrating {origin.version()} to {to_type.version()}", "Migration done!"
+        ):
+            # Use of cast because migrate does not produce the same type as output as its input and reduce expects that
+            result = cast(V, reduce(lambda result, delta: delta.migrate(result), deltas, origin))
 
         if not isinstance(result, to_type):
             raise TypeError(

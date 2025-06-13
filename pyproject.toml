@@ -48,6 +48,10 @@ Source = "https://github.com/Juanpe Araque/ynab-unlinked"
 [tool.hatch.version]
 path = "src/ynab_unlinked/__about__.py"
 
+# Set uv as installer
+[tool.hatch.envs.default]
+installer = "uv"
+
 # ------ Development Environment ------
 [tool.hatch.envs.dev]
 installer = "uv"
@@ -94,7 +98,7 @@ ignore = [
   "dist",
 ]
 
-[tool.ruuf]
+[tool.ruff]
 line-length = 100
 
 [tool.ruff.lint]

@@ -1,15 +1,16 @@
 import datetime as dt
 from typing import Annotated, Literal
 
-from rich import print
-from rich.prompt import Confirm, Prompt
-from rich.status import Status
+from rich.prompt import Prompt
 from typer import Context, Option
 from ynab.models.transaction_cleared_status import TransactionClearedStatus
 
 from ynab_unlinked import app, display
-from ynab_unlinked.config import TRANSACTION_GRACE_PERIOD_DAYS
+from ynab_unlinked.config import ConfigV2
+from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
 from ynab_unlinked.context_object import YnabUnlinkedContext
+from ynab_unlinked.display import confirm, process
+from ynab_unlinked.utils import display_reconciliation_table
 from ynab_unlinked.ynab_api import Client
 
 
@@ -74,8 +75,8 @@ def reconcile(
     """Help reconciling your accounts in one go"""
 
     ctx: YnabUnlinkedContext = context.obj
-    config = ctx.config
-    budget_id = config.budget_id
+    config: ConfigV2 = ctx.config
+    budget_id = config.budget.id
 
     last_reconciliation_date = None if all else config.last_reconciliation_date
 
@@ -85,7 +86,7 @@ def reconcile(
     if uncleared:
         cleared_allowed.add(TransactionClearedStatus.UNCLEARED)
 
-    with Status("Getting transactions from YNAB"):
+    with process("Getting transactions from YNAB"):
         transactions_to_reconcile = [
             transaction
             for transaction in client.transactions(
@@ -97,12 +98,10 @@ def reconcile(
         ids_to_account = {acc.id: acc for acc in accounts}
 
     if not transactions_to_reconcile:
-        print("[bold gree]All accounts are already reconciled!")
+        display.success("All accounts are already reconciled!")
         return
 
-    reconcile_groups = display.reconciliation_table(
-        ids_to_account, transactions_to_reconcile
-    )
+    reconcile_groups = display_reconciliation_table(ids_to_account, transactions_to_reconcile)
 
     selection = indexes_to_reconcile(max=len(reconcile_groups))
 
@@ -118,29 +117,25 @@ def reconcile(
             selected_transactions.extend(reconcile_groups[index - 1].transactions)
 
     if not selected_transactions:
-        print("No accounts to reconcile.\n👋 Bye!")
+        display.info("No accounts to reconcile.\n👋 Bye!")
         return
 
-    print("\nThe following accounts will be reconciled:")
+    display.info("\nThe following accounts will be reconciled:")
     for acc in selected_accounts:
-        print(f"- {acc}")
+        display.console().print(f"- {acc}")
 
-    if not Confirm.ask("\nShould I go ahead and reconcile them?"):
-        print("Alright, cancelling reconciliation.\n👋 Bye!")
+    if not confirm("\nShould I go ahead and reconcile them?"):
+        display.info("Alright, cancelling reconciliation.\n👋 Bye!")
         return
 
     for transaction in selected_transactions:
         transaction.cleared = TransactionClearedStatus.RECONCILED
 
-    with Status("Updating transactions"):
-        client.update_transactions(
-            budget_id=budget_id, transactions=selected_transactions
-        )
+    with process("Updating transactions"):
+        client.update_transactions(budget_id=budget_id, transactions=selected_transactions)
 
     latest_date = max(t.var_date for t in selected_transactions)
-    ctx.config.last_reconciliation_date = latest_date - dt.timedelta(
-        days=TRANSACTION_GRACE_PERIOD_DAYS
-    )
-    ctx.config.save()
+    config.last_reconciliation_date = latest_date - dt.timedelta(days=TRANSACTION_GRACE_PERIOD_DAYS)
+    config.save()
 
-    print("[bold green]🎉 Reconciliation done!")
+    display.success("🎉 Reconciliation done!")

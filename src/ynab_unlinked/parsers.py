@@ -4,8 +4,7 @@ from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import Any, Literal, overload
 
-import rich
-
+from ynab_unlinked import display
 from ynab_unlinked.exceptions import ParsingError
 
 
@@ -82,11 +81,7 @@ def pdf(
     if captured_output := stderr_capture.getvalue():
         cropbox_message = "CropBox missing from /Page, defaulting to MediaBox"
         if remaining_lines := [
-            line
-            for line in captured_output.strip().split("\n")
-            if line.strip() != cropbox_message
+            line for line in captured_output.strip().split("\n") if line.strip() != cropbox_message
         ]:
             remaining_output = "\n".join(remaining_lines)
-            rich.print(
-                f"[orange1]Potential PDF issue reading {input_file}:[/orange1]\n{remaining_output}"
-            )
+            display.warning(f"Potential PDF issue reading {input_file}:\n{remaining_output}")

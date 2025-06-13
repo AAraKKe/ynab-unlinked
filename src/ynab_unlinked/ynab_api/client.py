@@ -97,9 +97,7 @@ class Client:
             data=PostTransactionsWrapper(transactions=transactions_to_create),
         )
 
-    def update_transactions(
-        self, budget_id: str, transactions: list[TransactionDetail]
-    ):
+    def update_transactions(self, budget_id: str, transactions: list[TransactionDetail]):
         api = TransactionsApi(self.__client)
 
         to_update = [

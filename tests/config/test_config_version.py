@@ -1,14 +1,8 @@
 import pytest
 
-from ynab_unlinked.config import (
-    LATEST_VERSION,
-    MAX_CONFIG_VERSION,
-    ConfigError,
-    Version,
-    config_version,
-)
-
-mark = pytest.mark.usefixtures("config")
+from ynab_unlinked.config import LATEST_VERSION, MAX_CONFIG_VERSION
+from ynab_unlinked.config.core import ConfigError, config_version
+from ynab_unlinked.config.migrations.base import Version
 
 
 @pytest.mark.usefixtures("config")

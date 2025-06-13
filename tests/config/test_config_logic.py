@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from ynab_unlinked.config import TRANSACTION_GRACE_PERIOD_DAYS, Config
+from ynab_unlinked.config import Config
+from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
 from ynab_unlinked.models import Transaction
 
 # This module tests the central logic of the config object. It does not focus on each particular

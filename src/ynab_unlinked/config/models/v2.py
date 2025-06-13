@@ -1,32 +1,56 @@
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from ynab_unlinked.config.core import (
-    TRANSACTION_GRACE_PERIOD_DAYS,
-    Checkpoint,
-    EntityConfig,
-    v1_config_path,
-)
+from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
 from ynab_unlinked.config.migrations import Version
+from ynab_unlinked.config.paths import config_path
 from ynab_unlinked.models import Transaction, TransactionWithYnabData
 
+from .shared import Checkpoint, EntityConfig
 
-class ConfigV1(BaseModel):
+
+class CurrencyFormat(BaseModel):
+    iso_code: str
+    decimal_digits: int
+    decimal_separator: str
+    symbol_first: bool
+    group_separator: str
+    currency_symbol: str
+    display_symbol: bool
+
+
+class Budget(BaseModel):
+    id: str
+    name: str
+    date_format: str
+    currency_format: CurrencyFormat
+
+
+class ConfigV2(BaseModel):
     api_key: str
-    budget_id: str
+    budget: Budget
     last_reconciliation_date: dt.date | None = None
     entities: dict[str, EntityConfig] = Field(default_factory=dict)
     payee_rules: dict[str, set[str]] = Field(default_factory=dict)
+    version_number: str = Field(default="V2", alias="version")
+
+    model_config = ConfigDict(validate_by_alias=True, serialize_by_alias=True)
 
     @staticmethod
     def version() -> Version:
-        return Version("Config", "V1")
+        return Version("Config", "V2")
+
+    @staticmethod
+    def path() -> Path:
+        return config_path(ConfigV2.version().version)
 
     def save(self):
-        v1_config_path().write_text(self.model_dump_json(indent=4))
+        self.path().parent.mkdir(parents=True, exist_ok=True)
+        self.path().write_text(self.model_dump_json(indent=4))
 
     def update_and_save(self, last_transaction: Transaction, entity_name: str):
         checkpoint = Checkpoint(
@@ -41,12 +65,12 @@ class ConfigV1(BaseModel):
         self.save()
 
     @staticmethod
-    def load() -> ConfigV1:
-        return ConfigV1.model_validate_json(v1_config_path().read_text())
+    def load() -> ConfigV2:
+        return ConfigV2.model_validate_json(ConfigV2.path().read_text())
 
     @staticmethod
     def exists() -> bool:
-        return v1_config_path().is_file()
+        return ConfigV2.path().is_file()
 
     def add_payee_rules(self, transactions: list[TransactionWithYnabData]):
         # For each transaction, add a rule that matches both payees

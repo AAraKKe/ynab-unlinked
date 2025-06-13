@@ -1,8 +1,12 @@
-from ynab_unlinked.config.core import config_path, v1_config_path
-from ynab_unlinked.config.migrations import Delta
-from ynab_unlinked.config.v1 import ConfigV1
-from ynab_unlinked.config.v2 import Budget, ConfigV2, CurrencyFormat
+from __future__ import annotations
+
+import shutil
+
+from ynab_unlinked.config.migrations.base import Delta
 from ynab_unlinked.ynab_api import Client
+
+from .v1 import ConfigV1
+from .v2 import Budget, ConfigV2, CurrencyFormat
 
 
 class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
@@ -52,7 +56,7 @@ class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
 
         # Now we delete v1 and save v2
         # This is special because v1 is stored in a different path than any other versions
-        v1_config_path().unlink()
+        shutil.rmtree(ConfigV1.path().parent)
         config_v2.save()
 
         return config_v2
@@ -67,9 +71,9 @@ class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
         )
 
         # Ensure we store it on the expected place of v1
-        v1_config_path().parent.mkdir(parents=True, exist_ok=True)
+        ConfigV1.path().parent.mkdir(parents=True, exist_ok=True)
         config_v1.save()
         # And now delete the other config
-        config_path().unlink()
+        ConfigV2.path().unlink()
 
         return config_v1

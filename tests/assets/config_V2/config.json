@@ -1,5 +1,4 @@
 {
-    "version": "V2",
     "api_key": "my-api-key",
     "budget": {
         "id": "budget_id",
@@ -40,5 +39,6 @@
             "This makes no sense",
             "And this even less"
         ]
-    }
+    },
+    "version": "V2"
 }

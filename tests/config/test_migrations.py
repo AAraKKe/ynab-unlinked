@@ -3,12 +3,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from ynab_unlinked.config.migrations import (
-    Delta,
-    DeltaRegistry,
-    MigrationEngine,
-    Version,
-)
+from ynab_unlinked.config.migrations import Delta, DeltaRegistry, MigrationEngine, Version
 
 
 @dataclass
@@ -99,9 +94,7 @@ def v2() -> UserV2:
 
 @pytest.fixture
 def v3() -> UserV3:
-    return UserV3(
-        name="John", age=24, email="john@domain.com", address="My Street, My City"
-    )
+    return UserV3(name="John", age=24, email="john@domain.com", address="My Street, My City")
 
 
 @pytest.fixture
@@ -197,9 +190,7 @@ def test_delta_sequence_for_rollbacks(registry: DeltaRegistry):
 
 
 def test_delta_sequence_error_with_wrong_entity(registry: DeltaRegistry):
-    with pytest.raises(
-        ValueError, match="Cannot find a sequence between different entities"
-    ):
+    with pytest.raises(ValueError, match="Cannot find a sequence between different entities"):
         registry.migration_sequence(UserV1.version(), Other.version())
 
 
@@ -207,9 +198,7 @@ def test_delta_sequence_error_without_registered_delta():
     registry = DeltaRegistry("User")
     registry.add_delta(DeltaUserV1V2())
 
-    with pytest.raises(
-        ValueError, match="Cannot find a migration sequence matching V1 -> V3"
-    ):
+    with pytest.raises(ValueError, match="Cannot find a migration sequence matching V1 -> V3"):
         registry.migration_sequence(UserV1.version(), UserV3.version())
 
 
@@ -263,28 +252,20 @@ def test_rollback_through_engine_full_sequence(v3: UserV3, engine: MigrationEngi
 
 
 def test_migration_fails_with_different_entities(v3: UserV3, engine: MigrationEngine):
-    with pytest.raises(
-        ValueError, match="Cannot handle migrations on diferent entities"
-    ):
+    with pytest.raises(ValueError, match="Cannot handle migrations on diferent entities"):
         engine.migrate(v3, Other)
 
 
 def test_rollback_fails_with_different_entities(v3: UserV3, engine: MigrationEngine):
-    with pytest.raises(
-        ValueError, match="Cannot handle migrations on diferent entities"
-    ):
+    with pytest.raises(ValueError, match="Cannot handle migrations on diferent entities"):
         engine.rollback(v3, Other)
 
 
 def test_migration_fails_for_unregistered_entity(engine: MigrationEngine):
-    with pytest.raises(
-        ValueError, match="No migrations have been registered for 'Other'"
-    ):
+    with pytest.raises(ValueError, match="No migrations have been registered for 'Other'"):
         engine.migrate(Other(prop=1), Other)
 
 
 def test_rollback_fails_for_unregistered_entity(engine: MigrationEngine):
-    with pytest.raises(
-        ValueError, match="No migrations have been registered for 'Other'"
-    ):
+    with pytest.raises(ValueError, match="No migrations have been registered for 'Other'"):
         engine.rollback(Other(prop=1), Other)

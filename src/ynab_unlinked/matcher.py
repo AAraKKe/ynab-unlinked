@@ -1,19 +1,14 @@
 from ynab.models.transaction_detail import TransactionDetail
 
-from ynab_unlinked.config import ConfigV1
+from ynab_unlinked.config import ConfigV2
 from ynab_unlinked.models import MatchStatus, TransactionWithYnabData
 from ynab_unlinked.payee import payee_matches
 
 TIME_WINDOW_MATCH_DAYS = 5
 
 
-def __match_date(
-    transaction: TransactionWithYnabData, ynab_transaction: TransactionDetail
-) -> bool:
-    return (
-        abs((ynab_transaction.var_date - transaction.date).days)
-        <= TIME_WINDOW_MATCH_DAYS
-    )
+def __match_date(transaction: TransactionWithYnabData, ynab_transaction: TransactionDetail) -> bool:
+    return abs((ynab_transaction.var_date - transaction.date).days) <= TIME_WINDOW_MATCH_DAYS
 
 
 def __match_amount(
@@ -27,7 +22,7 @@ def __match_single_transaction(
     ynab_transactions: list[TransactionDetail],
     ynab_matched: set[str],
     reconcile: bool,
-    config: ConfigV1,
+    config: ConfigV2,
 ):
     for ynab_transaction in ynab_transactions:
         if ynab_transaction.id in ynab_matched:
@@ -39,9 +34,7 @@ def __match_single_transaction(
 
         if date_window and same_amount:
             ynab_matched.add(ynab_transaction.id)
-            return __finalize_match(
-                transaction, ynab_transaction, reconcile, similar_payee
-            )
+            return __finalize_match(transaction, ynab_transaction, reconcile, similar_payee)
 
 
 def __finalize_match(
@@ -59,9 +52,7 @@ def __finalize_match(
     transaction.update_cleared_from_ynab(ynab_transaction, reconcile)
 
     # If we are able to match the payee then we mark them as matched right away
-    transaction.match_status = (
-        MatchStatus.MATCHED if similar_payee else MatchStatus.PARTIAL_MATCH
-    )
+    transaction.match_status = MatchStatus.MATCHED if similar_payee else MatchStatus.PARTIAL_MATCH
     return
 
 
@@ -69,7 +60,7 @@ def match_transactions(
     transactions: list[TransactionWithYnabData],
     ynab_transactions: list[TransactionDetail],
     reconcile: bool,
-    config: ConfigV1,
+    config: ConfigV2,
 ):
     """Match imported transactions to existing YNAB transactions"""
 
@@ -80,6 +71,4 @@ def match_transactions(
     ynab_matched: set[str] = set()
 
     for transaction in transactions:
-        __match_single_transaction(
-            transaction, ynab_transactions, ynab_matched, reconcile, config
-        )
+        __match_single_transaction(transaction, ynab_transactions, ynab_matched, reconcile, config)
