@@ -5,8 +5,10 @@ import typer
 from ynab_unlinked import app
 from ynab_unlinked.commands import config_app, load
 from ynab_unlinked.config import Config, ConfigV1, ConfigV2, get_config
+from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.display import bold, success
+from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.utils import prompt_for_api_key, prompt_for_budget
 
 app.add_typer(load, name="load")
@@ -50,7 +52,17 @@ def cli(context: typer.Context):
         setup_command()
         config = get_config()
 
-    context.obj = YnabUnlinkedContext(config=cast(ConfigV2, config), extras=None)
+    if config is None:
+        raise ConfigError("Unexpected error: config could not be loaded")
+
+    context.obj = YnabUnlinkedContext(
+        config=cast(ConfigV2, config),
+        extras=None,
+        formatter=Formatter(
+            date_format=config.budget.date_format,
+            currency_format=config.budget.currency_format,
+        ),
+    )
 
 
 def main():

@@ -128,7 +128,7 @@ def process_transactions(
     preprocess_transactions(parsed_input, checkpoint)
 
     if show:
-        display_transaction_table(parsed_input)
+        display_transaction_table(parsed_input, context.formatter)
         return
 
     transactions = [
@@ -160,7 +160,7 @@ def process_transactions(
         set_payee_from_ynab(transactions, client, config)
     display.success("✔ Transactions augmneted with YNAB information")
 
-    display_transactions_to_upload(transactions)
+    display_transactions_to_upload(transactions, context.formatter)
 
     if not any(t.needs_creation for t in transactions):
         info("🎉 All done! Nothing to do.")
@@ -170,7 +170,7 @@ def process_transactions(
     if partial_matches := [
         t for t in transactions if t.match_status is MatchStatus.PARTIAL_MATCH and t.needs_creation
     ]:
-        display_partial_matches(partial_matches)
+        display_partial_matches(partial_matches, context.formatter)
         display.info(
             "\nIf these partial matches are ok, you can accept them and we will keep track of the "
             "payee name for future reference."

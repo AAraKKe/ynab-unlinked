@@ -61,6 +61,7 @@ extra-dependencies = [
   "pytest ~= 8.0",
   "pytest-cov~=6.0",
   "pytest-mock~=3.0",
+  "factory_boy~=3.0",
 ]
 
 [tool.hatch.envs.dev.scripts]

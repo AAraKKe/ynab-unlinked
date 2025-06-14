@@ -12,25 +12,11 @@ from ynab.models.transaction_detail import TransactionDetail
 from ynab_unlinked.config import get_config
 from ynab_unlinked.config.models.v2 import Budget, CurrencyFormat
 from ynab_unlinked.display import console, process, question
+from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.ynab_api.client import Client
 
 MAX_PAST_TRANSACTIONS_SHOWN = 3
-
-
-class YnabAmountFormatted(NamedTuple):
-    inflow: str
-    outflow: str
-    amount: str
-
-
-def format_ynab_amount(ynab_amount: int) -> YnabAmountFormatted:
-    value = ynab_amount / 1000
-    value_str = f"{value:.2f}€"
-    outflow = value_str if ynab_amount < 0 else ""
-    inflow = value_str if ynab_amount > 0 else ""
-
-    return YnabAmountFormatted(inflow=inflow, outflow=outflow, amount=value_str)
 
 
 def prompt_for_api_key() -> str:
@@ -91,7 +77,7 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
     )
 
 
-def display_transaction_table(transactions: list[Transaction]):
+def display_transaction_table(transactions: list[Transaction], formatter: Formatter):
     columns = [
         Column(header="Date", justify="left", max_width=10),
         Column(header="Payee", justify="left", width=50),
@@ -115,11 +101,12 @@ def display_transaction_table(transactions: list[Transaction]):
             table.add_row("...", "...", "...", "...")
             break
 
-        outflow = transaction.pretty_amount if transaction.amount < 0 else None
-        inflow = transaction.pretty_amount if transaction.amount > 0 else None
+        amount_str = formatter.format_amount(transaction.amount)
+        outflow = amount_str if transaction.amount < 0 else ""
+        inflow = amount_str if transaction.amount > 0 else ""
 
         table.add_row(
-            transaction.date.strftime("%m/%d/%Y"),
+            formatter.format_date(transaction.date),
             transaction.payee,
             inflow,
             outflow,
@@ -159,7 +146,9 @@ def updload_help_message(with_partial_matches=False) -> str:
     return main_message
 
 
-def display_transactions_to_upload(transactions: list[TransactionWithYnabData]):
+def display_transactions_to_upload(
+    transactions: list[TransactionWithYnabData], formatter: Formatter
+):
     columns = [
         Column(header="Match", justify="center", width=5),
         Column(header="Date", justify="left", max_width=10),
@@ -177,8 +166,9 @@ def display_transactions_to_upload(transactions: list[TransactionWithYnabData]):
 
     partial_matches = False
     for transaction in transactions:
-        outflow = transaction.pretty_amount if transaction.amount < 0 else None
-        inflow = transaction.pretty_amount if transaction.amount > 0 else None
+        amount_str = formatter.format_amount(transaction.amount)
+        outflow = amount_str if transaction.amount < 0 else ""
+        inflow = amount_str if transaction.amount > 0 else ""
 
         if transaction.needs_creation:
             if transaction.match_status == MatchStatus.PARTIAL_MATCH:
@@ -191,7 +181,7 @@ def display_transactions_to_upload(transactions: list[TransactionWithYnabData]):
 
         table.add_row(
             transaction.match_emoji,
-            transaction.date.strftime("%m/%d/%Y"),
+            formatter.format_date(transaction.date),
             payee_line(transaction),
             inflow,
             outflow,
@@ -204,7 +194,7 @@ def display_transactions_to_upload(transactions: list[TransactionWithYnabData]):
     console().print(table)
 
 
-def display_partial_matches(transactions: list[TransactionWithYnabData]):
+def display_partial_matches(transactions: list[TransactionWithYnabData], formatter: Formatter):
     columns = [
         Column(header="Date", justify="left", max_width=10),
         Column(header="Payee", justify="left", width=50),
@@ -236,26 +226,29 @@ def display_partial_matches(transactions: list[TransactionWithYnabData]):
             continue
 
         # Original transaction row
-        orig_outflow = transaction.pretty_amount if transaction.amount < 0 else None
-        orig_inflow = transaction.pretty_amount if transaction.amount > 0 else None
+        orig_amount_str = formatter.format_amount(transaction.amount)
+        orig_outflow = orig_amount_str if transaction.amount < 0 else ""
+        orig_inflow = orig_amount_str if transaction.amount > 0 else ""
 
         # YNAB transaction row (from partial_match)
-        amount = format_ynab_amount(transaction.partial_match.amount)
+        ynab_amount_str = formatter.format_amount_milli(transaction.partial_match.amount)
+        ynab_outflow = ynab_amount_str if transaction.partial_match.amount < 0 else ""
+        ynab_inflow = ynab_amount_str if transaction.partial_match.amount > 0 else ""
 
         # Add the pair of rows
         table.add_row(
-            transaction.date.strftime("%m/%d/%Y"),
+            formatter.format_date(transaction.date),
             transaction.payee,
             orig_inflow,
             orig_outflow,
-            "",
+            transaction.cleared_status,
         )
 
         table.add_row(
-            transaction.partial_match.var_date.strftime("%m/%d/%Y"),
+            formatter.format_date(transaction.partial_match.var_date),
             transaction.partial_match.payee_name or "",
-            amount.inflow,
-            amount.inflow,
+            ynab_inflow,
+            ynab_outflow,
             transaction.partial_match.cleared.name.capitalize(),
             end_section=True,
         )
@@ -269,7 +262,9 @@ class ReconciliationGroup(NamedTuple):
 
 
 def display_reconciliation_table(
-    id_to_account: dict[str, Account], transactions: list[TransactionDetail]
+    id_to_account: dict[str, Account],
+    transactions: list[TransactionDetail],
+    formatter: Formatter,
 ) -> list[ReconciliationGroup]:
     """
     Print a table with the transactions to reconcile per account and return a list
@@ -285,9 +280,9 @@ def display_reconciliation_table(
     ):
         account = id_to_account[account_id]
 
-        cleared_balance = format_ynab_amount(account.cleared_balance).amount
-        uncleared_balance = format_ynab_amount(account.uncleared_balance).amount
-        balance = format_ynab_amount(account.balance).amount
+        cleared_balance = formatter.format_amount_milli(account.cleared_balance)
+        uncleared_balance = formatter.format_amount_milli(account.uncleared_balance)
+        balance = formatter.format_amount_milli(account.balance)
         account_name = account.name
 
         columns = [
@@ -315,14 +310,17 @@ def display_reconciliation_table(
         for transaction in transaction_group:
             group.append(transaction)
 
-            amount = format_ynab_amount(transaction.amount)
+            amount_str = formatter.format_amount_milli(transaction.amount)
+            outflow = amount_str if transaction.amount < 0 else ""
+            inflow = amount_str if transaction.amount > 0 else ""
 
             table.add_row(
-                transaction.var_date.strftime("%m/%d/%Y"),
+                formatter.format_date(transaction.var_date),
                 transaction.payee_name,
-                amount.inflow,
-                amount.outflow,
+                inflow,
+                outflow,
                 TransactionWithYnabData.cleared_str(transaction.cleared),
+                end_section=True,
             )
 
         console().print(table)
