@@ -1,4 +1,5 @@
 import datetime as dt
+from typing import Literal, TypedDict, overload
 
 from ynab.api.accounts_api import AccountsApi
 from ynab.api.budgets_api import BudgetsApi
@@ -13,31 +14,64 @@ from ynab.models.new_transaction import NewTransaction
 from ynab.models.patch_transactions_wrapper import PatchTransactionsWrapper
 from ynab.models.payee import Payee
 from ynab.models.post_transactions_wrapper import PostTransactionsWrapper
-from ynab.models.save_transaction_with_id_or_import_id import (
-    SaveTransactionWithIdOrImportId,
-)
+from ynab.models.save_transaction_with_id_or_import_id import SaveTransactionWithIdOrImportId
 from ynab.models.transaction_detail import TransactionDetail
 
 from ynab_unlinked.models import TransactionWithYnabData
+
+
+class ApisType(TypedDict):
+    budget: type[BudgetsApi]
+    accounts: type[AccountsApi]
+    transactions: type[TransactionsApi]
+    payees: type[PayeesApi]
+
+
+SupportedApisType = BudgetsApi | AccountsApi | TransactionsApi | PayeesApi
+SupportedApisNames = Literal["budget", "accounts", "transactions", "payees"]
 
 
 class Client:
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.__client = ApiClient(Configuration(access_token=api_key))
+        self._apis: ApisType = {
+            "budget": BudgetsApi,
+            "accounts": AccountsApi,
+            "transactions": TransactionsApi,
+            "payees": PayeesApi,
+        }
+
+    @overload
+    def api(self, api_name: Literal["budget"]) -> BudgetsApi: ...
+
+    @overload
+    def api(self, api_name: Literal["accounts"]) -> AccountsApi: ...
+
+    @overload
+    def api(self, api_name: Literal["transactions"]) -> TransactionsApi: ...
+
+    @overload
+    def api(self, api_name: Literal["payees"]) -> PayeesApi: ...
+
+    def api(self, api_name: SupportedApisNames) -> SupportedApisType:
+        if (api := self._apis.get(api_name)) is None:
+            raise ValueError(f"The api {api_name!r} is not supported")
+
+        return api(self.__client)
 
     def budgets(self, include_accounts: bool = False) -> list[BudgetSummary]:
-        api = BudgetsApi(self.__client)
+        api = self.api("budget")
         response = api.get_budgets(include_accounts=include_accounts)
         return response.data.budgets
 
     def budget(self, budget_id: str) -> BudgetDetail:
-        api = BudgetsApi(self.__client)
+        api = self.api("budget")
         response = api.get_budget_by_id(budget_id=budget_id)
         return response.data.budget
 
     def accounts(self, budget_id: str) -> list[Account]:
-        api = AccountsApi(self.__client)
+        api = self.api("accounts")
         response = api.get_accounts(budget_id)
         return response.data.accounts
 
@@ -47,7 +81,7 @@ class Client:
         account_id: str | None = None,
         since_date: dt.date | None = None,
     ) -> list[TransactionDetail]:
-        api = TransactionsApi(self.__client)
+        api = self.api("transactions")
 
         if account_id:
             response = api.get_transactions_by_account(
@@ -64,7 +98,7 @@ class Client:
         return response.data.transactions
 
     def payees(self, budget_id: str) -> list[Payee]:
-        api = PayeesApi(self.__client)
+        api = self.api("payees")
         response = api.get_payees(budget_id)
         return response.data.payees
 
@@ -77,7 +111,7 @@ class Client:
         if not transactions:
             return
 
-        api = TransactionsApi(self.__client)
+        api = self.api("transactions")
 
         transactions_to_create = [
             NewTransaction(
@@ -98,7 +132,7 @@ class Client:
         )
 
     def update_transactions(self, budget_id: str, transactions: list[TransactionDetail]):
-        api = TransactionsApi(self.__client)
+        api = self.api("transactions")
 
         to_update = [
             SaveTransactionWithIdOrImportId(

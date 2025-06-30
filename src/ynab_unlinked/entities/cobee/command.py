@@ -33,7 +33,7 @@ def command(
     You cando this by Right Click > Save as, and select where you want to save the file.
     """
 
-    ctx: YnabUnlinkedContext = context.obj
+    ctx: YnabUnlinkedContext[CobeeContext] = context.obj
     ctx.extras = CobeeContext(language=language)
 
     process_transactions(

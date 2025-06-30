@@ -6,6 +6,8 @@ import typer
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.process import process_transactions
 
+from .constants import InputType
+
 
 def command(
     context: typer.Context,
@@ -13,6 +15,12 @@ def command(
         Path,
         typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
     ],
+    input_type: Annotated[
+        InputType,
+        typer.Option(
+            "-t", "--input-type", show_choices=True, help="The type of the file to be parsed"
+        ),
+    ] = InputType.TXT,
 ):
     """
     Inputs transactions from a Sabadell txt file.
@@ -24,8 +32,10 @@ def command(
 
     ctx: YnabUnlinkedContext = context.obj
 
+    print(f"{input_file!r}")
+
     process_transactions(
-        entity=SabadellParser(),
+        entity=SabadellParser(input_type),
         input_file=input_file,
         context=ctx,
     )

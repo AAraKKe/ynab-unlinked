@@ -26,11 +26,16 @@ def load_callback(
     reconcile: Annotated[
         bool, typer.Option("-r", "--reconcile", help="Reconcile cleared transactions")
     ] = False,
+    account: Annotated[
+        bool,
+        typer.Option("-a", "--acount", help="Prompt to select the account to load transactions to"),
+    ] = False,
 ):
     obj: YnabUnlinkedContext = context.obj
 
     obj.show = show
     obj.reconcile = reconcile
+    obj.choose_account = account
 
 
 # Dynamically load all entities commands when present

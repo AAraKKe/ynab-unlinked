@@ -11,3 +11,4 @@ class YnabUnlinkedContext[T]:
     extras: T
     show: bool = False
     reconcile: bool = False
+    choose_account: bool = False

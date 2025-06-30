@@ -1,11 +1,56 @@
+import datetime as dt
 from collections.abc import Generator
 from contextlib import ExitStack
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
+from freezegun import freeze_time
+from pytest_mock import MockerFixture
+from typer.testing import CliRunner as TyperRunner
 
+from tests.helpers.types import CliRunner
+from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config.core import VERSION_MAPPING
+from ynab_unlinked.main import app
+from ynab_unlinked.utils import split_quoted_string
+from ynab_unlinked.ynab_api import Client
+
+
+@pytest.fixture
+def yul(config: str) -> CliRunner:
+    def wrapper(*args: str, **kwargs: Any):
+        runner = TyperRunner()
+        if len(args) == 1 and " " in args[0]:
+            # Handle passing all commands as a single string
+            args = tuple(split_quoted_string(args[0]))
+        result = runner.invoke(app, args=args, **kwargs)
+        return result
+
+    return wrapper
+
+
+@pytest.fixture
+def load_entity(ynab_api):
+    from tests.helpers.load_entitie import load_entity
+
+    return load_entity()
+
+
+@pytest.fixture
+def today() -> Generator[dt.datetime]:
+    today = dt.datetime(2025, 5, 15)
+    with freeze_time("2025-05-15"):
+        yield today
+
+
+@pytest.fixture
+def ynab_api(mocker: MockerFixture):
+    client_mock = mocker.patch.object(Client, "api")
+    stub = YnabClientStub(api_key="someapikey")
+    client_mock.side_effect = stub.api
+    return stub
 
 
 @pytest.fixture

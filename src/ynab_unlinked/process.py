@@ -67,8 +67,8 @@ def filter_transactions(
     yield from (t for t in transactions if t.date >= checkpoint.latest_date_processed)
 
 
-def get_or_prompt_account_id(config: ConfigV2, entity_name: str) -> str:
-    if entity_name in config.entities:
+def get_or_prompt_account_id(config: ConfigV2, entity_name: str, force_prompt: bool) -> str:
+    if entity_name in config.entities and not force_prompt:
         return config.entities[entity_name].account_id
 
     display.info(f"Lets select the account for {entity_name.capitalize()}:")
@@ -89,8 +89,9 @@ def get_or_prompt_account_id(config: ConfigV2, entity_name: str) -> str:
 
     info(f"Account selected: {account.name}")
 
-    config.entities[entity_name] = EntityConfig(account_id=account.id)
-    config.save()
+    if not force_prompt:
+        config.entities[entity_name] = EntityConfig(account_id=account.id)
+        config.save()
 
     return account.id
 
@@ -114,7 +115,7 @@ def process_transactions(
     show = context.show
     reconcile = context.reconcile
 
-    acount_id = get_or_prompt_account_id(config, entity.name())
+    acount_id = get_or_prompt_account_id(config, entity.name(), force_prompt=context.choose_account)
 
     try:
         parsed_input = entity.parse(input_file, context)
