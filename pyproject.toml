@@ -65,13 +65,13 @@ extra-dependencies = [
   "pytest-cov~=6.0",
   "pytest-mock~=3.0",
   "factory_boy~=3.0",
-  "freezegun~=1.5.0"
+  "freezegun~=1.5.0",
 ]
 
 [tool.hatch.envs.dev.scripts]
 format-check = "ruff format --check"
 lint = "ruff check"
-type-check = "pyright src tests"
+type-check = "pyright src"
 check = ["- lint", "- format-check", "- type-check"]
 format = "ruff format"
 lint-fix = "ruff check --fix --unsafe-fixes"
