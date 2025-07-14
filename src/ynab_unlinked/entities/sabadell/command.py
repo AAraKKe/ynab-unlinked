@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.process import process_transactions
+from .constants import InputType
 
 
 def command(
@@ -13,19 +14,29 @@ def command(
         Path,
         typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
     ],
+    input_type: Annotated[
+        InputType,
+        typer.Option(
+            "-t", "--input-type", show_choices=True, help="The type of the file to be parsed"
+        ),
+    ] = InputType.TXT,
 ):
     """
-    Inputs transactions from a Sabadell txt file.
+    Inputs transactions from a Sabadell TXT or XLS file.
 
     From your Sabadell Credit Card statement, you can download a txt file with the transactions.
     At the moment only txt format is supported.
     """
+
+    from ynab_unlinked.context_object import YnabUnlinkedContext
+    from ynab_unlinked.process import process_transactions
+
     from .sabadell import SabadellParser
 
     ctx: YnabUnlinkedContext = context.obj
 
     process_transactions(
-        entity=SabadellParser(),
+        entity=SabadellParser(input_type),
         input_file=input_file,
         context=ctx,
     )

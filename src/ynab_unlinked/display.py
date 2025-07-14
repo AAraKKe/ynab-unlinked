@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from contextlib import contextmanager
 
 from rich.console import Console
@@ -48,3 +49,7 @@ def question(message: str, **kwargs) -> str:
 
 def confirm(message: str, **kwargs) -> bool:
     return Confirm.ask(f"[bold cyan]{message}[/bold cyan]", console=console(), **kwargs)
+
+
+def bullet_list(items: Iterable[str]) -> str:
+    return "\n".join(f" • {item}" for item in items)

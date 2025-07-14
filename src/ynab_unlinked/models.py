@@ -88,7 +88,19 @@ class TransactionWithYnabData(Transaction):
 
     @property
     def cleared_status(self) -> str:
-        return self.cleared_str(self.cleared)
+        """
+        Generate cleared string representation.
+
+        If the transaction does not need to be created and it has an internal `ynab_cleared`
+        status set, the representation of `ynab_cleared` is shown instead. Otherwise,
+        the representation of `cleared` is shown instead.
+        """
+        cleared = (
+            self.ynab_cleared
+            if not self.needs_creation and self.ynab_cleared is not None
+            else self.cleared
+        )
+        return self.cleared_str(cleared)
 
     @property
     def ynab_cleared_status(self) -> str:

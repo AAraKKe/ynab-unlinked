@@ -1,16 +1,24 @@
-import datetime as dt
-from pathlib import Path
-from typing import cast
+from __future__ import annotations
 
-from ynab_unlinked.context_object import YnabUnlinkedContext
+from typing import TYPE_CHECKING, cast
+
 from ynab_unlinked.entities import Entity
-from ynab_unlinked.exceptions import ParsingError
-from ynab_unlinked.models import Transaction
-from ynab_unlinked.parsers import pdf
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from ynab_unlinked.context_object import YnabUnlinkedContext
+    from ynab_unlinked.models import Transaction
 
 
 class BBVA(Entity):
     def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
+        import datetime as dt
+
+        from ynab_unlinked.exceptions import ParsingError
+        from ynab_unlinked.models import Transaction
+        from ynab_unlinked.parsers import pdf
+
         transactions = []
 
         for row in pdf(input_file, allow_empty_columns=False, expected_number_of_columns=3):

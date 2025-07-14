@@ -36,8 +36,7 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
         budgets = client.budgets()
 
     console().print("Available budgets:")
-    for idx, budget in enumerate(budgets):
-        console().print(f" - {idx + 1}. {budget.name}")
+    console().print(f" - {idx + 1}. {budget.name}" for idx, budget in enumerate(budgets))
 
     budget_num = Prompt.ask(
         "What budget do you want to use? (By number)",
@@ -149,6 +148,9 @@ def updload_help_message(with_partial_matches=False) -> str:
 def display_transactions_to_upload(
     transactions: list[TransactionWithYnabData], formatter: Formatter
 ):
+    if not transactions:
+        return
+
     columns = [
         Column(header="Match", justify="center", width=5),
         Column(header="Date", justify="left", max_width=10),
@@ -328,3 +330,55 @@ def display_reconciliation_table(
 
         groups.append(ReconciliationGroup(account_name=account_name, transactions=group))
     return groups
+
+
+def split_quoted_string(input_string: str) -> list[str]:
+    """
+    Splits a string by spaces, but keeps substrings within
+    single quotes, double quotes, or backticks as single tokens.
+
+    Empty quotes are stripped.
+
+    Examples:
+        >>> split_quoted_string("this is my name")
+        ['this', 'is', 'my', 'name']
+        >>> split_quoted_string("I live in 'La guardia'")
+        ['I', 'live', 'in', 'La guardia']
+    """
+    # Regex Explanation:
+    # This regular expression is designed to find one of two types of patterns:
+    # 1. A quoted string (single, double, or backtick quotes):
+    #    - r"'[^']*'"  : Matches content inside single quotes.
+    #      '           : Matches a literal single quote.
+    #      [^']* : Matches any character that is NOT a single quote, zero or more times.
+    #      '           : Matches the closing single quote.
+    #    - r'"[^"]*"'  : Matches content inside double quotes. (Similar logic)
+    #    - r"`[^`]*`"  : Matches content inside backticks. (Similar logic)
+    # 2. A sequence of non-whitespace characters:
+    #    - r'\S+'     : Matches one or more non-whitespace characters (for unquoted words).
+    #      \S          : Matches any non-whitespace character.
+    #      +           : Matches one or more times.
+
+    # The | (OR) operator combines these patterns. The order is crucial:
+    # Quoted patterns come first to ensure they are matched as a whole
+    # before individual non-whitespace characters inside them are considered.
+    import re
+
+    pattern = re.compile(r"'[^']*'|\"[^\"]*\"|`[^`]*`|\S+")
+
+    # re.findall finds all non-overlapping matches of the pattern in the string.
+    matches = pattern.findall(input_string)
+
+    # Post-process: remove the surrounding quotes from the matched substrings
+    result = []
+    for single_match in matches:
+        # Check if the match starts and ends with any of the recognized quote types
+        if (
+            (single_match.startswith("'") and single_match.endswith("'"))
+            or (single_match.startswith('"') and single_match.endswith('"'))
+            or (single_match.startswith("`") and single_match.endswith("`"))
+        ):
+            result.append(single_match[1:-1])
+        else:
+            result.append(single_match)
+    return [string for string in result if string]

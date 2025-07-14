@@ -32,7 +32,7 @@ jobs:
         run: hatch build
 
       - name: Publish package to PyPI
-        uses: 76f52bc884231f62b9a034ebfe128415bbaabdfc # v1.2.4
+        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc # v1.2.4
         with:
           # skip_existing: true # Uncomment if you want to skip publishing if the version already exists
           print-hash: true

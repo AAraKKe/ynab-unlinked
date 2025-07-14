@@ -13,6 +13,7 @@ VERSION_MAPPING: Final[dict[str, type[Config]]] = {
     "V1": ConfigV1,
     "V2": ConfigV2,
 }
+LATESST_CONFIG_TYPE = ConfigV2
 
 
 class ConfigError(ValueError): ...
@@ -38,7 +39,7 @@ def config_version() -> Version:
         return Version("Config", content["version"])
 
 
-def get_config() -> ConfigV2 | None:
+def get_config() -> LATESST_CONFIG_TYPE | None:
     """Get the latest supported version of the config running any migrations if needed"""
     version = config_version()
 
@@ -48,4 +49,9 @@ def get_config() -> ConfigV2 | None:
     if not current_config.exists():
         return None
 
-    return MigrationEngine("Config", DeltaConfigV1ToV2()).migrate(current_config.load(), ConfigV2)
+    if current_config is LATESST_CONFIG_TYPE:
+        return LATESST_CONFIG_TYPE.load()
+
+    return MigrationEngine("Config", DeltaConfigV1ToV2()).migrate(
+        current_config.load(), LATESST_CONFIG_TYPE
+    )
