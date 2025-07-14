@@ -13,6 +13,9 @@ def command(
         typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
     ],
 ):
+    """
+    Import transactions from BBVA using a Credit Card PDF report.
+    """
     from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.process import process_transactions
 

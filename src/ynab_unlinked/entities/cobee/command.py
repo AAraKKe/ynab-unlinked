@@ -25,7 +25,7 @@ def command(
     ] = Language.ES,
 ):
     """
-    Inputs transactions from a Cobee HTML file.
+    Import transactions from a Cobee HTML file.
 
     Cobee that not support exporting transactions. To use the Cobee entity, form the website,
     find the list of transactions of the month you want to import into YNAB and save the page as HTML.
