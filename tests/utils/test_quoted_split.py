@@ -36,7 +36,7 @@ from ynab_unlinked.utils import split_quoted_string
         pytest.param(
             "two 'quoted' 'parts'", ["two", "quoted", "parts"], id="single_quotes_multiple"
         ),
-        pytest.param("''", [""], id="single_quotes_empty"),  # Empty single quoted string
+        pytest.param("''", [], id="single_quotes_empty"),  # Empty single quoted string
         # Cases with double quotes
         pytest.param(
             'Hello, "World Wide Web" is great!',
@@ -51,7 +51,7 @@ from ynab_unlinked.utils import split_quoted_string
             ["another", "test case", "here"],
             id="double_quotes_in_middle",
         ),
-        pytest.param('""', [""], id="double_quotes_empty"),  # Empty double quoted string
+        pytest.param('""', [], id="double_quotes_empty"),  # Empty double quoted string
         # Cases with backticks
         pytest.param(
             "Path is `/usr/local/bin`", ["Path", "is", "/usr/local/bin"], id="backticks_basic"
@@ -61,7 +61,7 @@ from ynab_unlinked.utils import split_quoted_string
             ["command", "ls -la /tmp", "to", "list"],
             id="backticks_command_example",
         ),
-        pytest.param("``", [""], id="backticks_empty"),  # Empty backtick string
+        pytest.param("``", [], id="backticks_empty"),  # Empty backtick string
         # Mixed quotes and complex cases
         pytest.param(
             "Mixed 'quotes and' \"other things\" `like this`",
@@ -86,10 +86,6 @@ from ynab_unlinked.utils import split_quoted_string
     ],
 )
 def test_split_quoted_string(input_string: str, expected_output: list[str]):
-    """
-    Tests the split_string_preserving_quoted function with various inputs,
-    including strings with and without quoted sections.
-    """
     actual_output = split_quoted_string(input_string)
     assert actual_output == expected_output, (
         f"For input: '{input_string}', Expected: {expected_output}, Got: {actual_output}"

@@ -29,7 +29,8 @@ def load_entity() -> LoadEntityCallback:
     """
     Load a stub entity that always returns a given set of transactions for testing.
 
-    This entity is avialable through the load command in the test suit.
+    This entity is avialable through the load command in the test suit and is associated
+    with the TestAccountID account id.
     """
 
     def callback(current_date: dt.datetime, transactions: list[Transaction] | None = None):

@@ -32,7 +32,7 @@ def yul(config: str) -> CliRunner:
 
 
 @pytest.fixture
-def load_entity(ynab_api):
+def load_entity(ynab_api: YnabClientStub):
     from tests.helpers.load_entitie import load_entity
 
     return load_entity()

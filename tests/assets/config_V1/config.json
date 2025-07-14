@@ -16,6 +16,10 @@
                 "latest_date_processed": "2025-05-15",
                 "latest_transaction_hash": 7824838563629386568
             }
+        },
+        "test": {
+            "account_id": "TestAccountID",
+            "checkpoint": null
         }
     },
     "payee_rules": {
