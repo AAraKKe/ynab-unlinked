@@ -55,7 +55,6 @@ def reconcile(
         Option(
             "--all",
             "-a",
-            is_flag=True,
             help=(
                 "Get all transactions. By default, only transactions created after the last "
                 "time this command was run will be considered."
@@ -67,7 +66,6 @@ def reconcile(
         Option(
             "--uncleared",
             "-u",
-            is_flag=True,
             help="Reconcile even uncleared transactions",
         ),
     ] = False,
