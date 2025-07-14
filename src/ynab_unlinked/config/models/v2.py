@@ -99,3 +99,10 @@ class ConfigV2(BaseModel):
             ),
             None,
         )
+
+    def entity(self, name: str) -> EntityConfig | None:
+        return self.entities.get(name)
+
+    def set_entity_account(self, name: str, account_id: str):
+        if (entity := self.entities.get(name)) is not None:
+            entity.account_id = account_id
