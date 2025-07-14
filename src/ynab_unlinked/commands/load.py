@@ -24,7 +24,10 @@ def load_callback(
         ),
     ] = False,
     reconcile: Annotated[
-        bool, typer.Option("-r", "--reconcile", help="Reconcile cleared transactions")
+        bool,
+        typer.Option(
+            "-r", "--reconcile", help="Import transactions as reconciled instead of cleared."
+        ),
     ] = False,
     account: Annotated[
         bool,

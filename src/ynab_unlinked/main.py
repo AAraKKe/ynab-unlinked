@@ -67,10 +67,3 @@ def cli(context: typer.Context):
 
 def main():
     app(prog_name="yul")
-
-
-# from typer.testing import CliRunner
-
-# runner = CliRunner()
-# result = runner.invoke(app, 'load sabadell ~/Downloads/Particulares\ 30062025\ 5318.txt')
-# print(result)

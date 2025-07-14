@@ -36,8 +36,7 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
         budgets = client.budgets()
 
     console().print("Available budgets:")
-    for idx, budget in enumerate(budgets):
-        console().print(f" - {idx + 1}. {budget.name}")
+    console().print(f" - {idx + 1}. {budget.name}" for idx, budget in enumerate(budgets))
 
     budget_num = Prompt.ask(
         "What budget do you want to use? (By number)",
@@ -149,6 +148,9 @@ def updload_help_message(with_partial_matches=False) -> str:
 def display_transactions_to_upload(
     transactions: list[TransactionWithYnabData], formatter: Formatter
 ):
+    if not transactions:
+        return
+
     columns = [
         Column(header="Match", justify="center", width=5),
         Column(header="Date", justify="left", max_width=10),

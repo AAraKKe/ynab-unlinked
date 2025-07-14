@@ -9,7 +9,7 @@ from ynab_unlinked.config import ConfigV2
 from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
 from ynab_unlinked.config.models.shared import Checkpoint, EntityConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.display import confirm, console, info, process, question
+from ynab_unlinked.display import bullet_list, confirm, console, info, process, question
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.matcher import match_transactions
@@ -77,8 +77,7 @@ def get_or_prompt_account_id(config: ConfigV2, entity_name: str, force_prompt: b
 
     accounts = [acc for acc in client.accounts(budget_id=budget_id) if not acc.closed]
 
-    for idx, acc in enumerate(accounts):
-        console().print(f" - {idx + 1}. {acc.name}")
+    console().print(bullet_list(f"{idx + 1:>2}: {acc.name}" for idx, acc in enumerate(accounts)))
 
     acc_num = question(
         "What account are the transactions going to be imported to? (By number)",
@@ -165,7 +164,8 @@ def process_transactions(
 
     if not any(t.needs_creation for t in transactions):
         info("🎉 All done! Nothing to do.")
-        config.update_and_save(transactions[0], entity.name())
+        if transactions:
+            config.update_and_save(transactions[0], entity.name())
         return
 
     if partial_matches := [
