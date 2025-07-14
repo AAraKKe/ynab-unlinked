@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import datetime as dt
 import re
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
-from typing import assert_never
+from typing import TYPE_CHECKING, assert_never
 
-from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.models import Transaction
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from ynab_unlinked.context_object import YnabUnlinkedContext
+    from ynab_unlinked.models import Transaction
 
 DATE_REGEX = re.compile(r"(\d{1,2}) (\w{3}) (\d{4})")
 
@@ -97,6 +101,8 @@ class Cobee:
     ) -> list[Transaction]:
         # Import now the html parser
         import html_text
+
+        from ynab_unlinked.models import Transaction
 
         text = html_text.extract_text(input_file.read_text())  # type: ignore
 

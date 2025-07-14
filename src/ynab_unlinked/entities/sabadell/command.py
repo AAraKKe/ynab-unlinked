@@ -1,10 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Annotated
 
 import typer
-
-from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.process import process_transactions
 
 from .constants import InputType
 
@@ -22,6 +21,9 @@ def command(
         ),
     ] = InputType.TXT,
 ):
+    from ynab_unlinked.context_object import YnabUnlinkedContext
+    from ynab_unlinked.process import process_transactions
+
     """
     Inputs transactions from a Sabadell txt file.
 
@@ -31,8 +33,6 @@ def command(
     from .sabadell import SabadellParser
 
     ctx: YnabUnlinkedContext = context.obj
-
-    print(f"{input_file!r}")
 
     process_transactions(
         entity=SabadellParser(input_type),

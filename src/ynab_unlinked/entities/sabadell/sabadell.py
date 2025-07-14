@@ -1,17 +1,22 @@
-import datetime as dt
+from __future__ import annotations
+
 import re
-from pathlib import Path
-from typing import assert_never
+from typing import TYPE_CHECKING, assert_never
 
-from rich import print
+if TYPE_CHECKING:
+    import datetime as dt
+    from pathlib import Path
 
-from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.models import Transaction
+    from ynab_unlinked.context_object import YnabUnlinkedContext
+    from ynab_unlinked.models import Transaction
 
-from .constants import InputType
+    from .constants import InputType
 
-ANCHOR_LINE = "FECHA|CONCEPTO|LOCALIDAD|IMPORTE"
-TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|(.*EUR).*")
+
+# Line that triggers the credit operations
+ANCHOR_LINE = "Límite de crédito".encode("cp1252").decode("cp1252")
+XLS_DEBIG_LINE = "MOVIMIENTOS DE DEBITO"
+TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|(.*EUR)$")
 
 
 class SabadellParser:
@@ -19,6 +24,8 @@ class SabadellParser:
         self.input_type = input_type
 
     def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
+        from .constants import InputType
+
         match self.input_type:
             case InputType.TXT:
                 return self.__parse_txt(input_file)
@@ -28,16 +35,13 @@ class SabadellParser:
                 assert_never(never)
 
     def __parse_txt(self, input_file: Path) -> list[Transaction]:
+        from ynab_unlinked.models import Transaction
+
         lines = input_file.read_text(encoding="cp1252").splitlines()
         start = False
         transactions: list[Transaction] = []
         for line in lines:
             if ANCHOR_LINE in line:
-                # Check if this is the second time we find it
-                # This means we have had cash withdrawals but
-                # withdrawals will appear in the connected account
-                if transactions:
-                    transactions = []
                 start = True
                 continue
 
@@ -52,12 +56,11 @@ class SabadellParser:
                         amount=-self.__parse_amount(groups[3]),
                     )
                 )
-            else:
-                start = False
 
         return transactions
 
     def __parse_xls(self, input_file: Path) -> list[Transaction]:
+        from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import xls
 
         # This is the row after which real transactions appear
@@ -66,6 +69,11 @@ class SabadellParser:
         transactions = []
 
         for entry in xls(input_file, read_after_row_like=row_trigger):
+            # If we find debing movements, stop reading
+            # Debit movements appear at the end of the file
+            if entry[0] == XLS_DEBIG_LINE:
+                break
+
             # The order is date, payee, x, x, value
             date, payee, amount = entry[0], entry[1], entry[4]
 
@@ -87,6 +95,8 @@ class SabadellParser:
         return transactions
 
     def __parse_date(self, raw: str) -> dt.date:
+        import datetime as dt
+
         current_year = dt.date.today().year
         return dt.datetime.strptime(f"{raw}/{current_year}", "%d/%m/%Y").date()
 
