@@ -37,11 +37,12 @@ dependencies = [
   "platformdirs==4.3.8",
   "pyexcel==0.7.3",
   "pyexcel-xls==0.7.1",
+  "pyexcel-xlsx==0.6.1",
   "ipykernel"
 ]
 
 [project.scripts]
-yul = "ynab_unlinked.__main__:main"
+yul = "ynab_unlinked.main:main"
 
 [project.urls]
 Documentation = "https://github.com/Juanpe Araque/ynab-unlinked#readme"

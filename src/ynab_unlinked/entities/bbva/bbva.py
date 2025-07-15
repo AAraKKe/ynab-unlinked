@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from ynab_unlinked.entities import Entity
+from ynab_unlinked.entities import Entity, InputType
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -11,18 +11,31 @@ if TYPE_CHECKING:
     from ynab_unlinked.models import Transaction
 
 
+XLSX_ROW_TO_READ = ['', 'Fecha', 'Tarjeta', 'Concepto', 'Importe', 'Divisa', '']
+VALID_TYPES = [InputType.PDF, InputType.XLSX]
+
 class BBVA(Entity):
     def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
         import datetime as dt
 
         from ynab_unlinked.exceptions import ParsingError
         from ynab_unlinked.models import Transaction
-        from ynab_unlinked.parsers import pdf
+        from ynab_unlinked.parsers import pdf, xls
+        from ynab_unlinked.utils import extract_type
+
+        input_type = extract_type(input_file, valid=VALID_TYPES)
+        match input_type:
+            case InputType.XLSX:
+                generator = xls(input_file, read_after_row_like=XLSX_ROW_TO_READ)
+                field_reader = self.__extract_fields_from_xlsx_row
+            case InputType.PDF:
+                generator = pdf(input_file, allow_empty_columns=False, expected_number_of_columns=3)
+                field_reader = self.__extract_fields_from_pdf_row
 
         transactions = []
 
-        for row in pdf(input_file, allow_empty_columns=False, expected_number_of_columns=3):
-            parsed_row = self.__extract_fields_from_row(cast(list[str], row))
+        for row in generator:
+            parsed_row = field_reader(cast(list[str], row))
             if parsed_row is None:
                 raise ParsingError(
                     input_file,
@@ -47,7 +60,7 @@ class BBVA(Entity):
 
         return transactions
 
-    def __extract_fields_from_row(self, row: list[str]) -> tuple[str, ...] | None:
+    def __extract_fields_from_pdf_row(self, row: list[str]) -> tuple[str, ...] | None:
         # PDFs should have three columns
         # - Date with 2 lines for the date the transaction took place and when it was approved
         # - Concept, used for payee. Sometimes 2 lines including spending category
@@ -60,6 +73,10 @@ class BBVA(Entity):
         amount = row[2]
 
         return date, payee, amount
+
+    def __extract_fields_from_xlsx_row(self, row: list[str]) -> tuple[str, ...] | None:
+        # XLSX fields are present from 1 to 4 for date, card number, payee and amount
+        return str(row[1]), str(row[3]), str(row[4])
 
     def name(self) -> str:
         return "BBVA Credit Card"

@@ -1,4 +1,6 @@
+from collections.abc import Sequence
 from itertools import groupby
+from pathlib import Path
 from typing import NamedTuple
 
 from rich import box
@@ -12,6 +14,7 @@ from ynab.models.transaction_detail import TransactionDetail
 from ynab_unlinked.config import get_config
 from ynab_unlinked.config.models.v2 import Budget, CurrencyFormat
 from ynab_unlinked.display import console, process, question
+from ynab_unlinked.entities import InputType
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.ynab_api.client import Client
@@ -21,6 +24,21 @@ MAX_PAST_TRANSACTIONS_SHOWN = 3
 
 def prompt_for_api_key() -> str:
     return question("What is the API Key to connect to YNAB?", password=True)
+
+
+def extract_type(input_file: Path, valid: Sequence[InputType] | None = None) -> InputType:
+    extension = input_file.suffix[1:]
+
+    if extension not in InputType:
+        raise LookupError(f"Extension {extension!r} is not supported. File: {input_file}")
+
+    valid_extensions = {v.value for v in valid} if valid else [v.value for v in InputType]
+    if extension not in valid_extensions:
+        raise AttributeError(
+            f"Input file {input_file} does not have a supported extension. Supported: {valid_extensions}"
+        )
+
+    return InputType(extension)
 
 
 def prompt_for_budget(api_key: str | None = None) -> Budget:

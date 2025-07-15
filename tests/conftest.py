@@ -12,7 +12,10 @@ from typer.testing import CliRunner as TyperRunner
 
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked.config import get_config
 from ynab_unlinked.config.core import VERSION_MAPPING
+from ynab_unlinked.context_object import YnabUnlinkedContext
+from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.main import app
 from ynab_unlinked.utils import split_quoted_string
 from ynab_unlinked.ynab_api import Client
@@ -33,9 +36,23 @@ def yul(config: str) -> CliRunner:
 
 @pytest.fixture
 def load_entity(ynab_api: YnabClientStub):
-    from tests.helpers.load_entitie import load_entity
+    from tests.helpers.load_entity import load_entity
 
     return load_entity()
+
+
+@pytest.fixture
+def context_obj(config: str):
+    config_obj = get_config()
+    assert config_obj is not None
+    return YnabUnlinkedContext(
+        config=config_obj,
+        formatter=Formatter(
+            date_format=config_obj.budget.date_format,
+            currency_format=config_obj.budget.currency_format,
+        ),
+        extras=None,
+    )
 
 
 @pytest.fixture
