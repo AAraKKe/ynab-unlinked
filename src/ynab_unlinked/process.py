@@ -60,11 +60,13 @@ def preprocess_transactions(transactions: list[Transaction], checkpoint: Checkpo
 def filter_transactions(
     transactions: list[Transaction], checkpoint: Checkpoint | None
 ) -> Generator[Transaction]:
-    if checkpoint is None:
-        yield from transactions
-        return
+    # Checkpoint filtering has many issues when dealing with old trasactions that took time to
+    # be processed. While we rethink it lets just not filter them
+    # if checkpoint is None:
+    yield from transactions
+    return
 
-    yield from (t for t in transactions if t.date >= checkpoint.latest_date_processed)
+    # yield from (t for t in transactions if t.date >= checkpoint.latest_date_processed)
 
 
 def get_or_prompt_account_id(config: ConfigV2, entity_name: str, force_prompt: bool) -> str:
@@ -142,16 +144,13 @@ def process_transactions(
     client = Client(config.api_key)
     budget_id = config.budget.id
 
+    earliest_transaction = min(t.date for t in transactions)
+
     with process("Reading transactions..."):
         ynab_transactions = client.transactions(
             budget_id=budget_id,
             account_id=acount_id,
-            since_date=(
-                checkpoint.latest_date_processed
-                - dt.timedelta(days=TRANSACTIONS_DAYES_BEFORE_LAST_EXTRACTION)
-                if checkpoint
-                else None
-            ),
+            since_date=earliest_transaction - dt.timedelta(days=context.buffer),
         )
     display.success("✔ Transactions read")
 

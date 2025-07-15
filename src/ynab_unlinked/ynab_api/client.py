@@ -79,9 +79,12 @@ class Client:
         self,
         budget_id: str,
         account_id: str | None = None,
-        since_date: dt.date | None = None,
+        since_date: dt.datetime | dt.date | None = None,
     ) -> list[TransactionDetail]:
         api = self.api("transactions")
+
+        if since_date is not None and isinstance(since_date, dt.datetime):
+            since_date = since_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
         if account_id:
             response = api.get_transactions_by_account(

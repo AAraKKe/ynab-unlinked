@@ -12,3 +12,4 @@ class YnabUnlinkedContext[T]:
     show: bool = False
     reconcile: bool = False
     choose_account: bool = False
+    buffer: int = 15

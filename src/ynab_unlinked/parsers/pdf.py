@@ -41,8 +41,8 @@ def pdf(
     - table_settings (dict[str, Any]): these are the table settings passed
       to pdfpluber (see [docs](https://github.com/jsvine/pdfplumber/tree/stable?tab=readme-ov-file#table-extraction-settings))
 
-    The return value is a list of rows that contains a list of columns as
-    list[list[str]]
+    The method yields elements from a list of rows that contains a list of columns as
+    Sequence[str]
     """
     import pdfplumber
 

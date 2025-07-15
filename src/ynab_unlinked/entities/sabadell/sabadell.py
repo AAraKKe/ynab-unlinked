@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 # Line that triggers the credit operations
 ANCHOR_LINE = "Límite de crédito".encode("cp1252").decode("cp1252")
-XLS_DEBIG_LINE = "MOVIMIENTOS DE DEBITO"
+XLS_DEBIT_LINE = "MOVIMIENTOS DE DEBITO"
 TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|(.*EUR)$")
 
 
@@ -71,7 +71,7 @@ class SabadellParser:
         for entry in xls(input_file, read_after_row_like=row_trigger):
             # If we find debing movements, stop reading
             # Debit movements appear at the end of the file
-            if entry[0] == XLS_DEBIG_LINE:
+            if entry[0] == XLS_DEBIT_LINE:
                 break
 
             # The order is date, payee, x, x, value

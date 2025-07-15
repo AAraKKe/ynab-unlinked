@@ -33,12 +33,25 @@ def load_callback(
         bool,
         typer.Option("-a", "--acount", help="Prompt to select the account to load transactions to"),
     ] = False,
+    buffer: Annotated[
+        int,
+        typer.Option(
+            "-b",
+            "--buffer",
+            help=(
+                "The number of days before the earliest transaction in the input file to load transactions from YNAB. "
+                "This is used to compare your transactions to import with the ones laready in YNAB"
+            ),
+            show_default=True,
+        ),
+    ] = 15,
 ):
     obj: YnabUnlinkedContext = context.obj
 
     obj.show = show
     obj.reconcile = reconcile
     obj.choose_account = account
+    obj.buffer = buffer
 
 
 # Dynamically load all entities commands when present
