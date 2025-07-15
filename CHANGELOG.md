@@ -6,6 +6,25 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.1.0 (2025-07-15)
+
+### Fresh Out of the Feature Oven
+* [[#14](https://github.com/AAraKKe/ynab-unlinked/issues/14)] Add option to the load command that prompts to select an account to import to
+* [[#18](https://github.com/AAraKKe/ynab-unlinked/issues/18)] Add support for XLS parsing to Sabadell entity
+* Add support for XLSX files to BBVA improving how to handle multiple files types
+* [[#1](https://github.com/AAraKKe/ynab-unlinked/issues/1)] Yul Config can now be versioned and migrated from older to newer versions.
+
+### Polished Until It Shines
+* Bring match days threshold to the same value as YNAB has it
+* [[#9](https://github.com/AAraKKe/ynab-unlinked/issues/9)] Improve amount formatting based on the settings in the used YNAB budget
+* [[#1](https://github.com/AAraKKe/ynab-unlinked/issues/1)] Improve display handling by centralizing styles in the display module and moving complex display logic to utils
+* Instead of avoid loading transactions from the last time the tool was run, we are now tryingto match transactions with YNAB transactions that are a number of days prior to the earliest transaction in the import file. This is configurable through the `--buffer` option in the load command.
+* Make the menu to select accounts to reconcile interactive. This type of menu will be used whenever the user needs to selet an option
+
+### Bugs Squashed, Peace Restored
+* [[#11](https://github.com/AAraKKe/ynab-unlinked/issues/11)] Fix in Cobee entity that prevents it from importing accumulations lines
+* [[#20](https://github.com/AAraKKe/ynab-unlinked/issues/20)] Sabadell import ignores cash withdrawals. These appear in the linked bank acccount
+
 ## ynab-unlinked 0.0.3 (2025-05-18)
 
 ### Fresh Out of the Feature Oven

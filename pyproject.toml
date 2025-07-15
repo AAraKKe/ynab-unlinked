@@ -178,7 +178,7 @@ extra-dependencies = ["towncrier == 24.8.0"]
 [tool.hatch.envs.tc.scripts]
 check = "towncrier check"
 show = "towncrier build --draft"
-build = "towncrier build"
+build = "towncrier build {args:+}"
 removed = "towncrier create --edit {args:+}.removed.md"
 deprecated = "towncrier create --edit {args:+}.deprecated.md"
 added = "towncrier create --edit {args:+}.added.md"
