@@ -1,7 +1,6 @@
 import datetime as dt
 from typing import Annotated, Literal
 
-from rich.prompt import Prompt
 from typer import Context, Option
 from ynab.models.transaction_cleared_status import TransactionClearedStatus
 
@@ -9,42 +8,22 @@ from ynab_unlinked import app, display
 from ynab_unlinked.config import ConfigV2
 from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
 from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.display import confirm, process
+from ynab_unlinked.display import checkboxes, confirm, process
 from ynab_unlinked.utils import display_reconciliation_table
 from ynab_unlinked.ynab_api import Client
 
 
-def indexes_to_reconcile(max: int) -> list[int] | Literal["all"]:
-    selection = Prompt.ask(
-        (
-            "Select which accounts you want to reconcile from the list above. You can suply several "
-            "of them with a comma separated list of numbers (e.g. 1,2,4) or answer 'all' to reconcile all acounts."
-        ),
-        default="all",
-    )
+def indexes_to_reconcile(choices: dict[int, str]) -> list[int] | Literal["all"] | None:
+    question = "Select the accounts you want to reconcile."
 
-    if selection == "all":
-        return "all"
+    choices[-1] = "All of them"
 
-    while True:
-        try:
-            if selection == ".q":
-                return []
+    selection = checkboxes(question, choices, default=-1)
 
-            indexes = [int(i.strip()) for i in selection.split(",")]
+    if selection is None:
+        return
 
-            if any(i > max for i in indexes):
-                raise RuntimeError()
-
-            return indexes
-        except Exception:
-            selection = Prompt.ask(
-                (
-                    "Select either a set of numbers (e.g. 1,2,4) or 'all' to reoncile all accounts.\n"
-                    "If you want to quit, answer '.q'"
-                ),
-                default="all",
-            )
+    return "all" if -1 in selection else selection
 
 
 @app.command()
@@ -56,8 +35,10 @@ def reconcile(
             "--all",
             "-a",
             help=(
-                "Get all transactions. By default, only transactions created after the last "
-                "time this command was run will be considered."
+                "Include all transactions, not just those since the last reconciliation. "
+                "Use this if some transactions were cleared with a significant delay. "
+                "Note: This may take longer to run. "
+                "Alternatively, use the --buffer option to include more days before the last reconciliation."
             ),
         ),
     ] = False,
@@ -66,9 +47,21 @@ def reconcile(
         Option(
             "--uncleared",
             "-u",
-            help="Reconcile even uncleared transactions",
+            help="Also reconcile transactions that are not cleared.",
         ),
     ] = False,
+    buffer: Annotated[
+        int,
+        Option(
+            "-b",
+            "--buffer",
+            help=(
+                "Number of days before the last reconciliation to include when checking transactions. "
+                "This helps catch any late-cleared transactions."
+            ),
+            show_default=True,
+        ),
+    ] = 7,
 ):
     """Help reconciling your accounts in one go"""
 
@@ -77,6 +70,9 @@ def reconcile(
     budget_id = config.budget.id
 
     last_reconciliation_date = None if all else config.last_reconciliation_date
+
+    if last_reconciliation_date:
+        last_reconciliation_date -= dt.timedelta(days=buffer)
 
     client = Client(api_key=config.api_key)
 
@@ -103,7 +99,13 @@ def reconcile(
         ids_to_account, transactions_to_reconcile, ctx.formatter
     )
 
-    selection = indexes_to_reconcile(max=len(reconcile_groups))
+    choices = {idx: group.account_name for idx, group in enumerate(reconcile_groups)}
+
+    selection = indexes_to_reconcile(choices)
+
+    if selection is None:
+        display.info("No accounts to reconcile.\n👋 Bye!")
+        return
 
     if selection == "all":
         selected_transactions = transactions_to_reconcile

@@ -38,7 +38,7 @@ dependencies = [
   "pyexcel==0.7.3",
   "pyexcel-xls==0.7.1",
   "pyexcel-xlsx==0.6.1",
-  "ipykernel"
+  "questionary==2.0.1",
 ]
 
 [project.scripts]
