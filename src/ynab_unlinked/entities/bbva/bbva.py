@@ -11,8 +11,9 @@ if TYPE_CHECKING:
     from ynab_unlinked.models import Transaction
 
 
-XLSX_ROW_TO_READ = ['', 'Fecha', 'Tarjeta', 'Concepto', 'Importe', 'Divisa', '']
+XLSX_ROW_TO_READ = ["", "Fecha", "Tarjeta", "Concepto", "Importe", "Divisa", ""]
 VALID_TYPES = [InputType.PDF, InputType.XLSX]
+
 
 class BBVA(Entity):
     def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
