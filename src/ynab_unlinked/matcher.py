@@ -4,7 +4,7 @@ from ynab_unlinked.config import ConfigV2
 from ynab_unlinked.models import MatchStatus, TransactionWithYnabData
 from ynab_unlinked.payee import payee_matches
 
-TIME_WINDOW_MATCH_DAYS = 5
+TIME_WINDOW_MATCH_DAYS = 10
 
 
 def __match_date(transaction: TransactionWithYnabData, ynab_transaction: TransactionDetail) -> bool:
