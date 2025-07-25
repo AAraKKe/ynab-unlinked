@@ -1,29 +1,40 @@
 import datetime as dt
-from typing import Annotated, Literal
+from typing import Annotated
 
 from typer import Context, Option
-from ynab.models.transaction_cleared_status import TransactionClearedStatus
+from ynab import Account, TransactionClearedStatus, TransactionDetail
 
 from ynab_unlinked import app, display
+from ynab_unlinked.choices import Choice
+from ynab_unlinked.commands.recapp import Reconcile
 from ynab_unlinked.config import ConfigV2
 from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
 from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.display import checkboxes, confirm, process
-from ynab_unlinked.utils import display_reconciliation_table
+from ynab_unlinked.display import process
 from ynab_unlinked.ynab_api import Client
 
 
-def indexes_to_reconcile(choices: dict[int, str]) -> list[int] | Literal["all"] | None:
-    question = "Select the accounts you want to reconcile."
+def build_choices(transactions: list[TransactionDetail], accounts: list[Account]) -> list[Choice]:
+    accounts_by_id = {acc.id: acc for acc in accounts}
+    choices_per_account: dict[str, list[Choice | str]] = {}
 
-    choices[-1] = "All of them"
+    for transaction in transactions:
+        choice = Choice(id=f"transaction-{transaction.id}", transaction=transaction)
+        forced_selection = False if transaction.cleared is TransactionClearedStatus.UNCLEARED else None
+        choice.enable_forced_selected(forced_selection)
+        choices_per_account.setdefault(transaction.account_id, []).append(choice)
 
-    selection = checkboxes(question, choices, default=-1)
 
-    if selection is None:
-        return
-
-    return "all" if -1 in selection else selection
+    return [
+        Choice(
+            id=f"account-{acc_id}",
+            title=account.name,
+            choices=choices_per_account.get(acc_id),
+            account=account,
+        )
+        for acc_id, account in accounts_by_id.items()
+        if choices_per_account.get(acc_id)
+    ]
 
 
 @app.command()
@@ -40,14 +51,6 @@ def reconcile(
                 "Note: This may take longer to run. "
                 "Alternatively, use the --buffer option to include more days before the last reconciliation."
             ),
-        ),
-    ] = False,
-    uncleared: Annotated[
-        bool,
-        Option(
-            "--uncleared",
-            "-u",
-            help="Also reconcile transactions that are not cleared.",
         ),
     ] = False,
     buffer: Annotated[
@@ -67,6 +70,7 @@ def reconcile(
 
     ctx: YnabUnlinkedContext = context.obj
     config: ConfigV2 = ctx.config
+
     budget_id = config.budget.id
 
     last_reconciliation_date = None if all else config.last_reconciliation_date
@@ -76,59 +80,37 @@ def reconcile(
 
     client = Client(api_key=config.api_key)
 
-    cleared_allowed = {TransactionClearedStatus.CLEARED}
-    if uncleared:
-        cleared_allowed.add(TransactionClearedStatus.UNCLEARED)
-
     with process("Getting transactions from YNAB"):
         transactions_to_reconcile = [
             transaction
             for transaction in client.transactions(
                 budget_id=budget_id, since_date=last_reconciliation_date
             )
-            if transaction.cleared in cleared_allowed
+            if transaction.cleared is not TransactionClearedStatus.RECONCILED
         ]
         accounts = client.accounts(budget_id=budget_id)
-        ids_to_account = {acc.id: acc for acc in accounts}
 
     if not transactions_to_reconcile:
         display.success("All accounts are already reconciled!")
         return
 
-    reconcile_groups = display_reconciliation_table(
-        ids_to_account, transactions_to_reconcile, ctx.formatter
-    )
+    choices = build_choices(transactions_to_reconcile, accounts)
+    return_value = Reconcile(config, choices, formatter=ctx.formatter).run()
 
-    choices = {idx: group.account_name for idx, group in enumerate(reconcile_groups)}
-
-    selection = indexes_to_reconcile(choices)
-
-    if selection is None:
-        display.info("No accounts to reconcile.\n👋 Bye!")
+    if return_value == 2:
+        display.info("Nothing to reconcile.\n👋 Bye!")
         return
 
-    if selection == "all":
-        selected_transactions = transactions_to_reconcile
-        selected_ids = {t.account_id for t in selected_transactions}
-        selected_accounts = [ids_to_account[acc_id].name for acc_id in selected_ids]
-    else:
-        selected_transactions = []
-        selected_accounts = []
-        for index in selection:
-            selected_accounts.append(reconcile_groups[index - 1].account_name)
-            selected_transactions.extend(reconcile_groups[index - 1].transactions)
-
-    if not selected_transactions:
-        display.info("No accounts to reconcile.\n👋 Bye!")
+    if return_value == 1:
+        display.info("👋 Bye!")
         return
 
-    display.info("\nThe following accounts will be reconciled:")
-    for acc in selected_accounts:
-        display.console().print(f"- {acc}")
-
-    if not confirm("\nShould I go ahead and reconcile them?"):
-        display.info("Alright, cancelling reconciliation.\n👋 Bye!")
-        return
+    selected_transactions = [
+        child.transaction
+        for choice in choices
+        for child in choice.choices
+        if child.transaction and child.is_selected
+    ]
 
     for transaction in selected_transactions:
         transaction.cleared = TransactionClearedStatus.RECONCILED

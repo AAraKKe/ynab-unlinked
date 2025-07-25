@@ -14,8 +14,14 @@ class Formatter:
     def format_date(self, date: dt.date) -> str:
         return date.strftime(self.py_date_format)
 
-    def format_amount(self, amount: float) -> str:
+    def format_amount(self, amount: float, positive_style="", negative_style="") -> str:
         sign = "-" if amount < 0 else ""
+        style = positive_style if amount > 0 else negative_style
+        end_style = ""
+        if style:
+            end_style = f"[/{style}]"
+            style = f"[{style}]"
+
         amount = abs(amount)
         amount_str = (
             f"{amount:,.{self.currency_format.decimal_digits}f}".replace(",", "G")
@@ -28,7 +34,7 @@ class Formatter:
 
         if self.currency_format.symbol_first:
             return f"{sign}{self.currency_format.currency_symbol}{amount_str}"
-        return f"{sign}{amount_str}{self.currency_format.currency_symbol}"
+        return f"{style}{sign}{amount_str}{self.currency_format.currency_symbol}{end_style}"
 
     def format_amount_milli(self, milli_amount: int) -> str:
         amount = milli_amount / 1000.0

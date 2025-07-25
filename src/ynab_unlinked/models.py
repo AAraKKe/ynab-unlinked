@@ -30,10 +30,6 @@ class Transaction:
     def pretty_payee(self) -> str:
         return self.payee if len(self.payee) < 15 else f"{self.payee[:15]}..."
 
-    @property
-    def pretty_amount(self) -> str:
-        return f"{self.amount:.2f}€"
-
     def __hash__(self) -> int:
         return hash(f"{self.date:%m-%d-%Y}{self.payee}{self.amount}")
 
@@ -42,6 +38,14 @@ class Transaction:
         return sha256(
             f"{self.date:%m-%d-%Y}{self.payee}{self.amount}{self.counter}".encode()
         ).hexdigest()[:30]
+
+    @property
+    def inflow(self) -> float | None:
+        return self.amount if self.amount > 0 else None
+
+    @property
+    def outflow(self) -> float | None:
+        return self.amount if self.amount < 0 else None
 
     def __repr__(self) -> str:
         return (
