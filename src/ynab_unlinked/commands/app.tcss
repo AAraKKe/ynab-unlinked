@@ -1,0 +1,94 @@
+
+Switch {
+    width: 10;
+}
+
+Label {
+    padding: 1 1;
+}
+
+DataTable {
+    margin: 1 1;
+}
+
+AccountTable {
+    height: auto;
+}
+
+ReconcileModal {
+    align: center middle;
+}
+
+#reconcile-modal {
+    grid-size: 2;
+    padding: 0 1;
+    width: 50%;
+    height: auto;
+    grid-gutter: 1 3;
+    border: round $primary;
+    background: $surface;
+
+    #message {
+        column-span: 2;
+        height: auto;
+        text-align: center;
+        text-style: bold;
+    }
+
+    Static {
+        column-span: 2;
+        height: auto;
+    }
+
+    Button {
+        align: right middle;
+        width: 100%;
+        margin: 0 5;
+    }
+}
+
+.account-title {
+    text-style: bold;
+    align: left middle;
+}
+
+.padded {
+    padding: 1 1;
+}
+
+.account-container {
+    border: round $accent;
+    height: auto;
+}
+
+.account-table-header {
+    height: auto;
+    background: $secondary-muted;
+    height: auto;
+    padding: 0 2;
+    margin: 1 1;
+
+    Switch {
+        align: right middle;
+    }
+
+    #switch-container {
+        align: right middle;
+        height: auto;
+    }
+}
+
+#main-description {
+    text-align: left;
+    padding: 1 1;
+}
+
+#button-row {
+    align: right bottom;
+    height: auto;
+    padding: 2 1;
+}
+
+#button-row Button {
+    margin: 0 3;
+}

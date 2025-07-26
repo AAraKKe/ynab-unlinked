@@ -6,6 +6,11 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.2.0 (2025-07-26)
+
+### Polished Until It Shines
+* Improved how the reconcile command works. Now it launches a Textual app to more easily review all transactions to reconcile.
+
 ## ynab-unlinked 0.1.0 (2025-07-15)
 
 ### Fresh Out of the Feature Oven

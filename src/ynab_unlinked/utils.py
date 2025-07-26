@@ -1,15 +1,11 @@
 from collections.abc import Sequence
-from itertools import groupby
 from pathlib import Path
-from typing import NamedTuple
 
 from rich import box
 from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.style import Style
 from rich.table import Column, Table
-from ynab.models.account import Account
-from ynab.models.transaction_detail import TransactionDetail
 
 from ynab_unlinked.config import get_config
 from ynab_unlinked.config.models.v2 import Budget, CurrencyFormat
