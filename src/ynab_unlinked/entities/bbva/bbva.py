@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, assert_never, cast
 
 from ynab_unlinked.entities import Entity, InputType
 
@@ -26,12 +26,18 @@ class BBVA(Entity):
 
         input_type = extract_type(input_file, valid=VALID_TYPES)
         match input_type:
-            case InputType.XLSX:
+            case InputType.XLSX | InputType.XLS:
                 generator = xls(input_file, read_after_row_like=XLSX_ROW_TO_READ)
                 field_reader = self.__extract_fields_from_xlsx_row
             case InputType.PDF:
                 generator = pdf(input_file, allow_empty_columns=False, expected_number_of_columns=3)
                 field_reader = self.__extract_fields_from_pdf_row
+            case (InputType.TXT | InputType.CSV | InputType.HTML) as file_type:
+                raise NotImplementedError(
+                    f"BBVA does not support input file of type {file_type.value!r}"
+                )
+            case never:
+                assert_never(never)
 
         transactions = []
 

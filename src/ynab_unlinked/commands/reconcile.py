@@ -20,10 +20,11 @@ def build_choices(transactions: list[TransactionDetail], accounts: list[Account]
 
     for transaction in transactions:
         choice = Choice(id=f"transaction-{transaction.id}", transaction=transaction)
-        forced_selection = False if transaction.cleared is TransactionClearedStatus.UNCLEARED else None
+        forced_selection = (
+            False if transaction.cleared is TransactionClearedStatus.UNCLEARED else None
+        )
         choice.enable_forced_selected(forced_selection)
         choices_per_account.setdefault(transaction.account_id, []).append(choice)
-
 
     return [
         Choice(
