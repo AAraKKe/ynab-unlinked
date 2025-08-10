@@ -14,12 +14,6 @@ def command(
         Path,
         typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
     ],
-    input_type: Annotated[
-        InputType,
-        typer.Option(
-            "-t", "--input-type", show_choices=True, help="The type of the file to be parsed"
-        ),
-    ] = InputType.TXT,
 ):
     """
     Inputs transactions from a Sabadell TXT or XLS file.
@@ -36,7 +30,7 @@ def command(
     ctx: YnabUnlinkedContext = context.obj
 
     process_transactions(
-        entity=SabadellParser(input_type),
+        entity=SabadellParser(),
         input_file=input_file,
         context=ctx,
     )

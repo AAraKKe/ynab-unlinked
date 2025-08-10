@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import datetime as dt
@@ -9,8 +9,6 @@ if TYPE_CHECKING:
 
     from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.models import Transaction
-
-    from .constants import InputType
 
 
 # Line that triggers the credit operations
@@ -20,19 +18,20 @@ TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|(\d+.*EUR)(\([\d*
 
 
 class SabadellParser:
-    def __init__(self, input_type: InputType):
-        self.input_type = input_type
-
     def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
-        from .constants import InputType
+        from ynab_unlinked.entities import InputType
+        from ynab_unlinked.utils import extract_type
 
-        match self.input_type:
+        input_type = extract_type(input_file, valid=[InputType.TXT, InputType.XLS])
+
+        match input_type:
             case InputType.TXT:
                 return self.__parse_txt(input_file)
             case InputType.XLS:
                 return self.__parse_xls(input_file)
-            case never:
-                assert_never(never)
+            case _:
+                # Should never happen because we already checked
+                raise RuntimeError(f"Unexpected input type: {input_type}")
 
     def __parse_txt(self, input_file: Path) -> list[Transaction]:
         from ynab_unlinked.models import Transaction
