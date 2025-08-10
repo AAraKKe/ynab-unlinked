@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 # Line that triggers the credit operations
 ANCHOR_LINE = "Límite de crédito".encode("cp1252").decode("cp1252")
 XLS_DEBIT_LINE = "MOVIMIENTOS DE DEBITO"
-TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|(.*EUR)$")
+TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|(\d+.*EUR)(\([\d*]\))?$")
 
 
 class SabadellParser:
@@ -48,12 +48,17 @@ class SabadellParser:
             if not start:
                 continue
 
-            if groups := TRANSACTION_PATTERN.match(line):
+            if (match := TRANSACTION_PATTERN.match(line)) is not None:
+                print(match.groups())
+                if len(match.groups()) == 4 and match[4] == "(1)":
+                    # Pending transaction
+                    continue
+
                 transactions.append(
                     Transaction(
-                        date=self.__parse_date(groups[1]),
-                        payee=self.__parse_payee(groups[2]),
-                        amount=-self.__parse_amount(groups[3]),
+                        date=self.__parse_date(match[1]),
+                        payee=self.__parse_payee(match[2]),
+                        amount=-self.__parse_amount(match[3]),
                     )
                 )
 

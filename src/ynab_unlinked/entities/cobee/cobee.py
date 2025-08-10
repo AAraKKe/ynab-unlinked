@@ -135,6 +135,8 @@ class Cobee:
 
                 try:
                     amount = float(amount_str)
+                    if amount == 0:
+                        continue
                 except ValueError:
                     # If we could not convert this to float it means this is not an amount line.
                     continue
