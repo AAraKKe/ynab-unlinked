@@ -69,18 +69,22 @@ class SabadellParser:
         from ynab_unlinked.parsers import xls
 
         # This is the row after which real transactions appear
-        row_trigger = ["FECHA", "CONCEPTO", "LOCALIDAD", "IMPORTE", "", ""]
+        row_trigger = ["FECHA", "CONCEPTO", "LOCALIDAD"]
 
         transactions = []
 
-        for entry in xls(input_file, read_after_row_like=row_trigger):
-            # If we find debing movements, stop reading
+        for entry in xls(input_file, read_after_row_like=row_trigger, allow_partial_match=True):
+            # If we find debit movements, stop reading
             # Debit movements appear at the end of the file
             if entry[0] == XLS_DEBIT_LINE:
                 break
 
-            # The order is date, payee, x, x, value
-            date, payee, amount = entry[0], entry[1], entry[4]
+            # The order is date, payee, x, x, value, EUR
+            date, payee, amount, currency = entry[0], entry[1], entry[4], entry[5]
+
+            # If currency ends in (1) is a pending transaction, skip
+            if currency.endswith("(1)"):
+                continue
 
             # If we cannot parse the date, then continue because we might be in an entry that is not a
             # transaction entry
