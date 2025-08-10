@@ -6,6 +6,11 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.3.0 (2025-08-10)
+
+### Bugs Squashed, Peace Restored
+* Fix XLS files in Sabadell when pending transactions where present. Sabadell can also now identify file type automatically.
+
 ## ynab-unlinked 0.2.1 (2025-08-10)
 
 ### Bugs Squashed, Peace Restored
