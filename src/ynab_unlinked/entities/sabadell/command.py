@@ -5,8 +5,6 @@ from typing import Annotated
 
 import typer
 
-from .constants import InputType
-
 
 def command(
     context: typer.Context,
