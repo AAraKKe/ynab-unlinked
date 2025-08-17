@@ -99,6 +99,12 @@ class AccountTable(Container):
             self.choice.deselect()
         self.refresh(recompose=True)
 
+    def select(self):
+        self.query_one(Switch).value = True
+
+    def deselect(self):
+        self.query_one(Switch).value = False
+
     def on_data_table_row_selected(self, event: DataTable.RowSelected):
         choice_id = event.row_key.value
         if choice_id is None:
@@ -186,6 +192,7 @@ class Reconcile(App[int]):
         with Horizontal(id="button-row"):
             yield Label("Include Uncleared")
             yield Switch(False, id="uncleared-switch")
+            yield Button("Deselect All", id="uncheck-all")
             yield Button("Cancel", variant="default", id="cancel-button")
             yield Button("Reconcile", variant="success", id="reconcile-button")
         yield Footer()
@@ -195,6 +202,16 @@ class Reconcile(App[int]):
 
         if button_id == "cancel-button":
             self.exit(1)
+
+        if button_id == "uncheck-all":
+            if event.button.label == "Deselect All":
+                for table in self.query(AccountTable):
+                    table.deselect()
+                event.button.label = "Select All"
+            else:
+                for table in self.query(AccountTable):
+                    table.select()
+                event.button.label = "Deselect All"
 
         if button_id == "reconcile-button":
             if any(choice.is_selected or choice.has_selected_choices for choice in self.choices):
@@ -212,3 +229,6 @@ class Reconcile(App[int]):
         if event.switch.id and event.switch.id == "uncleared-switch":
             for table in self.query(AccountTable):
                 table.refresh_forced_selection(event.switch.value)
+
+    def action_quit(self):
+        self.exit(2)

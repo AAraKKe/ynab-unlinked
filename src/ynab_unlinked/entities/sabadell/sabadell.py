@@ -48,7 +48,6 @@ class SabadellParser:
                 continue
 
             if (match := TRANSACTION_PATTERN.match(line)) is not None:
-                print(match.groups())
                 if len(match.groups()) == 4 and match[4] == "(1)":
                     # Pending transaction
                     continue
