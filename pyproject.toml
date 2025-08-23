@@ -198,7 +198,7 @@ filename = "CHANGELOG.md"
 directory = "changelog"
 title_format = "## ynab-unlinked {version} ({project_date})"
 template = "changelog/_template.jinja"
-ignore = [".github"]
+ignore = [".github/**"]
 
 
 [[tool.towncrier.type]]
