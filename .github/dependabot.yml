@@ -5,8 +5,6 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-    reviewers:
-      - "aarakke"
     labels:
       - "github-actions"
       - "dependencies"
@@ -16,8 +14,6 @@ updates:
     directory: "/" # Location of your manifest files
     schedule:
       interval: "daily"
-    reviewers:
-      - "aarakke"
     labels:
       - "python"
       - "dependencies"
