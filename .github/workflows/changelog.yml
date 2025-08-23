@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 
@@ -21,7 +21,7 @@ jobs:
           echo "${{ github.event.pull_request.title }}" > changelog/${{ github.event.pull_request.number }}.bumped.md
 
       - name: Commit and push changelog entry
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@b863ae1933cb653a53c021fe36dbb774e1fb9403 # v5.2.0
         with:
           commit_message: "docs(changelog): Add entry for dependency update"
           file_pattern: "changelog/*.md"
