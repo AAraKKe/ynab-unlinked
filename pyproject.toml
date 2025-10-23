@@ -38,7 +38,7 @@ dependencies = [
   "pyexcel==0.7.3",
   "pyexcel-xls==0.7.1",
   "pyexcel-xlsx==0.6.1",
-  "textual==5.3.0"
+  "textual==6.4.0"
 ]
 
 [project.scripts]
