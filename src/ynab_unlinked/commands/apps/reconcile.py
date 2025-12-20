@@ -219,7 +219,7 @@ class Reconcile(App[int]):
                 def when_dismissed(value: int | None):
                     if value == 1:
                         return
-                    self.exit(value if value is not None else 0)
+                    self.exit(value)
 
                 self.push_screen(ReconcileModal(self.choices), when_dismissed)
             else:
@@ -230,5 +230,5 @@ class Reconcile(App[int]):
             for table in self.query(AccountTable):
                 table.refresh_forced_selection(event.switch.value)
 
-    def action_quit(self):
+    async def action_quit(self):
         self.exit(2)
