@@ -34,7 +34,7 @@ dependencies = [
   "html-text",
   "pdfplumber",
   "pydantic >= 2.0.0",
-  "platformdirs==4.3.8",
+  "platformdirs==4.5.1",
   "pyexcel==0.7.3",
   "pyexcel-xls==0.7.1",
   "pyexcel-xlsx==0.6.1",
