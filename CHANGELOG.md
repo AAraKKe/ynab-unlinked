@@ -6,6 +6,28 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.4.0 (2025-12-20)
+
+### Fresh Out of the Feature Oven
+* Add a button to reconcile to select/unselect all accounts
+
+### Bugs Squashed, Peace Restored
+* Fix reconcile command quit action. Now when quiting recondile no transactions will be reconciled
+* Fix the Reconcile.action_quit method making it async
+* Remove unnecessary print as a left over from previous change
+
+### Under the Hood Upgrades
+* [[#28](https://github.com/AAraKKe/ynab-unlinked/issues/28)] Bump actions/checkout from 4.2.2 to 5.0.0
+* [[#33](https://github.com/AAraKKe/ynab-unlinked/issues/33)] Bump actions/setup-python from 5.6.0 to 6.0.0
+* [[#40](https://github.com/AAraKKe/ynab-unlinked/issues/40)] Bump platformdirs from 4.3.8 to 4.5.0
+* [[#34](https://github.com/AAraKKe/ynab-unlinked/issues/34)] Bump pypa/gh-action-pypi-publish from 1.12.4 to 1.13.0
+* [[#42](https://github.com/AAraKKe/ynab-unlinked/issues/42)] Bump softprops/action-gh-release from 2.3.2 to 2.4.1
+* [[#29](https://github.com/AAraKKe/ynab-unlinked/issues/29)] Bump stefanzweifel/git-auto-commit-action from 5.2.0 to 6.0.1
+* [[#26](https://github.com/AAraKKe/ynab-unlinked/issues/26)] Bump textual from 5.0.0 to 5.3.0
+
+### For the Builders: Dev Experience Upgrades
+* Upate towncrier configuration to ignore updates on the .github directory
+
 ## ynab-unlinked 0.3.0 (2025-08-10)
 
 ### Bugs Squashed, Peace Restored
