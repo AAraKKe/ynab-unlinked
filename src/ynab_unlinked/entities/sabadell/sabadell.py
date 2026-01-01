@@ -18,6 +18,9 @@ TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|(\d+.*EUR)(\([\d*
 
 
 class SabadellParser:
+    def __init__(self, year: int):
+        self.year = year
+
     def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
         from ynab_unlinked.entities import InputType
         from ynab_unlinked.utils import extract_type
@@ -104,7 +107,7 @@ class SabadellParser:
     def __parse_date(self, raw: str) -> dt.date:
         import datetime as dt
 
-        current_year = dt.date.today().year
+        current_year = self.year
         return dt.datetime.strptime(f"{raw}/{current_year}", "%d/%m/%Y").date()
 
     def __parse_payee(self, raw: str) -> str:

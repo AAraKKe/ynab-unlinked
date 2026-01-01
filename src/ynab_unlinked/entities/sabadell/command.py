@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 from typing import Annotated
 
@@ -12,6 +13,17 @@ def command(
         Path,
         typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
     ],
+    year: Annotated[
+        int | None,
+        typer.Option(
+            "-y",
+            "--year",
+            help=(
+                "Year of the transactions to import. Sabadell statements do not include the year in the date, "
+                "so you need to specify it. If not specified, the current year will be used."
+            ),
+        ),
+    ] = None,
 ):
     """
     Inputs transactions from a Sabadell TXT or XLS file.
@@ -26,6 +38,8 @@ def command(
     from .sabadell import SabadellParser
 
     ctx: YnabUnlinkedContext = context.obj
+
+    year = dt.date.today().year if year is None else year
 
     process_transactions(
         entity=SabadellParser(),
