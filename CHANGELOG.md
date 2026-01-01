@@ -6,6 +6,17 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.5.0 (2026-01-01)
+
+### Fresh Out of the Feature Oven
+* Add a `--year` option to the Sabdell entity. Sabadell does not include the year in the transaction history. By default, the current year is used but if the year of the transaction is not the current year, this option allows you to specify it.
+
+### Under the Hood Upgrades
+* [[#45](https://github.com/AAraKKe/ynab-unlinked/issues/45)] Bump actions/checkout from 5.0.0 to 6.0.1
+* [[#47](https://github.com/AAraKKe/ynab-unlinked/issues/47)] Bump pyexcel from 0.7.3 to 0.7.4
+* [[#46](https://github.com/AAraKKe/ynab-unlinked/issues/46)] Bump stefanzweifel/git-auto-commit-action from 6.0.1 to 7.1.0
+* [[#48](https://github.com/AAraKKe/ynab-unlinked/issues/48)] Bump textual from 5.3.0 to 6.11.0
+
 ## ynab-unlinked 0.4.0 (2025-12-20)
 
 ### Fresh Out of the Feature Oven
