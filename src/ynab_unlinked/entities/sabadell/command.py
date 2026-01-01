@@ -42,7 +42,7 @@ def command(
     year = dt.date.today().year if year is None else year
 
     process_transactions(
-        entity=SabadellParser(),
+        entity=SabadellParser(year=year),
         input_file=input_file,
         context=ctx,
     )
