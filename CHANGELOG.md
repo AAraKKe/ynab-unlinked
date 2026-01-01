@@ -6,6 +6,11 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.5.1 (2026-01-01)
+
+### Bugs Squashed, Peace Restored
+* Fix missing argument when creating SabadellParser breaking Sabdell load command
+
 ## ynab-unlinked 0.5.0 (2026-01-01)
 
 ### Fresh Out of the Feature Oven
