@@ -6,6 +6,16 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.6.0 (2026-01-25)
+
+### Polished Until It Shines
+* Improve how Sabadell handles year changes. Now it automatically detects mixed-years transactions and update the year accordingly
+
+### Under the Hood Upgrades
+* [[#56](https://github.com/AAraKKe/ynab-unlinked/issues/56)] Bump actions/checkout from 6.0.1 to 6.0.2
+* [[#55](https://github.com/AAraKKe/ynab-unlinked/issues/55)] Bump actions/setup-python from 6.1.0 to 6.2.0
+* [[#54](https://github.com/AAraKKe/ynab-unlinked/issues/54)] Bump textual from 6.11.0 to 7.3.0
+
 ## ynab-unlinked 0.5.2 (2026-01-25)
 
 ### Bugs Squashed, Peace Restored
