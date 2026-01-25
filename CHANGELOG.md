@@ -6,6 +6,11 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.5.2 (2026-01-25)
+
+### Bugs Squashed, Peace Restored
+* [[#57](https://github.com/AAraKKe/ynab-unlinked/issues/57)] Fix sabadell issue that was preventing it from loading refunds from credit card balance
+
 ## ynab-unlinked 0.5.1 (2026-01-01)
 
 ### Bugs Squashed, Peace Restored
