@@ -63,7 +63,7 @@ class SabadellParser:
                     )
                 )
 
-        return transactions
+        return self._adjust_year_transition(transactions)
 
     def __parse_xls(self, input_file: Path) -> list[Transaction]:
         from ynab_unlinked.models import Transaction
@@ -101,6 +101,24 @@ class SabadellParser:
                     amount=-self.__parse_amount(amount),
                 )
             )
+
+        return self._adjust_year_transition(transactions)
+
+    def _adjust_year_transition(self, transactions: list[Transaction]) -> list[Transaction]:
+        """
+        Adjust transactions dates when a year transition is detected.
+
+        Sabadell files do not include the year in the date. When importing a file that contains
+        transactions from December and January, we need to infer the year.
+
+        If we find transactions in January and December, we assume that the December transactions
+        belong to the previous year.
+        """
+        months = {t.date.month for t in transactions}
+        if 1 in months and 12 in months:
+            for t in transactions:
+                if t.date.month == 12:
+                    t.date = t.date.replace(year=t.date.year - 1)
 
         return transactions
 
