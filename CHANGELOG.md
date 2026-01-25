@@ -6,7 +6,8 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
-## ynab-unlinked 0.6.0 (2026-01-25)
+## ynab-unlinked 0.6.1 (2026-01-25)
+_Note_: Version 0.6.0 was skipped due to a mistake in the release process.
 
 ### Polished Until It Shines
 * Improve how Sabadell handles year changes. Now it automatically detects mixed-years transactions and update the year accordingly
