@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 # Line that triggers the credit operations
 ANCHOR_LINE = "Límite de crédito".encode("cp1252").decode("cp1252")
 XLS_DEBIT_LINE = "MOVIMIENTOS DE DEBITO"
-TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|(\d+.*EUR)(\([\d*]\))?$")
+TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|([-]?\d+.*EUR)(\([\d*]\))?$")
 
 
 class SabadellParser:
