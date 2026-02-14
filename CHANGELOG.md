@@ -6,6 +6,15 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.7.0 (2026-02-14)
+
+### Bugs Squashed, Peace Restored
+* [[#10](https://github.com/AAraKKe/ynab-unlinked/issues/10)] Fix matching algorithm to properly consider imported IDs
+
+### Under the Hood Upgrades
+* [[#61](https://github.com/AAraKKe/ynab-unlinked/issues/61)] Bump platformdirs from 4.5.1 to 4.7.0
+* [[#59](https://github.com/AAraKKe/ynab-unlinked/issues/59)] Bump textual from 7.3.0 to 7.5.0
+
 ## ynab-unlinked 0.6.1 (2026-01-25)
 _Note_: Version 0.6.0 was skipped due to a mistake in the release process.
 
