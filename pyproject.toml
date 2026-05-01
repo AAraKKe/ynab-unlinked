@@ -45,9 +45,10 @@ dependencies = [
 yul = "ynab_unlinked.main:main"
 
 [project.urls]
-Documentation = "https://github.com/Juanpe Araque/ynab-unlinked#readme"
-Issues = "https://github.com/Juanpe Araque/ynab-unlinked/issues"
-Source = "https://github.com/Juanpe Araque/ynab-unlinked"
+Documentation = "https://github.com/AAraKKe/ynab-unlinked#readme"
+Issues = "https://github.com/AAraKKe/ynab-unlinked/issues"
+Source = "https://github.com/AAraKKe/ynab-unlinked"
+Privacy = "https://github.com/AAraKKe/ynab-unlinked/blob/main/PRIVACY.md"
 
 [tool.hatch.version]
 path = "src/ynab_unlinked/__about__.py"

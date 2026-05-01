@@ -1,0 +1,1 @@
+New `yul privacy` command that prints what data YNAB Unlinked stores on your computer, where it lives, and how to delete it. New `yul config reset` command that wipes all locally stored data, including your YNAB API key. Pass `--yes` to skip the confirmation prompt.

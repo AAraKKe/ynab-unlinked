@@ -5,7 +5,7 @@ from typing import Annotated
 import typer
 
 from ynab_unlinked import entities
-from ynab_unlinked.context_object import YnabUnlinkedContext
+from ynab_unlinked.setup import ensure_config
 
 load = typer.Typer(
     help="Load transactions from a bank statement into your YNAB account.",
@@ -46,7 +46,7 @@ def load_callback(
         ),
     ] = 15,
 ):
-    obj: YnabUnlinkedContext = context.obj
+    obj = ensure_config(context)
 
     obj.show = show
     obj.reconcile = reconcile
