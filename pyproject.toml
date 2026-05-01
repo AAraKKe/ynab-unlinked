@@ -27,18 +27,18 @@ classifiers = [
   "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
-  "ynab",
-  "typer",
-  "rapidfuzz",
-  "unidecode",
-  "html-text",
-  "pdfplumber",
-  "pydantic >= 2.13.3",
-  "platformdirs==4.7.0",
+  "ynab==4.1.0",
+  "typer==0.25.1",
+  "rapidfuzz==3.14.5",
+  "unidecode==1.4.0",
+  "html-text==0.7.1",
+  "pdfplumber==0.11.9",
+  "pydantic==2.13.3",
+  "platformdirs==4.9.6",
   "pyexcel==0.7.4",
   "pyexcel-xls==0.7.1",
   "pyexcel-xlsx==0.6.1",
-  "textual==8.2.5"
+  "textual==8.2.5",
 ]
 
 [project.scripts]
@@ -60,13 +60,13 @@ installer = "uv"
 [tool.hatch.envs.dev]
 installer = "uv"
 extra-dependencies = [
-  "ruff==0.11.10",
-  "pyright~=1.1",
-  "pytest ~= 8.0",
-  "pytest-cov~=6.0",
-  "pytest-mock~=3.0",
-  "factory_boy~=3.0",
-  "freezegun~=1.5.0",
+  "ruff==0.15.12",
+  "pyright==1.1.409",
+  "pytest==9.0.3",
+  "pytest-cov==7.1.0",
+  "pytest-mock==3.15.1",
+  "factory_boy==3.3.3",
+  "freezegun==1.5.5",
 ]
 
 [tool.hatch.envs.dev.scripts]
@@ -173,7 +173,7 @@ tests = ["tests"]
 # ------ Environment to run towncrier ------
 [tool.hatch.envs.tc]
 installer = "uv"
-extra-dependencies = ["towncrier == 24.8.0"]
+extra-dependencies = ["towncrier==25.8.0"]
 
 [tool.hatch.envs.tc.scripts]
 check = "towncrier check"

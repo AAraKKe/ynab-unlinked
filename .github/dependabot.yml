@@ -8,12 +8,20 @@ updates:
     labels:
       - "github-actions"
       - "dependencies"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   # 2. Python packages (using pip)
   - package-ecosystem: "pip"
-    directory: "/" # Location of your manifest files
+    directory: "/"
     schedule:
       interval: "daily"
     labels:
       - "python"
       - "dependencies"
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
