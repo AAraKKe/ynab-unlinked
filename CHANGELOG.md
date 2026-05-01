@@ -9,7 +9,7 @@ To help us keep our books in order, these release notes are automatically genera
 ## ynab-unlinked 0.7.0 (2026-05-01)
 
 ### Bugs Squashed, Peace Restored
-* [[#10](https://github.com/AAraKKe/ynab-unlinked/issues/10)] Fix matching algorithm to properly consider imported IDs
+* [[#62](https://github.com/AAraKKe/ynab-unlinked/pull/62)] Fix matching algorithm to properly consider imported IDs
 
 ### Under the Hood Upgrades
 * [[#61](https://github.com/AAraKKe/ynab-unlinked/issues/61)] Bump platformdirs from 4.5.1 to 4.7.0
