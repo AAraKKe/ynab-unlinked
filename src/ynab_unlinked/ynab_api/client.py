@@ -1,5 +1,6 @@
 import datetime as dt
 from typing import Literal, TypedDict, overload
+from uuid import UUID
 
 from ynab.api.accounts_api import AccountsApi
 from ynab.api.payees_api import PayeesApi
@@ -63,15 +64,12 @@ class Client:
     def budgets(self, include_accounts: bool = False) -> list[PlanSummary]:
         api = self.api("budget")
         response = api.get_plans(include_accounts=include_accounts)
-        # The SDK exposes ids as UUID objects; stringify at the boundary so the
-        # rest of the codebase can keep treating budget ids as strings.
-        return [p.model_copy(update={"id": str(p.id)}) for p in response.data.plans]
+        return response.data.plans
 
     def budget(self, budget_id: str) -> PlanDetail:
         api = self.api("budget")
         response = api.get_plan_by_id(plan_id=budget_id)
-        plan = response.data.plan
-        return plan.model_copy(update={"id": str(plan.id)})
+        return response.data.plan
 
     def accounts(self, budget_id: str) -> list[Account]:
         api = self.api("accounts")
@@ -119,9 +117,10 @@ class Client:
 
         api = self.api("transactions")
 
+        account_uuid = UUID(account_id)
         transactions_to_create = [
             NewTransaction(
-                account_id=account_id,
+                account_id=account_uuid,
                 date=t.date,
                 payee_name=t.payee,
                 cleared=t.cleared,

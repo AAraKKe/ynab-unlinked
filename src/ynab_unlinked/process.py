@@ -90,11 +90,12 @@ def get_or_prompt_account_id(config: ConfigV2, entity_name: str, force_prompt: b
 
     info(f"Account selected: {account.name}")
 
+    account_id = str(account.id)
     if not force_prompt:
-        config.entities[entity_name] = EntityConfig(account_id=account.id)
+        config.entities[entity_name] = EntityConfig(account_id=account_id)
         config.save()
 
-    return account.id
+    return account_id
 
 
 def process_transactions(

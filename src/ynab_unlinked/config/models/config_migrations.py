@@ -39,7 +39,7 @@ class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
 
         # Create Budget object
         budget = Budget(
-            id=budget_details.id,
+            id=str(budget_details.id),
             name=budget_details.name,
             date_format=budget_details.date_format.format,
             currency_format=currency_format,

@@ -66,13 +66,14 @@ def __match_from_payee_list(
     # If we have a partial match, use it
     if transaction.partial_match is not None:
         transaction.ynab_payee = transaction.partial_match.payee_name
-        transaction.ynab_payee_id = transaction.partial_match.payee_id
+        partial_payee_id = transaction.partial_match.payee_id
+        transaction.ynab_payee_id = str(partial_payee_id) if partial_payee_id else None
         return
 
     for p in payees:
         if payee_matches(transaction, config, p):
             transaction.ynab_payee = p.name
-            transaction.ynab_payee_id = p.id
+            transaction.ynab_payee_id = str(p.id)
             return
 
     transaction.ynab_payee = transaction.payee

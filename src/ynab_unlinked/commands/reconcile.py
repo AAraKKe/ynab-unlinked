@@ -15,7 +15,7 @@ from ynab_unlinked.ynab_api import Client
 
 
 def build_choices(transactions: list[TransactionDetail], accounts: list[Account]) -> list[Choice]:
-    accounts_by_id = {acc.id: acc for acc in accounts}
+    accounts_by_id = {str(acc.id): acc for acc in accounts}
     choices_per_account: dict[str, list[Choice | str]] = {}
 
     for transaction in transactions:
@@ -24,7 +24,7 @@ def build_choices(transactions: list[TransactionDetail], accounts: list[Account]
             False if transaction.cleared is TransactionClearedStatus.UNCLEARED else None
         )
         choice.enable_forced_selected(forced_selection)
-        choices_per_account.setdefault(transaction.account_id, []).append(choice)
+        choices_per_account.setdefault(str(transaction.account_id), []).append(choice)
 
     return [
         Choice(
