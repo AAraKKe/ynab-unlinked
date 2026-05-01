@@ -1,6 +1,6 @@
 {
     "api_key": "my-api-key",
-    "budget_id": "budget_id",
+    "budget_id": "00000000-0000-0000-0000-000000000001",
     "last_reconciliation_date": null,
     "entities": {
         "sabadell": {
@@ -27,8 +27,8 @@
             "Something weird"
         ],
         "My Other Payee": [
-            "This makes no sense",
-            "And this even less"
+            "And this even less",
+            "This makes no sense"
         ]
     }
 }

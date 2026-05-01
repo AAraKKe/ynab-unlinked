@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
-from ynab.models.budget_detail import BudgetDetail
 from ynab.models.currency_format import CurrencyFormat
 from ynab.models.date_format import DateFormat
+from ynab.models.plan_detail import PlanDetail
 
 from ynab_unlinked.config import MAX_CONFIG_VERSION
 from ynab_unlinked.config.core import VERSION_MAPPING
@@ -41,8 +41,8 @@ def unlink(mocker: MockerFixture):
 @pytest.fixture(autouse=True)
 def ynab_client_mock(mocker: MockerFixture):
     budget_patch = mocker.patch.object(Client, "budget")
-    budget_patch.return_value = BudgetDetail(
-        id="budget_id",
+    budget_patch.return_value = PlanDetail(
+        id="00000000-0000-0000-0000-000000000001",
         name="My Budget",
         date_format=DateFormat(format="DD/MM/YYYY"),
         currency_format=CurrencyFormat(

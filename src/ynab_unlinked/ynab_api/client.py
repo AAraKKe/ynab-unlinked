@@ -1,18 +1,19 @@
 import datetime as dt
 from typing import Literal, TypedDict, overload
+from uuid import UUID
 
 from ynab.api.accounts_api import AccountsApi
-from ynab.api.budgets_api import BudgetsApi
 from ynab.api.payees_api import PayeesApi
+from ynab.api.plans_api import PlansApi
 from ynab.api.transactions_api import TransactionsApi
 from ynab.api_client import ApiClient
 from ynab.configuration import Configuration
 from ynab.models.account import Account
-from ynab.models.budget_detail import BudgetDetail
-from ynab.models.budget_summary import BudgetSummary
 from ynab.models.new_transaction import NewTransaction
 from ynab.models.patch_transactions_wrapper import PatchTransactionsWrapper
 from ynab.models.payee import Payee
+from ynab.models.plan_detail import PlanDetail
+from ynab.models.plan_summary import PlanSummary
 from ynab.models.post_transactions_wrapper import PostTransactionsWrapper
 from ynab.models.save_transaction_with_id_or_import_id import SaveTransactionWithIdOrImportId
 from ynab.models.transaction_detail import TransactionDetail
@@ -21,13 +22,13 @@ from ynab_unlinked.models import TransactionWithYnabData
 
 
 class ApisType(TypedDict):
-    budget: type[BudgetsApi]
+    budget: type[PlansApi]
     accounts: type[AccountsApi]
     transactions: type[TransactionsApi]
     payees: type[PayeesApi]
 
 
-SupportedApisType = BudgetsApi | AccountsApi | TransactionsApi | PayeesApi
+SupportedApisType = PlansApi | AccountsApi | TransactionsApi | PayeesApi
 SupportedApisNames = Literal["budget", "accounts", "transactions", "payees"]
 
 
@@ -36,14 +37,14 @@ class Client:
         self.api_key = api_key
         self.__client = ApiClient(Configuration(access_token=api_key))
         self._apis: ApisType = {
-            "budget": BudgetsApi,
+            "budget": PlansApi,
             "accounts": AccountsApi,
             "transactions": TransactionsApi,
             "payees": PayeesApi,
         }
 
     @overload
-    def api(self, api_name: Literal["budget"]) -> BudgetsApi: ...
+    def api(self, api_name: Literal["budget"]) -> PlansApi: ...
 
     @overload
     def api(self, api_name: Literal["accounts"]) -> AccountsApi: ...
@@ -60,15 +61,15 @@ class Client:
 
         return api(self.__client)
 
-    def budgets(self, include_accounts: bool = False) -> list[BudgetSummary]:
+    def budgets(self, include_accounts: bool = False) -> list[PlanSummary]:
         api = self.api("budget")
-        response = api.get_budgets(include_accounts=include_accounts)
-        return response.data.budgets
+        response = api.get_plans(include_accounts=include_accounts)
+        return response.data.plans
 
-    def budget(self, budget_id: str) -> BudgetDetail:
+    def budget(self, budget_id: str) -> PlanDetail:
         api = self.api("budget")
-        response = api.get_budget_by_id(budget_id=budget_id)
-        return response.data.budget
+        response = api.get_plan_by_id(plan_id=budget_id)
+        return response.data.plan
 
     def accounts(self, budget_id: str) -> list[Account]:
         api = self.api("accounts")
@@ -88,13 +89,13 @@ class Client:
 
         if account_id:
             response = api.get_transactions_by_account(
-                budget_id=budget_id,
+                plan_id=budget_id,
                 account_id=account_id,
                 since_date=since_date,
             )
         else:
             response = api.get_transactions(
-                budget_id=budget_id,
+                plan_id=budget_id,
                 since_date=since_date,
             )
 
@@ -116,9 +117,10 @@ class Client:
 
         api = self.api("transactions")
 
+        account_uuid = UUID(account_id)
         transactions_to_create = [
             NewTransaction(
-                account_id=account_id,
+                account_id=account_uuid,
                 date=t.date,
                 payee_name=t.payee,
                 cleared=t.cleared,
@@ -146,6 +148,6 @@ class Client:
             for t in transactions
         ]
         api.update_transactions(
-            budget_id=budget_id,
+            plan_id=budget_id,
             data=PatchTransactionsWrapper(transactions=to_update),
         )

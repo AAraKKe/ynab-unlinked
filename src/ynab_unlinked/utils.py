@@ -63,7 +63,7 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
     console().print(f"[bold]Selected budget: {selected_budget.name}")
 
     # Get the full budget to get all the required fields
-    budget_details = client.budget(selected_budget.id)
+    budget_details = client.budget(str(selected_budget.id))
 
     if budget_details is None:
         raise ValueError(f"Could not find budget with ID {selected_budget.id}")
@@ -75,7 +75,7 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
         raise ValueError(f"Budget {budget_details.name!r} has no date format")
 
     return Budget(
-        id=budget_details.id,
+        id=str(budget_details.id),
         name=budget_details.name,
         date_format=budget_details.date_format.format,
         currency_format=CurrencyFormat(
