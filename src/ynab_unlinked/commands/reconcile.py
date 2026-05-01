@@ -9,8 +9,8 @@ from ynab_unlinked.choices import Choice
 from ynab_unlinked.commands.apps.reconcile import Reconcile
 from ynab_unlinked.config import ConfigV2
 from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
-from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.display import process
+from ynab_unlinked.setup import ensure_config
 from ynab_unlinked.ynab_api import Client
 
 
@@ -69,7 +69,7 @@ def reconcile(
 ):
     """Help reconciling your accounts in one go"""
 
-    ctx: YnabUnlinkedContext = context.obj
+    ctx = ensure_config(context)
     config: ConfigV2 = ctx.config
 
     budget_id = config.budget.id
