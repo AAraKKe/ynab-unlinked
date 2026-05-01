@@ -6,6 +6,17 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.9.0 (2026-05-01)
+
+### Fresh Out of the Feature Oven
+* New `yul privacy` command that prints what data YNAB Unlinked stores on your computer, where it lives, and how to delete it. New `yul config reset` command that wipes all locally stored data, including your YNAB API key. Pass `--yes` to skip the confirmation prompt.
+
+### Polished Until It Shines
+* `yul setup` and `yul config set api_key` now show a short notice explaining where your YNAB API key will be stored before asking for it.
+
+### Read All About It! (Docs Updates)
+* Added a [privacy notice](https://github.com/AAraKKe/ynab-unlinked/blob/main/PRIVACY.md) describing what data YNAB Unlinked reads from YNAB, what stays on your machine and where, and how to delete it. Added the corresponding "Privacy" and "Disclaimer" sections to the README.
+
 ## ynab-unlinked 0.8.0 (2026-05-01)
 
 ### Under the Hood Upgrades

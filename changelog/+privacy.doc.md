@@ -1,1 +1,0 @@
-Added a [privacy notice](https://github.com/AAraKKe/ynab-unlinked/blob/main/PRIVACY.md) describing what data YNAB Unlinked reads from YNAB, what stays on your machine and where, and how to delete it. Added the corresponding "Privacy" and "Disclaimer" sections to the README.
