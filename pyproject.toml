@@ -28,17 +28,17 @@ classifiers = [
 ]
 dependencies = [
   "ynab==4.1.0",
-  "typer==0.25.1",
+  "typer==0.26.1",
   "rapidfuzz==3.14.5",
   "unidecode==1.4.0",
   "html-text==0.7.1",
   "pdfplumber==0.11.9",
-  "pydantic==2.13.3",
+  "pydantic==2.13.4",
   "platformdirs==4.9.6",
   "pyexcel==0.7.4",
   "pyexcel-xls==0.7.1",
   "pyexcel-xlsx==0.6.1",
-  "textual==8.2.5",
+  "textual==8.2.7",
 ]
 
 [project.scripts]
