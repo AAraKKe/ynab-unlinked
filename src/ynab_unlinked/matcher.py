@@ -1,4 +1,4 @@
-from ynab.models.transaction_detail import TransactionDetail
+from ynab import TransactionDetail
 
 from ynab_unlinked.config import ConfigV2
 from ynab_unlinked.models import MatchStatus, TransactionWithYnabData
