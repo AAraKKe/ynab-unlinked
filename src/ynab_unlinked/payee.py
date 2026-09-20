@@ -2,8 +2,7 @@ from typing import overload
 
 import unidecode
 from rapidfuzz import fuzz
-from ynab.models.payee import Payee
-from ynab.models.transaction_detail import TransactionDetail
+from ynab import Payee, TransactionDetail
 
 from ynab_unlinked.config import ConfigV2
 from ynab_unlinked.models import TransactionWithYnabData

@@ -7,9 +7,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
-from ynab.models.currency_format import CurrencyFormat
-from ynab.models.date_format import DateFormat
-from ynab.models.plan_detail import PlanDetail
+from ynab import CurrencyFormat, DateFormat, PlanDetail
 
 from ynab_unlinked.config import MAX_CONFIG_VERSION
 from ynab_unlinked.config.core import VERSION_MAPPING
