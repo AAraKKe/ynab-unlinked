@@ -1,0 +1,51 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 563 >>
+stream
+0.5 w
+40 750 m 40 734 l S
+40 734 m 40 706 l S
+180 750 m 180 734 l S
+180 734 m 180 706 l S
+320 750 m 320 734 l S
+320 734 m 320 706 l S
+460 750 m 460 734 l S
+460 734 m 460 706 l S
+40 750 m 460 750 l S
+40 734 m 460 734 l S
+40 706 m 460 706 l S
+BT /F1 9 Tf 43 738 Td (Fecha) Tj ET
+BT /F1 9 Tf 183 738 Td (Concepto) Tj ET
+BT /F1 9 Tf 323 738 Td (Importe) Tj ET
+BT /F1 9 Tf 43 722 Td (11/07/2025) Tj ET
+BT /F1 9 Tf 43 710 Td (12/07/2025) Tj ET
+BT /F1 9 Tf 183 722 Td (Viaje a Japon) Tj ET
+BT /F1 9 Tf 183 710 Td (Viajes) Tj ET
+BT /F1 9 Tf 323 722 Td (-1.234,56 €) Tj ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000212 00000 n 
+0000000338 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+952
+%%EOF

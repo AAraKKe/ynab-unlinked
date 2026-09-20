@@ -1,4 +1,3 @@
-from collections.abc import Generator
 from dataclasses import dataclass
 
 import pytest
@@ -108,10 +107,8 @@ def registry() -> DeltaRegistry:
 
 
 @pytest.fixture
-def engine() -> Generator[MigrationEngine]:
-    yield MigrationEngine("User", DeltaUserV1V2(), DeltaUserV2V3())
-
-    MigrationEngine._deltas = {}
+def engine(isolated_migration_registry: None) -> MigrationEngine:
+    return MigrationEngine("User", DeltaUserV1V2(), DeltaUserV2V3())
 
 
 def test_version():
@@ -208,13 +205,12 @@ def test_delta_sequence_empty_for_no_change(registry: DeltaRegistry):
     assert len(sequence) == 0
 
 
+@pytest.mark.usefixtures("isolated_migration_registry")
 def test_cannot_register_twice_same_class():
     MigrationEngine("Something")
 
     with pytest.raises(ValueError, match="has already been registered"):
         MigrationEngine("Something")
-
-    MigrationEngine._deltas = {}
 
 
 def test_migration_through_engine(v1: UserV1, engine: MigrationEngine):
@@ -269,3 +265,26 @@ def test_migration_fails_for_unregistered_entity(engine: MigrationEngine):
 def test_rollback_fails_for_unregistered_entity(engine: MigrationEngine):
     with pytest.raises(ValueError, match="No migrations have been registered for 'Other'"):
         engine.rollback(Other(prop=1), Other)
+
+
+class DeltaUserV1V2WithWrongResult(Delta[UserV1, UserV2]):
+    origin = UserV1.version()
+    destination = UserV2.version()
+
+    def on_migrate(self, origin: UserV1) -> UserV2:
+        return Other(prop=1)  # type: ignore[return-value]
+
+    def on_rollback(self, destination: UserV2) -> UserV1:
+        raise NotImplementedError
+
+
+@pytest.fixture
+def broken_engine(isolated_migration_registry: None) -> MigrationEngine:
+    return MigrationEngine("User", DeltaUserV1V2WithWrongResult())
+
+
+def test_migration_that_produces_another_entity_is_rejected(
+    v1: UserV1, broken_engine: MigrationEngine
+):
+    with pytest.raises(TypeError, match="Unexpected type mismatch"):
+        broken_engine.migrate(v1, UserV2)

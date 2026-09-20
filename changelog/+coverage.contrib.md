@@ -1,0 +1,1 @@
+Raise test coverage of `src` from 51% to 98% with behaviour tests for matching, the load pipeline, entities, parsers, config, reconcile and the TUI. Strict xfails pin the bugs found on the way. Coverage now reports `src` only.

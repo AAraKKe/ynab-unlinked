@@ -39,6 +39,7 @@ def read_xls(
     asset_path: AssetPath,
     read_after_row: int = 0,
     read_after_row_like: Sequence[str] | None = None,
+    allow_partial_match: bool = False,
 ) -> Generator[Sequence[str]]:
     from ynab_unlinked.parsers import xls
 
@@ -46,4 +47,5 @@ def read_xls(
         path(asset_path),
         read_after_row=read_after_row,
         read_after_row_like=read_after_row_like,
+        allow_partial_match=allow_partial_match,
     )

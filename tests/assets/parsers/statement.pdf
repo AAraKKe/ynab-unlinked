@@ -1,0 +1,89 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+6 0 obj
+<< /Length 805 >>
+stream
+0.5 w
+40 750 m 40 734 l S
+40 734 m 40 706 l S
+40 706 m 40 690 l S
+180 750 m 180 734 l S
+180 734 m 180 706 l S
+180 706 m 180 690 l S
+320 750 m 320 734 l S
+320 734 m 320 706 l S
+320 706 m 320 690 l S
+460 750 m 460 734 l S
+460 734 m 460 706 l S
+460 706 m 460 690 l S
+40 750 m 460 750 l S
+40 734 m 460 734 l S
+40 706 m 460 706 l S
+40 690 m 460 690 l S
+BT /F1 9 Tf 43 738 Td (Fecha) Tj ET
+BT /F1 9 Tf 183 738 Td (Concepto) Tj ET
+BT /F1 9 Tf 323 738 Td (Importe) Tj ET
+BT /F1 9 Tf 43 722 Td (11/07/2025) Tj ET
+BT /F1 9 Tf 43 710 Td (12/07/2025) Tj ET
+BT /F1 9 Tf 183 722 Td (Netflix.com) Tj ET
+BT /F1 9 Tf 183 710 Td (Ocio y cultura) Tj ET
+BT /F1 9 Tf 323 722 Td (-19,99 €) Tj ET
+BT /F1 9 Tf 43 694 Td (05/07/2025) Tj ET
+BT /F1 9 Tf 183 694 Td (Recibo mes anterior) Tj ET
+BT /F1 9 Tf 323 694 Td (270,74 €) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Length 566 >>
+stream
+0.5 w
+40 750 m 40 734 l S
+40 734 m 40 706 l S
+180 750 m 180 734 l S
+180 734 m 180 706 l S
+320 750 m 320 734 l S
+320 734 m 320 706 l S
+460 750 m 460 734 l S
+460 734 m 460 706 l S
+40 750 m 460 750 l S
+40 734 m 460 734 l S
+40 706 m 460 706 l S
+BT /F1 9 Tf 43 738 Td (Fecha) Tj ET
+BT /F1 9 Tf 183 738 Td (Concepto) Tj ET
+BT /F1 9 Tf 323 738 Td (Importe) Tj ET
+BT /F1 9 Tf 43 722 Td (03/07/2025) Tj ET
+BT /F1 9 Tf 43 710 Td (04/07/2025) Tj ET
+BT /F1 9 Tf 183 722 Td (Www.dazn.com) Tj ET
+BT /F1 9 Tf 183 710 Td (Ocio y cultura) Tj ET
+BT /F1 9 Tf 323 722 Td (-5,00 €) Tj ET
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000218 00000 n 
+0000000344 00000 n 
+0000000470 00000 n 
+0000001326 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+1943
+%%EOF

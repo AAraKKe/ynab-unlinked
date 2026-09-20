@@ -7,13 +7,33 @@ from tests.helpers.ynab_api import YnabClientStub
 
 pytestmark = pytest.mark.version("V2")
 
+# Every entity package that ships a `command` is registered as a `yul load` subcommand
+SHIPPED_ENTITIES = {"bbva", "cobee", "sabadell"}
 
-def test_load(
+
+def test_load_shows_the_transactions_of_the_export(
     yul: CliRunner,
     load_entity: LoadEntityCallback,
     today: dt.datetime,
     ynab_api: YnabClientStub,
 ):
     load_entity(today)
+
     result = yul("load --show test")
+
     assert result.exit_code == 0, f"Error found: {result.output_bytes}"
+    assert "Transactions to process" in result.output
+    assert all(f"Test Payee {n}" in result.output for n in (1, 2, 3))
+
+
+def test_every_entity_package_is_registered_as_a_subcommand(yul: CliRunner):
+    result = yul("load --help")
+
+    assert result.exit_code == 0, result.output
+    assert set(result.output.split()) >= SHIPPED_ENTITIES
+
+
+def test_an_unknown_entity_is_rejected(yul: CliRunner):
+    result = yul("load unknown-bank")
+
+    assert result.exit_code != 0
