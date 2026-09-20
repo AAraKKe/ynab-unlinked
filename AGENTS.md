@@ -50,8 +50,17 @@ CI runs the same four things on every PR. See `tests/AGENTS.md` for test convent
 
 - Dependencies are pinned exactly in `pyproject.toml`; dependabot bumps them.
 - Import SDK names from the package root: `from ynab import TransactionDetail`.
-- Every PR needs a changelog fragment in `changelog/` named `<pr-number>.<type>.md`
-  (types: added, improved, bugfix, bumped, doc, contrib, misc, removed, deprecated).
-  Use `+<slug>.<type>.md` when the PR number is not known yet.
+- Every PR needs a changelog fragment in `changelog/` named `<pr-number>.<type>.md`, a single
+  line describing the change for users. Use `+<slug>.<type>.md` when the PR number is not
+  known yet. Types:
+  - `added`: new feature.
+  - `improved`: new behaviour in an existing feature.
+  - `bugfix`: undesired behaviour corrected.
+  - `removed`: feature removed (should have been `deprecated` in a previous release).
+  - `deprecated`: feature still present but warns about removal.
+  - `bumped`: dependency updates (dependabot creates these automatically).
+  - `doc`: documentation changes.
+  - `contrib`: contributor experience (tests, checks, CI, tooling).
+  - `misc`: anything that fits nowhere else.
 - Releases: bump `src/ynab_unlinked/__about__.py`, run `hatch run tc:build`, merge, then
   push a `yul-X.Y.Z` tag. The release workflow validates the version and publishes to PyPI.
