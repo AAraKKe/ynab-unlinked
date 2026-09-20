@@ -34,6 +34,25 @@ Some Header Info
     assert transactions[1].amount == -20.00
 
 
+def test_parse_txt_thousands_separator(tmp_path: Path) -> None:
+    content = f"""
+Some Header Info
+{ANCHOR_LINE}
+20/09|BIG PURCHASE|CITY|1.212,16EUR
+20/09|BIGGER REFUND|CITY|-12.345.678,90EUR
+    """.strip()
+
+    input_file = tmp_path / "sabadell_thousands.txt"
+    input_file.write_text(content, encoding="cp1252")
+
+    parser = SabadellParser(year=2026)
+    transactions = parser.parse(input_file, cast(YnabUnlinkedContext, None))
+
+    assert len(transactions) == 2
+    assert transactions[0].amount == -1212.16
+    assert transactions[1].amount == 12345678.90
+
+
 def test_parse_txt_year_transition(tmp_path: Path, today: dt.datetime) -> None:
     content = f"""
 Some Header Info
