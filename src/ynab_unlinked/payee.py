@@ -9,6 +9,7 @@ from ynab_unlinked.models import TransactionWithYnabData
 from ynab_unlinked.ynab_api import Client
 
 FUZZY_MATCH_THRESHOLD = 90
+MIN_PARTIAL_MATCH_LENGTH = 5
 
 
 def __preprocess_payee(value: str) -> str:
@@ -48,15 +49,19 @@ def payee_matches(
     if config.payee_from_fules(transaction.payee) == payee_name:
         return True
 
-    return (
-        fuzz.partial_ratio(
-            transaction.payee,
-            payee_name,
-            score_cutoff=FUZZY_MATCH_THRESHOLD,
-            processor=__preprocess_payee,
-        )
-        > 0
+    bank_payee = __preprocess_payee(transaction.payee)
+    ynab_payee = __preprocess_payee(payee_name)
+
+    # partial_ratio scores any substring at 100, so a very short name would match every payee
+    # that happens to contain it ("Sol" against "Carrefour Market Solar"). Short names are
+    # compared whole instead, which still lets an exact one through.
+    scorer = (
+        fuzz.partial_ratio
+        if min(len(bank_payee), len(ynab_payee)) >= MIN_PARTIAL_MATCH_LENGTH
+        else fuzz.ratio
     )
+
+    return scorer(bank_payee, ynab_payee, score_cutoff=FUZZY_MATCH_THRESHOLD) > 0
 
 
 def __match_from_payee_list(

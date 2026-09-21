@@ -153,6 +153,12 @@ def test_format_date(date_format: str, date_obj: dt.date, expected_str: str):
             "[red]-12.34€[/red]",
             id="a negative amount takes the negative style",
         ),
+        pytest.param(
+            CurrencyFormatFactory.build(),
+            0,
+            "[green]0.00€[/green]",
+            id="a zero amount is not shown as a negative one",
+        ),
     ],
     indirect=["currency_formatter"],
 )
@@ -166,13 +172,6 @@ def test_amount_is_wrapped_in_the_requested_style(
     assert formatted == expected
 
 
-@pytest.mark.xfail(
-    reason=(
-        "formatter.py:33 and formatter.py:36 return before the style is applied, so the "
-        "reconcile balances lose their colour for budgets that hide the symbol or put it first"
-    ),
-    strict=True,
-)
 @pytest.mark.parametrize(
     "currency_formatter, expected",
     [

@@ -19,6 +19,18 @@ LATESST_CONFIG_TYPE = ConfigV2
 class ConfigError(ValueError): ...
 
 
+# Deltas are registered on a registry shared by every MigrationEngine, so a second engine for
+# the same class would be rejected. Build the one engine for the config lazily and reuse it.
+_MIGRATION_ENGINE: MigrationEngine | None = None
+
+
+def migration_engine() -> MigrationEngine:
+    global _MIGRATION_ENGINE
+    if _MIGRATION_ENGINE is None:
+        _MIGRATION_ENGINE = MigrationEngine("Config", DeltaConfigV1ToV2())
+    return _MIGRATION_ENGINE
+
+
 def config_version() -> Version:
     # Check V1
     # V1 does not have a version in it and was stored in a different path
@@ -52,6 +64,4 @@ def get_config() -> LATESST_CONFIG_TYPE | None:
     if current_config is LATESST_CONFIG_TYPE:
         return LATESST_CONFIG_TYPE.load()
 
-    return MigrationEngine("Config", DeltaConfigV1ToV2()).migrate(
-        current_config.load(), LATESST_CONFIG_TYPE
-    )
+    return migration_engine().migrate(current_config.load(), LATESST_CONFIG_TYPE)

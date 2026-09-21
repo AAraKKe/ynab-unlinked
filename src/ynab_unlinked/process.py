@@ -3,6 +3,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 import typer
+from ynab import TransactionClearedStatus
 
 from ynab_unlinked import display
 from ynab_unlinked.config import ConfigV2
@@ -126,7 +127,8 @@ def process_transactions(
         display.console().print(f"  Message: {e.message}")
         raise typer.Exit(1) from e
 
-    checkpoint = config.entities[entity.name()].checkpoint
+    entity_config = config.entity(entity.name())
+    checkpoint = entity_config.checkpoint if entity_config is not None else None
 
     preprocess_transactions(parsed_input, checkpoint)
 
@@ -141,6 +143,10 @@ def process_transactions(
             checkpoint,
         )
     ]
+
+    if not transactions:
+        info("🎉 All done! Nothing to do.")
+        return
 
     client = Client(config.api_key)
     budget_id = config.budget.id
@@ -160,12 +166,16 @@ def process_transactions(
         set_payee_from_ynab(transactions, client, config)
     display.success("✔ Transactions augmneted with YNAB information")
 
+    if reconcile:
+        for t in transactions:
+            if t.needs_creation:
+                t.cleared = TransactionClearedStatus.RECONCILED
+
     display_transactions_to_upload(transactions, context.formatter)
 
     if not any(t.needs_creation for t in transactions):
         info("🎉 All done! Nothing to do.")
-        if transactions:
-            config.update_and_save(transactions[0], entity.name())
+        config.update_and_save(max(transactions, key=lambda t: t.date), entity.name())
         return
 
     if partial_matches := [
@@ -203,6 +213,6 @@ def process_transactions(
                 transactions=new_transactions,
             )
 
-        config.update_and_save(transactions[0], entity.name())
+        config.update_and_save(max(transactions, key=lambda t: t.date), entity.name())
 
     display.info("🎉 All done!")

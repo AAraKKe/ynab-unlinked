@@ -146,15 +146,6 @@ def test_reconcile_leaves_ynab_untouched_when_the_app_is_dismissed(
     assert ConfigV2.load().last_reconciliation_date is None
 
 
-@pytest.mark.xfail(
-    reason=(
-        "An account whose pending transactions are all uncleared is still selected by default, "
-        "so the app accepts the confirmation and returns 0 with nothing to update. "
-        "commands/reconcile.py:122 then calls max() over an empty sequence and the command dies "
-        "with a ValueError traceback after sending an empty update to YNAB"
-    ),
-    strict=True,
-)
 def test_reconcile_does_nothing_when_the_confirmed_selection_is_empty(
     yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV2, tui: TuiStub
 ):

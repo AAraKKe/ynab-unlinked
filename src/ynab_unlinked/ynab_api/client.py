@@ -124,9 +124,10 @@ class Client:
             NewTransaction(
                 account_id=account_uuid,
                 date=t.date,
-                payee_name=t.payee,
+                payee_id=UUID(t.ynab_payee_id) if t.ynab_payee_id else None,
+                payee_name=t.ynab_payee,
                 cleared=t.cleared,
-                amount=int(t.amount * 1000),
+                amount=round(t.amount * 1000),
                 approved=False,
                 import_id=t.id,
             )
@@ -139,6 +140,9 @@ class Client:
         )
 
     def update_transactions(self, budget_id: str, transactions: list[TransactionDetail]):
+        if not transactions:
+            return
+
         api = self.api("transactions")
 
         to_update = [

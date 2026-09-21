@@ -159,15 +159,6 @@ def test_only_credit_movements_are_imported(statement_file: str):
     ]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "utils.py:29 raises LookupError for an unknown extension and utils.py:33 raises "
-        "AttributeError for one this entity does not read. Neither is a ParsingError, and "
-        "process.py:123 only catches ParsingError, so handing the command the wrong file "
-        "ends in a traceback instead of a message naming the formats Sabadell reads."
-    ),
-    strict=True,
-)
 @pytest.mark.parametrize(
     "suffix",
     [

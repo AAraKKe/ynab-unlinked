@@ -11,6 +11,7 @@ from ynab_unlinked.config import get_config
 from ynab_unlinked.config.models.v2 import Budget, CurrencyFormat
 from ynab_unlinked.display import console, process, question
 from ynab_unlinked.entities import InputType
+from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
 from ynab_unlinked.ynab_api.client import Client
@@ -24,14 +25,21 @@ def prompt_for_api_key() -> str:
 
 def extract_type(input_file: Path, valid: Sequence[InputType] | None = None) -> InputType:
     extension = input_file.suffix[1:]
+    valid_extensions = [v.value for v in valid] if valid else [v.value for v in InputType]
+    supported = ", ".join(valid_extensions)
 
     if extension not in InputType:
-        raise LookupError(f"Extension {extension!r} is not supported. File: {input_file}")
+        raise ParsingError(
+            input_file=input_file,
+            message=f"Extension {extension!r} is not supported. Supported formats: {supported}",
+        )
 
-    valid_extensions = {v.value for v in valid} if valid else [v.value for v in InputType]
     if extension not in valid_extensions:
-        raise AttributeError(
-            f"Input file {input_file} does not have a supported extension. Supported: {valid_extensions}"
+        raise ParsingError(
+            input_file=input_file,
+            message=(
+                f"Input files of type {extension!r} cannot be read. Supported formats: {supported}"
+            ),
         )
 
     return InputType(extension)
@@ -50,7 +58,8 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
         budgets = client.budgets()
 
     console().print("Available budgets:")
-    console().print(f" - {idx + 1}. {budget.name}" for idx, budget in enumerate(budgets))
+    for idx, budget in enumerate(budgets):
+        console().print(f" - {idx + 1}. {budget.name}")
 
     budget_num = Prompt.ask(
         "What budget do you want to use? (By number)",
@@ -130,8 +139,8 @@ def display_transaction_table(transactions: list[Transaction], formatter: Format
 
 
 def payee_line(transaction: TransactionWithYnabData) -> str:
-    if transaction.ynab_payee is not None and transaction.payee == transaction.ynab_payee:
-        return transaction.ynab_payee
+    if transaction.ynab_payee is None or transaction.payee == transaction.ynab_payee:
+        return transaction.payee
 
     return f"{transaction.ynab_payee} [gray37] [Original payee: {transaction.payee}][/gray37]"
 

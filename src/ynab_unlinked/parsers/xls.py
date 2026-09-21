@@ -27,7 +27,8 @@ def xls(
 
     kwargs: dict[str, Any] = {"file_name": str(input_file.absolute())}
 
-    read = False
+    # With no row to look for, reading starts right after the skipped rows
+    read = read_after_row_like is None
 
     for idx, entry in enumerate(pyexcel.get_array(**kwargs)):
         if idx < read_after_row:

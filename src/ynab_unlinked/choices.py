@@ -22,6 +22,7 @@ class Choice:
         self.selected = selected
         self._forced_selection: bool | None = None
         self.parent = parent
+        self._dict: dict[str, Choice] | None = None
         if choices is not None:
             n = 0
             for choice in choices:
@@ -45,9 +46,6 @@ class Choice:
         if self._account is None:
             raise ValueError(f"Account is needed in choice {self.id!r} but has not been provided.")
         return self._account
-
-    def has_choices(self) -> bool:
-        return len(self.choices) > 0
 
     def select(self):
         """Mark the choice as selected. This implicitely select all child choices."""
@@ -97,12 +95,12 @@ class Choice:
 
         This dictionary flattens out all children choices.
         """
-        if not hasattr(self, "__dict"):
+        if self._dict is None:
             dict_value: dict[str, Choice] = {self.id: self}
 
             for choice in self.choices:
                 dict_value |= choice.to_dict()
 
-            self.__dict = dict_value
+            self._dict = dict_value
 
-        return self.__dict
+        return self._dict

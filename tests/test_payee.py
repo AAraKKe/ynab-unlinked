@@ -101,20 +101,12 @@ def test_payee_matches_uses_a_configured_rename_rule(
     assert payee_matches(transaction, config_v2, PayeeFactory(name=ynab_name)) is expected
 
 
-@pytest.mark.xfail(
-    reason=(
-        "payee.py:52 uses fuzz.partial_ratio, which scores any substring at 100. A short bank "
-        "payee therefore matches every unrelated YNAB payee that happens to contain it, and "
-        "matcher.py promotes that to a full MATCHED without asking the user"
-    ),
-    strict=True,
-)
 @pytest.mark.parametrize(
     "bank_payee",
     [
-        pytest.param("A", id="a single letter matches anything containing it"),
-        pytest.param("Mar", id="three letters match the middle of another name"),
-        pytest.param("Sol", id="three letters match the end of another name"),
+        pytest.param("A", id="a single letter is contained in the name"),
+        pytest.param("Mar", id="three letters sit in the middle of the name"),
+        pytest.param("Sol", id="three letters sit at the end of the name"),
     ],
 )
 def test_short_payees_do_not_match_unrelated_names(bank_payee: str, config_v2: ConfigV2):

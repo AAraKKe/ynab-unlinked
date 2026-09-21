@@ -47,3 +47,20 @@ def test_a_v1_config_is_migrated_and_replaced_by_the_current_version(
     assert config.entities["sabadell"].account_id == "sabadell-account"
     assert not config_files.v1.exists(), "The migrated away V1 config was left behind"
     assert config_files.v2.is_file(), "The migration result was not persisted"
+
+
+@pytest.mark.usefixtures("isolated_migration_registry")
+def test_a_second_migration_in_the_same_process_reuses_the_migration_engine(
+    config_files: ConfigFiles,
+    mocker: MockerFixture,
+):
+    # Deltas are registered once per class, so an engine built per migration made the second
+    # `yul` command of a process blow up with "already been registered".
+    mocker.patch.object(Client, "budget", return_value=PlanDetailFactory())
+    config_files.write_asset("V1")
+    get_config()
+
+    # The first migration removes the V1 file, so put a V1 config back to migrate again
+    config_files.write_asset("V1")
+
+    assert isinstance(get_config(), ConfigV2)

@@ -1,8 +1,6 @@
-from collections.abc import Generator
-
 import pytest
 
-from ynab_unlinked.config import MAX_CONFIG_VERSION, Config
+from ynab_unlinked.config import MAX_CONFIG_VERSION, Config, core
 from ynab_unlinked.config.core import VERSION_MAPPING
 from ynab_unlinked.config.migrations.base import MigrationEngine
 from ynab_unlinked.config.models import DeltaConfigV1ToV2
@@ -25,17 +23,14 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
 
 
 @pytest.fixture
-def isolated_migration_registry() -> Generator[None]:
+def isolated_migration_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Migration engines register on a class attribute shared by the whole session, and
-    `get_config` builds one whenever it migrates. Give each test a clean registry.
+    `get_config` reuses a single engine for the config. Give each test a clean registry
+    and an unbuilt engine.
     """
-    registered = MigrationEngine._deltas
-    MigrationEngine._deltas = {}
-
-    yield
-
-    MigrationEngine._deltas = registered
+    monkeypatch.setattr(MigrationEngine, "_deltas", {})
+    monkeypatch.setattr(core, "_MIGRATION_ENGINE", None)
 
 
 @pytest.fixture

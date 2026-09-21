@@ -22,7 +22,7 @@ def test_a_page_without_a_table_reports_which_page_failed():
     with pytest.raises(ParsingError) as error:
         list(assets.read_pdf("parsers/no_table.pdf"))
 
-    assert "page 0" in error.value.message
+    assert "page 1" in error.value.message
     assert error.value.input_file == assets.path("parsers/no_table.pdf")
 
 

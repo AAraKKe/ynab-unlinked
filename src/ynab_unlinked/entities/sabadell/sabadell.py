@@ -30,11 +30,8 @@ class SabadellParser:
         match input_type:
             case InputType.TXT:
                 return self.__parse_txt(input_file)
-            case InputType.XLS:
-                return self.__parse_xls(input_file)
             case _:
-                # Should never happen because we already checked
-                raise RuntimeError(f"Unexpected input type: {input_type}")
+                return self.__parse_xls(input_file)
 
     def __parse_txt(self, input_file: Path) -> list[Transaction]:
         from ynab_unlinked.models import Transaction

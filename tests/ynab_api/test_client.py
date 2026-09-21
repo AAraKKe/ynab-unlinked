@@ -12,6 +12,7 @@ from ynab_unlinked.ynab_api.client import Client
 
 BUDGET_ID = "00000000-0000-0000-0000-000000000001"
 ACCOUNT_ID = "00000000-0000-0000-0000-00000000000a"
+PAYEE_ID = "00000000-0000-0000-0000-0000000000b0"
 
 
 @pytest.fixture
@@ -169,13 +170,6 @@ def test_create_transactions_converts_amounts_to_milliunits(
     assert created_by(ynab_api)[0].amount == expected_milliunits
 
 
-@pytest.mark.xfail(
-    reason=(
-        "client.py:129 truncates with int() instead of rounding, so 2.01 is uploaded as 2009 "
-        "milliunits. matcher.py:17 rounds, so such a transaction never matches back either"
-    ),
-    strict=True,
-)
 def test_create_transactions_rounds_amounts_that_float_cannot_represent(
     client: Client, ynab_api: YnabClientStub
 ):
@@ -202,11 +196,36 @@ def test_create_transactions_sends_the_import_id_and_the_target_account(
     [created] = call.kwargs["data"].transactions
     assert created.account_id == UUID(ACCOUNT_ID)
     assert created.import_id == transaction.id
-    assert created.payee_name == transaction.payee
     assert created.var_date == transaction.date
     assert created.cleared is TransactionClearedStatus.CLEARED
     # YNAB keeps imported transactions in the "unapproved" inbox until the user reviews them
     assert created.approved is False
+
+
+@pytest.mark.parametrize(
+    ("ynab_payee_id", "expected_payee_id"),
+    [
+        pytest.param(PAYEE_ID, UUID(PAYEE_ID), id="a resolved payee is linked by its id"),
+        pytest.param(None, None, id="an unknown payee is created from its name alone"),
+    ],
+)
+def test_create_transactions_sends_the_payee_resolved_against_ynab(
+    client: Client,
+    ynab_api: YnabClientStub,
+    ynab_payee_id: str | None,
+    expected_payee_id: UUID | None,
+):
+    transaction = TransactionWithYnabDataFactory(payee="COMPRA EN MERCADONA 4412")
+    transaction.ynab_payee = "Mercadona"
+    transaction.ynab_payee_id = ynab_payee_id
+
+    client.create_transactions(
+        budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[transaction]
+    )
+
+    [created] = created_by(ynab_api)
+    assert created.payee_name == "Mercadona"
+    assert created.payee_id == expected_payee_id
 
 
 def test_create_transactions_keeps_the_import_id_of_each_duplicate(
@@ -222,6 +241,14 @@ def test_create_transactions_keeps_the_import_id_of_each_duplicate(
 
     assert [t.import_id for t in created_by(ynab_api)] == [first.id, duplicate.id]
     assert first.id != duplicate.id
+
+
+def test_update_transactions_does_not_reach_ynab_with_nothing_to_update(
+    client: Client, ynab_api: YnabClientStub
+):
+    client.update_transactions(budget_id=BUDGET_ID, transactions=[])
+
+    assert ynab_api.registry == {}
 
 
 def test_update_transactions_patches_each_transaction_by_id(

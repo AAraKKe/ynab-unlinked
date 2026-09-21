@@ -69,14 +69,6 @@ def test_rows_skipped_by_read_after_row_cannot_trigger_the_header():
     assert payees(list(rows)) == ["Los Diamantes"]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "read_after_row only skips rows, it never enables reading: without "
-        "read_after_row_like the `read` flag stays False and no row is ever yielded, "
-        "even though tests/helpers/assets.py::read_xls offers the argument on its own."
-    ),
-    strict=True,
-)
 def test_read_after_row_on_its_own_yields_the_rows_that_follow():
     rows = assets.read_xls(STATEMENT, read_after_row=4)
 

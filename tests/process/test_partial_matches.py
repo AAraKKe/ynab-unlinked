@@ -36,10 +36,20 @@ def a_partial_match(existing_in_ynab, load_entity: LoadEntityCallback):
 
 
 @pytest.mark.parametrize(
-    ("answer", "expected_rules"),
+    ("answer", "expected_rules", "expected_payee"),
     [
-        pytest.param("y", {YNAB_PAYEE: {BANK_PAYEE}}, id="accepting remembers the payee naming"),
-        pytest.param("n", {}, id="rejecting leaves no naming rule behind"),
+        pytest.param(
+            "y",
+            {YNAB_PAYEE: {BANK_PAYEE}},
+            YNAB_PAYEE,
+            id="accepting remembers the naming and uploads the ynab payee",
+        ),
+        pytest.param(
+            "n",
+            {},
+            BANK_PAYEE,
+            id="rejecting leaves no rule behind and uploads the bank payee",
+        ),
     ],
 )
 def test_the_answer_to_a_partial_match_decides_the_payee_rules(
@@ -49,13 +59,14 @@ def test_the_answer_to_a_partial_match_decides_the_payee_rules(
     created_transactions,
     answer: str,
     expected_rules: dict,
+    expected_payee: str,
 ):
     result = yul("load test", input=f"{answer}\ny\n")
 
     assert result.exit_code == 0, result.output
     assert saved_config(config_file).payee_rules == expected_rules
     # Either way the transaction is uploaded, because the YNAB side is still uncleared
-    assert [t.payee_name for t in created_transactions()] == [BANK_PAYEE]
+    assert [t.payee_name for t in created_transactions()] == [expected_payee]
 
 
 def test_a_partial_match_is_uploaded_as_cleared(

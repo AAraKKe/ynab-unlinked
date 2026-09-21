@@ -108,6 +108,9 @@ class Cobee:
 
         start = False
         previous_line = ""
+        # A cancelled or rejected marker refers to the transaction right above it, so it
+        # only removes one that has just been read
+        last_line_was_transaction = False
         transactions: list[Transaction] = []
         date: dt.date | None = None
         payee: str | None = None
@@ -131,14 +134,16 @@ class Cobee:
                 date = try_date
 
             if "€" in line:
-                amount_str = line.replace("€", "").replace(",", ".")
+                # Cobee uses "." as thousands separator and "," as decimal separator
+                amount_str = line.replace("€", "").strip().replace(".", "").replace(",", ".")
 
                 try:
                     amount = float(amount_str)
-                    if amount == 0:
-                        continue
                 except ValueError:
                     # If we could not convert this to float it means this is not an amount line.
+                    continue
+
+                if amount == 0:
                     continue
 
                 # If it was the amount line, the previous line is the payee.
@@ -154,14 +159,18 @@ class Cobee:
                     continue
 
                 transactions.append(Transaction(date=date, payee=payee, amount=amount))
+                last_line_was_transaction = True
                 continue
 
             if identifiers.cancelled in line or identifiers.rejected in line:
                 # These are transactions that didn't went through.
-                transactions.pop()
+                if last_line_was_transaction:
+                    transactions.pop()
+                    last_line_was_transaction = False
                 continue
 
             previous_line = line
+            last_line_was_transaction = False
 
         return transactions
 

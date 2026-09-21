@@ -138,13 +138,6 @@ def test_to_dict_flattens_the_whole_tree():
     assert flattened["split"] is split
 
 
-@pytest.mark.xfail(
-    reason=(
-        "choices.py:100 guards the memoisation with hasattr(self, '__dict') but stores the value "
-        "in the name-mangled _Choice__dict, so the cache is never read"
-    ),
-    strict=True,
-)
 def test_to_dict_is_memoised():
     account = account_with_transactions()
 
