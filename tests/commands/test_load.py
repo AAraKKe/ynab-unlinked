@@ -4,6 +4,7 @@ import pytest
 
 from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked.commands import load
 
 pytestmark = pytest.mark.version("V2")
 
@@ -26,11 +27,8 @@ def test_load_shows_the_transactions_of_the_export(
     assert all(f"Test Payee {n}" in result.output for n in (1, 2, 3))
 
 
-def test_every_entity_package_is_registered_as_a_subcommand(yul: CliRunner):
-    result = yul("load --help")
-
-    assert result.exit_code == 0, result.output
-    assert set(result.output.split()) >= SHIPPED_ENTITIES
+def test_every_entity_package_is_registered_as_a_subcommand():
+    assert {command.name for command in load.registered_commands} >= SHIPPED_ENTITIES
 
 
 def test_an_unknown_entity_is_rejected(yul: CliRunner):
