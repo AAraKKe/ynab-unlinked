@@ -13,7 +13,7 @@ from ynab_unlinked.entities.sabadell.sabadell import ANCHOR_LINE, SabadellParser
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.models import Transaction
 
-pytestmark = pytest.mark.version("V2")
+pytestmark = pytest.mark.version("V3")
 
 TXT_STATEMENT = "sabadell/movements.txt"
 XLS_STATEMENT = "sabadell/movements.xls"

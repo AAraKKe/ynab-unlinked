@@ -15,7 +15,7 @@ from tests.helpers.config import ConfigFiles
 from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
 from tests.process.builders import ACCOUNT_ID, BUDGET_ID, THREE_DAYS_AGO, TODAY
-from ynab_unlinked.config.models.v2 import ConfigV2
+from ynab_unlinked.config.models.v3 import ConfigV3
 from ynab_unlinked.setup import load_context
 
 API_KEY = "a-personal-access-token"
@@ -50,7 +50,7 @@ def test_setup_stores_the_selected_budget(unconfigured: Path, yul: CliRunner, bu
 
     assert result.exit_code == 0, result.output
     budgets_in_ynab.get_plan_by_id.assert_called_once_with(plan_id=OTHER_BUDGET_ID)
-    stored = ConfigV2.model_validate_json(unconfigured.read_text())
+    stored = ConfigV3.model_validate_json(unconfigured.read_text())
     assert stored.api_key == API_KEY
     assert (stored.budget.id, stored.budget.name) == (OTHER_BUDGET_ID, "Household")
     assert stored.budget.date_format == "YYYY-MM-DD"
@@ -93,7 +93,7 @@ def test_no_context_is_built_when_the_config_cannot_be_read():
     assert load_context() is None
 
 
-@pytest.mark.version("V2")
+@pytest.mark.version("V3")
 @pytest.mark.usefixtures("config")
 def test_the_context_formats_dates_and_amounts_as_the_budget_does():
     context = load_context()

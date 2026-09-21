@@ -7,7 +7,7 @@ from pytest_mock import MockerFixture
 
 from tests.factories import PlanDetailFactory
 from tests.helpers.config import ConfigFiles
-from ynab_unlinked.config import ConfigV2, get_config
+from ynab_unlinked.config import ConfigV3, get_config
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.ynab_api import Client
 
@@ -17,7 +17,7 @@ def test_there_is_no_config_before_the_first_setup(config_files: ConfigFiles):
 
 
 def test_a_config_from_a_newer_yul_is_reported_as_unsupported(config_files: ConfigFiles):
-    config_files.write("V2", json.dumps({"version": "V9"}))
+    config_files.write("V3", json.dumps({"version": "V9"}))
 
     with pytest.raises(ConfigError, match="Unsupported config version: 'Config:V9'"):
         get_config()
@@ -26,7 +26,7 @@ def test_a_config_from_a_newer_yul_is_reported_as_unsupported(config_files: Conf
 def test_loading_the_current_version_twice_needs_no_migration(config_files: ConfigFiles):
     # A MigrationEngine can only be registered once per class, so get_config building one
     # unconditionally would make the second call blow up.
-    config_files.write_asset("V2")
+    config_files.write_asset("V3")
 
     assert get_config() == get_config()
 
@@ -41,7 +41,7 @@ def test_a_v1_config_is_migrated_and_replaced_by_the_current_version(
 
     config = get_config()
 
-    assert isinstance(config, ConfigV2)
+    assert isinstance(config, ConfigV3)
     assert config.api_key == "my-api-key"
     assert config.budget.name == "My Budget"
     assert config.entities["sabadell"].account_id == "sabadell-account"
@@ -63,4 +63,4 @@ def test_a_second_migration_in_the_same_process_reuses_the_migration_engine(
     # The first migration removes the V1 file, so put a V1 config back to migrate again
     config_files.write_asset("V1")
 
-    assert isinstance(get_config(), ConfigV2)
+    assert isinstance(get_config(), ConfigV3)

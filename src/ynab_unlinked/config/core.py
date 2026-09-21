@@ -5,15 +5,16 @@ from typing import Final
 
 from .constants import LATEST_VERSION
 from .migrations import MigrationEngine, Version
-from .models import ConfigV1, ConfigV2, DeltaConfigV1ToV2
+from .models import ConfigV1, ConfigV2, ConfigV3, DeltaConfigV1ToV2, DeltaConfigV2ToV3
 from .paths import config_path
 from .types import Config
 
 VERSION_MAPPING: Final[dict[str, type[Config]]] = {
     "V1": ConfigV1,
     "V2": ConfigV2,
+    "V3": ConfigV3,
 }
-LATESST_CONFIG_TYPE = ConfigV2
+LATESST_CONFIG_TYPE = ConfigV3
 
 
 class ConfigError(ValueError): ...
@@ -27,7 +28,7 @@ _MIGRATION_ENGINE: MigrationEngine | None = None
 def migration_engine() -> MigrationEngine:
     global _MIGRATION_ENGINE
     if _MIGRATION_ENGINE is None:
-        _MIGRATION_ENGINE = MigrationEngine("Config", DeltaConfigV1ToV2())
+        _MIGRATION_ENGINE = MigrationEngine("Config", DeltaConfigV1ToV2(), DeltaConfigV2ToV3())
     return _MIGRATION_ENGINE
 
 

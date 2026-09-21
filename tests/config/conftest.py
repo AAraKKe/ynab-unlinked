@@ -3,7 +3,7 @@ import pytest
 from ynab_unlinked.config import MAX_CONFIG_VERSION, Config, core
 from ynab_unlinked.config.core import VERSION_MAPPING
 from ynab_unlinked.config.migrations.base import MigrationEngine
-from ynab_unlinked.config.models import DeltaConfigV1ToV2
+from ynab_unlinked.config.models import DeltaConfigV1ToV2, DeltaConfigV2ToV3
 
 
 @pytest.fixture
@@ -35,4 +35,4 @@ def isolated_migration_registry(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def migration_engine(isolated_migration_registry: None) -> MigrationEngine:
-    return MigrationEngine("Config", DeltaConfigV1ToV2())
+    return MigrationEngine("Config", DeltaConfigV1ToV2(), DeltaConfigV2ToV3())

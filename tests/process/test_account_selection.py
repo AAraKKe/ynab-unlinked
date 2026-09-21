@@ -17,7 +17,7 @@ from tests.process.builders import (
 )
 from ynab_unlinked.process import get_or_prompt_account_id
 
-pytestmark = pytest.mark.version("V2")
+pytestmark = pytest.mark.version("V3")
 
 
 @pytest.fixture

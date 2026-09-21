@@ -9,7 +9,6 @@ from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.models import Transaction
 from ynab_unlinked.process import process_transactions
-from ynab_unlinked.utils import MAX_PAST_TRANSACTIONS_SHOWN
 
 from .types import LoadEntityCallback
 
@@ -38,11 +37,6 @@ def load_entity() -> LoadEntityCallback:
             transactions = [
                 Transaction(current_date - dt.timedelta(1), "Test Payee 1", 10.00),
                 Transaction(current_date - dt.timedelta(2), "Test Payee 2", -10.00),
-                Transaction(
-                    current_date - dt.timedelta(MAX_PAST_TRANSACTIONS_SHOWN + 1),
-                    "Test Payee 3",
-                    -0.15,
-                ),
             ]
 
         def command(context: typer.Context):

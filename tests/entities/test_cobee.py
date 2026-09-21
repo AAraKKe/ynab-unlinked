@@ -10,7 +10,7 @@ from tests.helpers.types import CliRunner
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities.cobee.cobee import Cobee, CobeeContext, Language, parse_date
 
-pytestmark = [pytest.mark.version("V2"), pytest.mark.usefixtures("config")]
+pytestmark = [pytest.mark.version("V3"), pytest.mark.usefixtures("config")]
 
 EXPORT = "cobee/transactions.html"
 

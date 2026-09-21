@@ -12,7 +12,7 @@ from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities.bbva.bbva import BBVA
 from ynab_unlinked.exceptions import ParsingError
 
-pytestmark = [pytest.mark.version("V2"), pytest.mark.usefixtures("config")]
+pytestmark = [pytest.mark.version("V3"), pytest.mark.usefixtures("config")]
 
 XLSX_STATEMENT = "bbva/bbva.xlsx"
 PDF_STATEMENT = "bbva/bbva.pdf"

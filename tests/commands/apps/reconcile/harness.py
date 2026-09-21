@@ -14,7 +14,7 @@ from tests.factories import AccountFactory, CurrencyFormatFactory, TransactionDe
 from ynab_unlinked.choices import Choice
 from ynab_unlinked.commands.apps.reconcile import AccountTable, Reconcile
 from ynab_unlinked.commands.reconcile import build_choices
-from ynab_unlinked.config import ConfigV2
+from ynab_unlinked.config import ConfigV3
 from ynab_unlinked.config.models.v2 import Budget
 from ynab_unlinked.formatter import Formatter
 
@@ -29,7 +29,7 @@ RECONCILED = TransactionClearedStatus.RECONCILED
 TERMINAL_SIZE = (160, 60)
 
 CURRENCY_FORMAT = CurrencyFormatFactory()
-CONFIG = ConfigV2(
+CONFIG = ConfigV3(
     api_key="an-api-key",
     budget=Budget(
         id="a-budget", name="A Budget", date_format="DD/MM/YYYY", currency_format=CURRENCY_FORMAT

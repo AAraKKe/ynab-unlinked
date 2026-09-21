@@ -4,17 +4,14 @@ import uuid
 
 import factory
 from factory.base import Factory
-from ynab import Account, DateFormat, Payee, PlanDetail, TransactionClearedStatus, TransactionDetail
+from ynab import Account, DateFormat, PlanDetail, TransactionClearedStatus, TransactionDetail
 from ynab import CurrencyFormat as SdkCurrencyFormat
 
 from ynab_unlinked.config.models.v2 import CurrencyFormat
-from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
+from ynab_unlinked.models import PendingImport, Transaction
 
 # Matches the `today` fixture so factory built objects line up with frozen time
 DEFAULT_DATE = dt.date(2025, 5, 15)
-
-# Tells "leave what the constructor set" apart from an explicit None
-UNSET = object()
 
 
 class CurrencyFormatFactory(Factory):
@@ -38,21 +35,16 @@ class TransactionFactory(Factory):
     payee = "Mercadona"
     amount = -10.0
 
-    @factory.post_generation
-    def past(obj, create, extracted, **kwargs):
-        """``past`` is assigned while processing, after ``__post_init__`` cleared it."""
-        obj.past = bool(extracted)
 
+class PendingImportFactory(Factory):
+    """A transaction paired with the ids YNAB recognises it by.
 
-class TransactionWithYnabDataFactory(Factory):
-    """Builds the enriched transaction from its payee, amount and date directly.
-
-    ``status``, ``partial_match`` and ``ynab_payee`` are what the matcher writes afterwards,
-    so they are applied to the built object rather than passed to the constructor.
+    The ids are set literally so a test can pin what the client forwards without depending on
+    how `assign_import_ids` derives them.
     """
 
     class Meta:
-        model = TransactionWithYnabData
+        model = PendingImport
 
     class Params:
         date = DEFAULT_DATE
@@ -62,22 +54,10 @@ class TransactionWithYnabDataFactory(Factory):
     transaction = factory.LazyAttribute(
         lambda o: TransactionFactory(date=o.date, payee=o.payee, amount=o.amount)
     )
-    status = MatchStatus.UNMATCHED
-    partial_match = None
-    ynab_payee = UNSET
-
-    @classmethod
-    def _create(cls, model_class, *args, **kwargs):
-        status = kwargs.pop("status")
-        partial_match = kwargs.pop("partial_match")
-        ynab_payee = kwargs.pop("ynab_payee")
-
-        transaction = model_class(*args, **kwargs)
-        transaction.match_status = status
-        transaction.partial_match = partial_match
-        if ynab_payee is not UNSET:
-            transaction.ynab_payee = ynab_payee
-        return transaction
+    import_id = factory.LazyAttribute(
+        lambda o: f"YNAB:{round(o.transaction.amount * 1000)}:{o.transaction.date:%Y-%m-%d}:1"
+    )
+    legacy_import_id = "0" * 30
 
 
 class TransactionDetailFactory(Factory):
@@ -98,15 +78,6 @@ class TransactionDetailFactory(Factory):
     payee_id = None
     import_id = None
     subtransactions = factory.LazyFunction(list)
-
-
-class PayeeFactory(Factory):
-    class Meta:
-        model = Payee
-
-    id = uuid.UUID(int=7)
-    name = "Mercadona"
-    deleted = False
 
 
 class AccountFactory(Factory):

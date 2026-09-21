@@ -37,7 +37,7 @@ def test_setup_persists_the_answers_it_collects(yul: CliRunner, config_files: Co
     assert stored["api_key"] == "the-api-key"
     assert stored["budget"]["id"] == str(BUDGET_ID)
     assert stored["budget"]["date_format"] == "DD/MM/YYYY"
-    assert stored["version"] == "V2"
+    assert stored["version"] == "V3"
 
 
 @pytest.mark.usefixtures("answers")

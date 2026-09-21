@@ -12,7 +12,7 @@ from tests.helpers import assets
 from tests.helpers.config import ConfigFiles
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
-from ynab_unlinked.config import ConfigV2, get_config
+from ynab_unlinked.config import ConfigV3, get_config
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.main import app
@@ -86,6 +86,7 @@ def config_files(tmp_path: Path, mocker: MockerFixture) -> ConfigFiles:
         "ynab_unlinked.config.core",
         "ynab_unlinked.config.models.v1",
         "ynab_unlinked.config.models.v2",
+        "ynab_unlinked.config.models.v3",
         "ynab_unlinked.privacy",
         "ynab_unlinked.commands.config",
     ):
@@ -101,7 +102,7 @@ def config(request: pytest.FixtureRequest, config_files: ConfigFiles) -> str:
     """
     Install the config asset for a version and yield that version.
 
-    The version comes from `@pytest.mark.version("V2")` or from indirect parametrization.
+    The version comes from `@pytest.mark.version("V3")` or from indirect parametrization.
     Versions without an asset (such as "missing") leave the scratch directory empty.
     """
     version_marker = request.node.get_closest_marker("version")
@@ -124,7 +125,7 @@ def config(request: pytest.FixtureRequest, config_files: ConfigFiles) -> str:
 
 
 @pytest.fixture
-def config_v2(config: str) -> ConfigV2:
+def config_v3(config: str) -> ConfigV3:
     loaded = get_config()
-    assert isinstance(loaded, ConfigV2)
+    assert isinstance(loaded, ConfigV3)
     return loaded

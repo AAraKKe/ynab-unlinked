@@ -68,14 +68,14 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
 
 - `config_files` (root conftest) points every config path into a scratch directory and returns
   the `ConfigFiles` paths. `config` writes the asset for `@pytest.mark.version("V1"|"V2")` there
-  and yields the version; `"missing"` leaves it empty. `config_v2` loads it as a `ConfigV2`.
+  and yields the version; `"missing"` leaves it empty. `config_v3` loads it as a `ConfigV3`.
   Tests may save, migrate and reset freely; the assets under `tests/assets/config_*` are never
   written to.
 - `yul` runs the CLI (`yul("load --show test", input="y\n")`); `ynab_api` stubs the YNAB client
   with one MagicMock per API (`ynab_api.api("transactions")`); `load_entity` registers a stub
   entity as `yul load test`; `today` freezes time to 2025-05-15.
 - `tests/factories.py` builds domain and SDK objects: `TransactionFactory`,
-  `TransactionWithYnabDataFactory`, `TransactionDetailFactory`, `AccountFactory`, `PayeeFactory`,
+  `PendingImportFactory`, `TransactionDetailFactory`, `AccountFactory`,
   `PlanDetailFactory`. Extend a factory rather than constructing these by hand in a test.
 - `tests/helpers/statements.py` holds the bank statement builders and, run as a script,
   regenerates the binary fixtures under `tests/assets/{parsers,bbva,sabadell,cobee}`.

@@ -5,7 +5,7 @@ from typing import Annotated, assert_never
 
 import typer
 
-from ynab_unlinked.config import ConfigV2
+from ynab_unlinked.config import ConfigV3
 from ynab_unlinked.config.paths import config_path, v1_config_path
 from ynab_unlinked.display import bullet_list, confirm, console, info, success, warning
 from ynab_unlinked.privacy import privacy_notice
@@ -28,7 +28,7 @@ def set_command(
 ):
     """Set configuration options"""
     ctx = ensure_config(context)
-    config: ConfigV2 = ctx.config
+    config: ConfigV3 = ctx.config
 
     match key:
         case ValidKeys.API_KEY:
@@ -49,7 +49,7 @@ def set_command(
 @config_app.command(name="show")
 def show(context: typer.Context):
     ctx = ensure_config(context)
-    config: ConfigV2 = ctx.config
+    config: ConfigV3 = ctx.config
     console().print(config.model_dump_json(indent=2))
 
 
@@ -77,9 +77,7 @@ def reset_command(
 
     info("The following directories will be permanently deleted:")
     info(bullet_list(str(p) for p in paths_to_remove))
-    warning(
-        "This will remove your YNAB API key, selected budget, payee rules, and entity checkpoints."
-    )
+    warning("This will remove your YNAB API key, selected budget and entity accounts.")
 
     if not yes and not confirm("Are you sure you want to continue?", default=False):
         info("Aborted. Nothing was deleted.")

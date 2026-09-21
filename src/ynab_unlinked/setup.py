@@ -10,7 +10,7 @@ from typing import cast
 
 import typer
 
-from ynab_unlinked.config import ConfigV2, get_config
+from ynab_unlinked.config import ConfigV3, get_config
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.display import bold, success
@@ -19,19 +19,19 @@ from ynab_unlinked.privacy import privacy_notice
 from ynab_unlinked.utils import prompt_for_api_key, prompt_for_budget
 
 
-def run_setup() -> ConfigV2:
+def run_setup() -> ConfigV3:
     """Run the interactive setup flow and persist a fresh config."""
     bold("Welcome to ynab-unlinked! Lets setup your connection")
     privacy_notice()
     api_key = prompt_for_api_key()
     budget = prompt_for_budget(api_key)
-    config = ConfigV2(api_key=api_key, budget=budget)
+    config = ConfigV3(api_key=api_key, budget=budget)
     config.save()
     success("All done!")
     return config
 
 
-def _build_context(config: ConfigV2) -> YnabUnlinkedContext:
+def _build_context(config: ConfigV3) -> YnabUnlinkedContext:
     return YnabUnlinkedContext(
         config=config,
         extras=None,
@@ -57,7 +57,7 @@ def load_context() -> YnabUnlinkedContext | None:
     if config is None:
         return None
 
-    return _build_context(cast(ConfigV2, config))
+    return _build_context(cast(ConfigV3, config))
 
 
 def ensure_config(context: typer.Context) -> YnabUnlinkedContext:
@@ -73,6 +73,6 @@ def ensure_config(context: typer.Context) -> YnabUnlinkedContext:
     if config is None:
         raise ConfigError("Unexpected error: config could not be loaded after setup")
 
-    obj = _build_context(cast(ConfigV2, config))
+    obj = _build_context(cast(ConfigV3, config))
     context.obj = obj
     return obj

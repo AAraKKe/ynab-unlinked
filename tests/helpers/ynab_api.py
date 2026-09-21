@@ -25,6 +25,3 @@ class YnabClientStub(Client):
 
     def transactions(self) -> MagicMock:
         return self.registry.get("transactions")
-
-    def payees(self) -> MagicMock:
-        return self.registry.get("payees")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -112,12 +113,13 @@ class SabadellParser:
         belong to the previous year.
         """
         months = {t.date.month for t in transactions}
-        if 1 in months and 12 in months:
-            for t in transactions:
-                if t.date.month == 12:
-                    t.date = t.date.replace(year=t.date.year - 1)
+        if 1 not in months or 12 not in months:
+            return transactions
 
-        return transactions
+        return [
+            replace(t, date=t.date.replace(year=t.date.year - 1)) if t.date.month == 12 else t
+            for t in transactions
+        ]
 
     def __parse_date(self, raw: str) -> dt.date:
         import datetime as dt

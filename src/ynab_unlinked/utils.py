@@ -13,10 +13,16 @@ from ynab_unlinked.display import console, process, question
 from ynab_unlinked.entities import InputType
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.formatter import Formatter
-from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
+from ynab_unlinked.models import PendingImport, Transaction
 from ynab_unlinked.ynab_api.client import Client
 
-MAX_PAST_TRANSACTIONS_SHOWN = 3
+IMPORT_HELP_MESSAGE = (
+    "The table below shows the transactions to be imported to YNAB.\n"
+    " - The [green]green[/] rows are new transactions to be imported.\n"
+    " - The [gray37]dimmed[/] rows are already in YNAB and will not be sent again.\n"
+    "YNAB matches every imported transaction against the ones you entered yourself on the same "
+    "account, so the payee shown here is the one from the bank export, not the final one."
+)
 
 
 def prompt_for_api_key() -> str:
@@ -99,6 +105,11 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
     )
 
 
+def _flows(amount: float, formatter: Formatter) -> tuple[str, str]:
+    amount_str = formatter.format_amount(amount)
+    return (amount_str if amount > 0 else "", amount_str if amount < 0 else "")
+
+
 def display_transaction_table(transactions: list[Transaction], formatter: Formatter):
     columns = [
         Column(header="Date", justify="left", max_width=10),
@@ -106,178 +117,47 @@ def display_transaction_table(transactions: list[Transaction], formatter: Format
         Column(header="Inflow", justify="right", max_width=15),
         Column(header="Outflow", justify="right", max_width=15),
     ]
-    table = Table(
-        *columns,
-        title="Transactions to process",
-        caption=f"Only {MAX_PAST_TRANSACTIONS_SHOWN} processed transactions are shown.",
-        box=box.SIMPLE,
-    )
+    table = Table(*columns, title="Transactions to process", box=box.SIMPLE)
 
-    past_counter = 0
     for transaction in transactions:
-        style = Style(color="gray37" if transaction.past else "default")
-
-        past_counter += int(transaction.past)
-        if past_counter == MAX_PAST_TRANSACTIONS_SHOWN:
-            # Stop adding transactions that are past after 5 for clarification
-            table.add_row("...", "...", "...", "...")
-            break
-
-        amount_str = formatter.format_amount(transaction.amount)
-        outflow = amount_str if transaction.amount < 0 else ""
-        inflow = amount_str if transaction.amount > 0 else ""
-
+        inflow, outflow = _flows(transaction.amount, formatter)
         table.add_row(
             formatter.format_date(transaction.date),
             transaction.payee,
             inflow,
             outflow,
-            style=style,
         )
 
     console().print(table)
 
 
-def payee_line(transaction: TransactionWithYnabData) -> str:
-    if transaction.ynab_payee is None or transaction.payee == transaction.ynab_payee:
-        return transaction.payee
-
-    return f"{transaction.ynab_payee} [gray37] [Original payee: {transaction.payee}][/gray37]"
-
-
-def updload_help_message(with_partial_matches=False) -> str:
-    main_message = (
-        "The table below shows the transactaions to be imported to YNAB. The transactions in the input file "
-        "have been matched with existing transactions in YNAB.\n"
-        " - The [green]green[/] rows are new transactions to be imported.\n"
-    )
-    if with_partial_matches:
-        main_message += (
-            " - The [yellow]yellow[/] rows are transaction to be imported that match in date and amount with\n"
-            "   transations that exist in YNAB but for which teh payee name could not be matched.\n"
-            "   This is usually because the name from the import file is substantially different any payee "
-            "present in YNAB.\n"
-            "   If you accept these transactions are valid, we will keep track of this naming for future imports."
-        )
-
-    main_message += (
-        "The cleared status column shows how the transaction will be loaded to YNAB, not the current "
-        "status if the transaction was already in YNAB."
-    )
-
-    return main_message
-
-
-def display_transactions_to_upload(
-    transactions: list[TransactionWithYnabData], formatter: Formatter
+def display_import_table(
+    transactions: list[PendingImport], already_imported: set[str], formatter: Formatter
 ):
     if not transactions:
         return
 
     columns = [
-        Column(header="Match", justify="center", width=5),
-        Column(header="Date", justify="left", max_width=10),
-        Column(header="Payee", justify="left", width=70),
-        Column(header="Inflow", justify="right", max_width=15),
-        Column(header="Outflow", justify="right", max_width=15),
-        Column(header="Cleared Status", justify="left", width=15),
-    ]
-    table = Table(
-        *columns,
-        title="Recent Transactions",
-        caption="Transactions to [cyan bold]update[/] and [bold green]create[/].",
-        box=box.SIMPLE,
-    )
-
-    partial_matches = False
-    for transaction in transactions:
-        amount_str = formatter.format_amount(transaction.amount)
-        outflow = amount_str if transaction.amount < 0 else ""
-        inflow = amount_str if transaction.amount > 0 else ""
-
-        if transaction.needs_creation:
-            if transaction.match_status == MatchStatus.PARTIAL_MATCH:
-                style = "yellow"
-                partial_matches = True
-            else:
-                style = "green"
-        else:
-            style = "default"
-
-        table.add_row(
-            transaction.match_emoji,
-            formatter.format_date(transaction.date),
-            payee_line(transaction),
-            inflow,
-            outflow,
-            transaction.cleared_status,
-            style=style,
-        )
-
-    console().print(Rule("Transactions to be imported"))
-    console().print(updload_help_message(partial_matches))
-    console().print(table)
-
-
-def display_partial_matches(transactions: list[TransactionWithYnabData], formatter: Formatter):
-    columns = [
         Column(header="Date", justify="left", max_width=10),
         Column(header="Payee", justify="left", width=50),
         Column(header="Inflow", justify="right", max_width=15),
         Column(header="Outflow", justify="right", max_width=15),
-        Column(header="Cleared Status", justify="left", width=15),
     ]
-    table = Table(
-        *columns,
-        title="Partial Matches",
-        caption=(
-            "Each pair of transactions shows the imported transaction (top) \n"
-            "and the partial match in YNAB (bottom)."
-        ),
-        box=box.SIMPLE,
-        row_styles=["", "gray70"],
-    )
+    table = Table(*columns, title="Transactions to import", box=box.SIMPLE)
 
-    for transaction in transactions:
-        # If we do not need to import it, skip it
-        if not transaction.needs_creation:
-            continue
-
-        # Skip if no partial match
-        if (
-            transaction.match_status != MatchStatus.PARTIAL_MATCH
-            or transaction.partial_match is None
-        ):
-            continue
-
-        # Original transaction row
-        orig_amount_str = formatter.format_amount(transaction.amount)
-        orig_outflow = orig_amount_str if transaction.amount < 0 else ""
-        orig_inflow = orig_amount_str if transaction.amount > 0 else ""
-
-        # YNAB transaction row (from partial_match)
-        ynab_amount_str = formatter.format_amount_milli(transaction.partial_match.amount)
-        ynab_outflow = ynab_amount_str if transaction.partial_match.amount < 0 else ""
-        ynab_inflow = ynab_amount_str if transaction.partial_match.amount > 0 else ""
-
-        # Add the pair of rows
+    for pending in transactions:
+        inflow, outflow = _flows(pending.transaction.amount, formatter)
+        style = Style(color="gray37" if pending.import_id in already_imported else "green")
         table.add_row(
-            formatter.format_date(transaction.date),
-            transaction.payee,
-            orig_inflow,
-            orig_outflow,
-            transaction.cleared_status,
+            formatter.format_date(pending.transaction.date),
+            pending.transaction.payee,
+            inflow,
+            outflow,
+            style=style,
         )
 
-        table.add_row(
-            formatter.format_date(transaction.partial_match.var_date),
-            transaction.partial_match.payee_name or "",
-            ynab_inflow,
-            ynab_outflow,
-            transaction.partial_match.cleared.name.capitalize(),
-            end_section=True,
-        )
-
+    console().print(Rule("Transactions to be imported"))
+    console().print(IMPORT_HELP_MESSAGE)
     console().print(table)
 
 

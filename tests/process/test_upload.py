@@ -5,13 +5,13 @@ import pytest
 from pytest_mock import MockerFixture
 from ynab import TransactionClearedStatus
 
-from tests.factories import TransactionDetailFactory, TransactionFactory
+from tests.factories import TransactionFactory
 from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
-from tests.process.builders import ACCOUNT_ID, BUDGET_ID, THREE_DAYS_AGO, TODAY, YESTERDAY
+from tests.process.builders import ACCOUNT_ID, THREE_DAYS_AGO, TODAY, YESTERDAY
 from ynab_unlinked.exceptions import ParsingError
 
-pytestmark = pytest.mark.version("V2")
+pytestmark = pytest.mark.version("V3")
 
 COFFEE = {"payee": "Coffee Shop", "amount": -12.34}
 BAKERY = {"payee": "Bakery", "amount": -5.0}
@@ -35,7 +35,7 @@ def test_show_only_lists_the_parsed_transactions(
     ynab.api("transactions").get_transactions_by_account.assert_not_called()
 
 
-def test_unmatched_transactions_are_created_in_ynab(
+def test_new_transactions_are_imported_with_the_payee_from_the_export(
     config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, created_transactions
 ):
     load_entity(
@@ -49,63 +49,25 @@ def test_unmatched_transactions_are_created_in_ynab(
     result = yul("load test", input="y\n")
 
     assert result.exit_code == 0, result.output
-    assert [(t.payee_name, t.amount) for t in created_transactions()] == [
-        ("Coffee Shop", -12340),
-        ("Bakery", -5000),
+    assert [(t.payee_name, t.amount, t.import_id) for t in created_transactions()] == [
+        ("Coffee Shop", -12340, f"YNAB:-12340:{THREE_DAYS_AGO:%Y-%m-%d}:1"),
+        ("Bakery", -5000, f"YNAB:-5000:{YESTERDAY:%Y-%m-%d}:1"),
     ]
 
 
-def test_transactions_already_in_ynab_are_not_created_again(
-    config_file: Path,
-    yul: CliRunner,
-    load_entity: LoadEntityCallback,
-    ynab: YnabClientStub,
-    existing_in_ynab,
+def test_the_import_leaves_the_payee_for_ynab_to_resolve(
+    config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, created_transactions
 ):
-    imported = TransactionFactory(date=THREE_DAYS_AGO, **COFFEE)
-    existing_in_ynab(
-        [
-            TransactionDetailFactory(
-                var_date=THREE_DAYS_AGO,
-                amount=-12340,
-                payee_name="Coffee Shop",
-                import_id=imported.id,
-            )
-        ]
-    )
-    load_entity(TODAY, [imported])
-
-    result = yul("load test")
-
-    assert result.exit_code == 0, result.output
-    assert "Nothing to do" in result.output
-    ynab.api("transactions").create_transaction.assert_not_called()
-
-
-def test_a_repeated_import_only_uploads_what_is_missing_from_ynab(
-    config_file: Path,
-    yul: CliRunner,
-    load_entity: LoadEntityCallback,
-    existing_in_ynab,
-    created_transactions,
-):
-    already_loaded = TransactionFactory(date=THREE_DAYS_AGO, **COFFEE)
-    existing_in_ynab(
-        [
-            TransactionDetailFactory(
-                var_date=THREE_DAYS_AGO,
-                amount=-12340,
-                payee_name="Coffee Shop",
-                import_id=already_loaded.id,
-            )
-        ]
-    )
-    load_entity(TODAY, [already_loaded, TransactionFactory(date=YESTERDAY, **BAKERY)])
+    # YNAB applies its own rename rules to an imported transaction, so sending a payee id would
+    # pin the payee and defeat them
+    load_entity(TODAY, [TransactionFactory(date=THREE_DAYS_AGO, payee="COMPRA EN MERCADONA 4412")])
 
     result = yul("load test", input="y\n")
 
     assert result.exit_code == 0, result.output
-    assert [t.payee_name for t in created_transactions()] == ["Bakery"]
+    [created] = created_transactions()
+    assert created.payee_name == "COMPRA EN MERCADONA 4412"
+    assert created.payee_id is None
 
 
 @pytest.mark.parametrize(
@@ -150,72 +112,31 @@ def test_declining_the_confirmation_uploads_nothing(
     ynab.api("transactions").create_transaction.assert_not_called()
 
 
-def test_the_payee_list_is_read_from_ynab_only_once(
-    config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, ynab: YnabClientStub
-):
-    load_entity(
-        TODAY,
-        [
-            TransactionFactory(date=THREE_DAYS_AGO, **COFFEE),
-            TransactionFactory(date=YESTERDAY, **BAKERY),
-        ],
-    )
-
-    result = yul("load test", input="n\n")
-
-    assert result.exit_code == 0, result.output
-    ynab.api("payees").get_payees.assert_called_once_with(BUDGET_ID)
-
-
 @pytest.mark.parametrize(
-    "already_in_ynab",
+    ("command", "expected_cleared"),
     [
-        pytest.param(True, id="a transaction matched against an uncleared one"),
+        pytest.param("load test", TransactionClearedStatus.CLEARED, id="a plain import"),
         pytest.param(
-            False,
-            id="a brand new transaction",
+            "load --reconcile test", TransactionClearedStatus.RECONCILED, id="--reconcile"
         ),
     ],
 )
-def test_reconcile_uploads_transactions_as_reconciled(
+def test_the_cleared_status_the_transactions_are_imported_with(
     config_file: Path,
     yul: CliRunner,
     load_entity: LoadEntityCallback,
-    existing_in_ynab,
     created_transactions,
-    already_in_ynab: bool,
+    command: str,
+    expected_cleared: TransactionClearedStatus,
 ):
-    if already_in_ynab:
-        existing_in_ynab(
-            [
-                TransactionDetailFactory(
-                    var_date=THREE_DAYS_AGO,
-                    amount=-12340,
-                    payee_name="Coffee Shop",
-                    cleared=TransactionClearedStatus.UNCLEARED,
-                )
-            ]
-        )
     load_entity(TODAY, [TransactionFactory(date=THREE_DAYS_AGO, **COFFEE)])
 
-    result = yul("load --reconcile test", input="y\n")
+    result = yul(command, input="y\n")
 
     assert result.exit_code == 0, result.output
-    assert [t.cleared for t in created_transactions()] == [TransactionClearedStatus.RECONCILED]
-
-
-def test_duplicated_transactions_in_the_export_are_both_uploaded(
-    config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, created_transactions
-):
-    vending = {"date": THREE_DAYS_AGO, "payee": "Vending Machine", "amount": -1.5}
-    load_entity(TODAY, [TransactionFactory(**vending), TransactionFactory(**vending)])
-
-    result = yul("load test", input="y\n")
-
-    assert result.exit_code == 0, result.output
-    created = created_transactions()
-    assert len(created) == 2
-    assert created[0].import_id != created[1].import_id
+    assert [t.cleared for t in created_transactions()] == [expected_cleared]
+    # YNAB keeps imported transactions in the unapproved inbox until the user reviews them
+    assert all(not t.approved for t in created_transactions())
 
 
 def test_a_parsing_error_stops_the_load_with_an_error_code(
@@ -237,7 +158,7 @@ def test_a_parsing_error_stops_the_load_with_an_error_code(
     assert "Column 3 is missing" in result.output
 
 
-def test_an_empty_export_reports_nothing_to_do(
+def test_an_empty_export_never_reaches_ynab(
     config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, ynab: YnabClientStub
 ):
     load_entity(TODAY, [])
@@ -245,3 +166,5 @@ def test_an_empty_export_reports_nothing_to_do(
     result = yul("load test")
 
     assert result.exit_code == 0, result.output
+    assert "Nothing to do" in result.output
+    ynab.api("transactions").get_transactions_by_account.assert_not_called()

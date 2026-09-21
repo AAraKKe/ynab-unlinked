@@ -8,11 +8,11 @@ from ynab import TransactionDetail
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
-from ynab_unlinked.config import ConfigV2
+from ynab_unlinked.config import ConfigV3
 
 from .harness import CHECKING_ID, RECONCILED, TuiStub, given_ynab_data
 
-pytestmark = pytest.mark.version("V2")
+pytestmark = pytest.mark.version("V3")
 
 CHECKING = AccountFactory(id=CHECKING_ID, name="Checking")
 
@@ -31,7 +31,7 @@ def test_reconcile_stops_when_there_is_nothing_left_to_reconcile(
     transactions: list[TransactionDetail],
     yul: CliRunner,
     ynab: YnabClientStub,
-    stored_config: ConfigV2,
+    stored_config: ConfigV3,
     tui: TuiStub,
 ):
     given_ynab_data(ynab, transactions, [CHECKING])
@@ -82,7 +82,7 @@ def test_reconcile_asks_ynab_for_transactions_since_the_buffered_checkpoint(
     expected_since_date: dt.date | None,
     yul: CliRunner,
     ynab: YnabClientStub,
-    stored_config: ConfigV2,
+    stored_config: ConfigV3,
     tui: TuiStub,
 ):
     stored_config.last_reconciliation_date = last_reconciliation_date
