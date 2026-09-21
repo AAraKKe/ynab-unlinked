@@ -11,3 +11,7 @@ class Checkpoint(BaseModel):
 class EntityConfig(BaseModel):
     account_id: str
     checkpoint: Checkpoint | None = None
+
+
+class EntityConfigV3(BaseModel):
+    account_id: str

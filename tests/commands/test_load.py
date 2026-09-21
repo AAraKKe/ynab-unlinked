@@ -6,7 +6,7 @@ from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.commands import load
 
-pytestmark = pytest.mark.version("V2")
+pytestmark = pytest.mark.version("V3")
 
 # Every entity package that ships a `command` is registered as a `yul load` subcommand
 SHIPPED_ENTITIES = {"bbva", "cobee", "sabadell"}
@@ -24,7 +24,7 @@ def test_load_shows_the_transactions_of_the_export(
 
     assert result.exit_code == 0, f"Error found: {result.output_bytes}"
     assert "Transactions to process" in result.output
-    assert all(f"Test Payee {n}" in result.output for n in (1, 2, 3))
+    assert all(f"Test Payee {n}" in result.output for n in (1, 2))
 
 
 def test_every_entity_package_is_registered_as_a_subcommand():

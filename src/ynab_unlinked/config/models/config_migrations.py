@@ -5,8 +5,10 @@ import shutil
 from ynab_unlinked.config.migrations.base import Delta
 from ynab_unlinked.ynab_api import Client
 
+from .shared import EntityConfig, EntityConfigV3
 from .v1 import ConfigV1
 from .v2 import Budget, ConfigV2, CurrencyFormat
+from .v3 import ConfigV3
 
 
 class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
@@ -77,3 +79,41 @@ class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
         ConfigV2.path().unlink()
 
         return config_v1
+
+
+class DeltaConfigV2ToV3(Delta[ConfigV2, ConfigV3]):
+    origin = ConfigV2.version()
+    destination = ConfigV3.version()
+
+    def on_migrate(self, origin: ConfigV2) -> ConfigV3:
+        # Payee rules and checkpoints are gone in V3: YNAB renames payees itself and the
+        # import id identifies a transaction, so neither is read any more.
+        config_v3 = ConfigV3(
+            api_key=origin.api_key,
+            budget=origin.budget,
+            last_reconciliation_date=origin.last_reconciliation_date,
+            entities={
+                name: EntityConfigV3(account_id=entity.account_id)
+                for name, entity in origin.entities.items()
+            },
+        )
+
+        # V2 and V3 live in the same file, so saving replaces the migrated away config
+        config_v3.save()
+
+        return config_v3
+
+    def on_rollback(self, destination: ConfigV3) -> ConfigV2:
+        config_v2 = ConfigV2(
+            api_key=destination.api_key,
+            budget=destination.budget,
+            last_reconciliation_date=destination.last_reconciliation_date,
+            entities={
+                name: EntityConfig(account_id=entity.account_id)
+                for name, entity in destination.entities.items()
+            },
+        )
+
+        config_v2.save()
+
+        return config_v2

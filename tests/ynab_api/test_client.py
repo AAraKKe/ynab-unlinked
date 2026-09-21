@@ -6,13 +6,12 @@ from uuid import UUID
 import pytest
 from ynab import TransactionClearedStatus
 
-from tests.factories import TransactionDetailFactory, TransactionWithYnabDataFactory
+from tests.factories import PendingImportFactory, TransactionDetailFactory
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.ynab_api.client import Client
 
 BUDGET_ID = "00000000-0000-0000-0000-000000000001"
 ACCOUNT_ID = "00000000-0000-0000-0000-00000000000a"
-PAYEE_ID = "00000000-0000-0000-0000-0000000000b0"
 
 
 @pytest.fixture
@@ -22,8 +21,8 @@ def client(ynab_api: YnabClientStub) -> Client:
 
 
 def test_api_rejects_an_unknown_name():
-    with pytest.raises(ValueError, match="'budgets' is not supported"):
-        Client(api_key="an-api-key").api("budgets")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="'payees' is not supported"):
+        Client(api_key="an-api-key").api("payees")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -60,14 +59,6 @@ def test_api_rejects_an_unknown_name():
             (BUDGET_ID,),
             {},
             id="accounts reads the accounts of a budget",
-        ),
-        pytest.param(
-            lambda c: c.payees(BUDGET_ID),
-            "payees",
-            "get_payees",
-            (BUDGET_ID,),
-            {},
-            id="payees reads the payees of a budget",
         ),
     ],
 )
@@ -138,8 +129,10 @@ def test_transactions_without_an_account_reads_the_whole_budget(
 def test_create_transactions_does_not_reach_ynab_with_nothing_to_create(
     client: Client, ynab_api: YnabClientStub
 ):
-    client.create_transactions(budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[])
-
+    assert (
+        client.create_transactions(budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[])
+        == []
+    )
     assert ynab_api.registry == {}
 
 
@@ -154,8 +147,8 @@ def created_by(ynab_api: YnabClientStub) -> list:
     [
         pytest.param(10.0, 10000, id="a whole inflow"),
         pytest.param(-25.5, -25500, id="an outflow with one decimal"),
-        pytest.param(0.15, 150, id="a small inflow of cents"),
         pytest.param(-0.15, -150, id="a small outflow of cents"),
+        pytest.param(2.01, 2010, id="an amount a float cannot represent exactly"),
     ],
 )
 def test_create_transactions_converts_amounts_to_milliunits(
@@ -164,83 +157,70 @@ def test_create_transactions_converts_amounts_to_milliunits(
     client.create_transactions(
         budget_id=BUDGET_ID,
         account_id=ACCOUNT_ID,
-        transactions=[TransactionWithYnabDataFactory(amount=amount)],
+        transactions=[PendingImportFactory(amount=amount)],
     )
 
     assert created_by(ynab_api)[0].amount == expected_milliunits
 
 
-def test_create_transactions_rounds_amounts_that_float_cannot_represent(
+def test_create_transactions_sends_the_import_id_the_account_and_the_bank_payee(
     client: Client, ynab_api: YnabClientStub
 ):
-    client.create_transactions(
-        budget_id=BUDGET_ID,
-        account_id=ACCOUNT_ID,
-        transactions=[TransactionWithYnabDataFactory(amount=2.01)],
-    )
+    pending = PendingImportFactory(payee="COMPRA EN MERCADONA 4412", amount=-12.34)
 
-    assert created_by(ynab_api)[0].amount == 2010
-
-
-def test_create_transactions_sends_the_import_id_and_the_target_account(
-    client: Client, ynab_api: YnabClientStub
-):
-    transaction = TransactionWithYnabDataFactory(amount=-12.34)
-
-    client.create_transactions(
-        budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[transaction]
-    )
+    client.create_transactions(budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[pending])
 
     call = ynab_api.api("transactions").create_transaction.call_args
     assert call.args == (BUDGET_ID,)
     [created] = call.kwargs["data"].transactions
     assert created.account_id == UUID(ACCOUNT_ID)
-    assert created.import_id == transaction.id
-    assert created.var_date == transaction.date
-    assert created.cleared is TransactionClearedStatus.CLEARED
+    assert created.import_id == pending.import_id
+    assert created.var_date == pending.transaction.date
+    # The payee is left unresolved so YNAB can apply its own rename rules to the import
+    assert created.payee_name == "COMPRA EN MERCADONA 4412"
+    assert created.payee_id is None
     # YNAB keeps imported transactions in the "unapproved" inbox until the user reviews them
     assert created.approved is False
 
 
 @pytest.mark.parametrize(
-    ("ynab_payee_id", "expected_payee_id"),
+    "cleared",
     [
-        pytest.param(PAYEE_ID, UUID(PAYEE_ID), id="a resolved payee is linked by its id"),
-        pytest.param(None, None, id="an unknown payee is created from its name alone"),
+        pytest.param(TransactionClearedStatus.CLEARED, id="an ordinary import"),
+        pytest.param(TransactionClearedStatus.RECONCILED, id="a reconciling import"),
     ],
 )
-def test_create_transactions_sends_the_payee_resolved_against_ynab(
-    client: Client,
-    ynab_api: YnabClientStub,
-    ynab_payee_id: str | None,
-    expected_payee_id: UUID | None,
+def test_create_transactions_applies_the_same_cleared_status_to_every_row(
+    client: Client, ynab_api: YnabClientStub, cleared: TransactionClearedStatus
 ):
-    transaction = TransactionWithYnabDataFactory(payee="COMPRA EN MERCADONA 4412")
-    transaction.ynab_payee = "Mercadona"
-    transaction.ynab_payee_id = ynab_payee_id
-
     client.create_transactions(
-        budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[transaction]
+        budget_id=BUDGET_ID,
+        account_id=ACCOUNT_ID,
+        transactions=[PendingImportFactory(), PendingImportFactory(amount=-3.0)],
+        cleared=cleared,
     )
 
-    [created] = created_by(ynab_api)
-    assert created.payee_name == "Mercadona"
-    assert created.payee_id == expected_payee_id
+    assert [t.cleared for t in created_by(ynab_api)] == [cleared, cleared]
 
 
-def test_create_transactions_keeps_the_import_id_of_each_duplicate(
-    client: Client, ynab_api: YnabClientStub
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        pytest.param(["YNAB:-10000:2025-05-15:1"], ["YNAB:-10000:2025-05-15:1"], id="a rejection"),
+        pytest.param(None, [], id="a response that omits the field"),
+    ],
+)
+def test_create_transactions_returns_the_import_ids_ynab_rejected(
+    client: Client, ynab_api: YnabClientStub, answer: list[str] | None, expected: list[str]
 ):
-    first = TransactionWithYnabDataFactory(amount=-12.34)
-    duplicate = TransactionWithYnabDataFactory(amount=-12.34)
-    duplicate.counter = 1
+    api = ynab_api.api("transactions")
+    api.create_transaction.return_value.data.duplicate_import_ids = answer
 
-    client.create_transactions(
-        budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[first, duplicate]
+    duplicates = client.create_transactions(
+        budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[PendingImportFactory()]
     )
 
-    assert [t.import_id for t in created_by(ynab_api)] == [first.id, duplicate.id]
-    assert first.id != duplicate.id
+    assert duplicates == expected
 
 
 def test_update_transactions_does_not_reach_ynab_with_nothing_to_update(

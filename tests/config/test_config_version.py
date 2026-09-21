@@ -8,7 +8,8 @@ from ynab_unlinked.config.migrations.base import Version
 @pytest.mark.usefixtures("config")
 @pytest.mark.parametrize(
     "config, expected",
-    [[f"V{i}", f"V{i}"] for i in range(1, MAX_CONFIG_VERSION + 1)] + [["V0", "V2"]],
+    [[f"V{i}", f"V{i}"] for i in range(1, MAX_CONFIG_VERSION + 1)]
+    + [["V0", f"V{MAX_CONFIG_VERSION}"]],
     indirect=["config"],
     ids=[f"V{i}" for i in range(1, MAX_CONFIG_VERSION + 1)] + ["invalid_version"],
 )

@@ -9,29 +9,27 @@ from ynab import (
     Configuration,
     NewTransaction,
     PatchTransactionsWrapper,
-    Payee,
-    PayeesApi,
     PlanDetail,
     PlansApi,
     PlanSummary,
     PostTransactionsWrapper,
     SaveTransactionWithIdOrImportId,
+    TransactionClearedStatus,
     TransactionDetail,
     TransactionsApi,
 )
 
-from ynab_unlinked.models import TransactionWithYnabData
+from ynab_unlinked.models import PendingImport, milliunits
 
 
 class ApisType(TypedDict):
     budget: type[PlansApi]
     accounts: type[AccountsApi]
     transactions: type[TransactionsApi]
-    payees: type[PayeesApi]
 
 
-SupportedApisType = PlansApi | AccountsApi | TransactionsApi | PayeesApi
-SupportedApisNames = Literal["budget", "accounts", "transactions", "payees"]
+SupportedApisType = PlansApi | AccountsApi | TransactionsApi
+SupportedApisNames = Literal["budget", "accounts", "transactions"]
 
 
 class Client:
@@ -42,7 +40,6 @@ class Client:
             "budget": PlansApi,
             "accounts": AccountsApi,
             "transactions": TransactionsApi,
-            "payees": PayeesApi,
         }
 
     @overload
@@ -53,9 +50,6 @@ class Client:
 
     @overload
     def api(self, api_name: Literal["transactions"]) -> TransactionsApi: ...
-
-    @overload
-    def api(self, api_name: Literal["payees"]) -> PayeesApi: ...
 
     def api(self, api_name: SupportedApisNames) -> SupportedApisType:
         if (api := self._apis.get(api_name)) is None:
@@ -103,19 +97,16 @@ class Client:
 
         return response.data.transactions
 
-    def payees(self, budget_id: str) -> list[Payee]:
-        api = self.api("payees")
-        response = api.get_payees(budget_id)
-        return response.data.payees
-
     def create_transactions(
         self,
         budget_id: str,
         account_id: str,
-        transactions: list[TransactionWithYnabData],
-    ):
+        transactions: list[PendingImport],
+        cleared: TransactionClearedStatus = TransactionClearedStatus.CLEARED,
+    ) -> list[str]:
+        """Import the transactions and return the import ids YNAB rejected as duplicates."""
         if not transactions:
-            return
+            return []
 
         api = self.api("transactions")
 
@@ -123,21 +114,22 @@ class Client:
         transactions_to_create = [
             NewTransaction(
                 account_id=account_uuid,
-                date=t.date,
-                payee_id=UUID(t.ynab_payee_id) if t.ynab_payee_id else None,
-                payee_name=t.ynab_payee,
-                cleared=t.cleared,
-                amount=round(t.amount * 1000),
+                date=pending.transaction.date,
+                payee_name=pending.transaction.payee,
+                cleared=cleared,
+                amount=milliunits(pending.transaction.amount),
                 approved=False,
-                import_id=t.id,
+                import_id=pending.import_id,
             )
-            for t in transactions
+            for pending in transactions
         ]
 
-        api.create_transaction(
+        response = api.create_transaction(
             budget_id,
             data=PostTransactionsWrapper(transactions=transactions_to_create),
         )
+
+        return response.data.duplicate_import_ids or []
 
     def update_transactions(self, budget_id: str, transactions: list[TransactionDetail]):
         if not transactions:

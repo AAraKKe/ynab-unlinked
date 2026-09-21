@@ -42,8 +42,7 @@ def privacy_summary() -> None:
             [
                 "Your YNAB Personal Access Token (plaintext)",
                 "Selected budget metadata (id, name, date and currency formats)",
-                "Per-entity checkpoints (last processed date and transaction hash)",
-                "Payee rules",
+                "The YNAB account each entity imports into",
                 "Last reconciliation date",
             ]
         )

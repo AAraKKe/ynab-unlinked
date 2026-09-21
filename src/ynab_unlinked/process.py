@@ -1,76 +1,21 @@
 import datetime as dt
-from collections.abc import Generator
 from pathlib import Path
 
 import typer
 from ynab import TransactionClearedStatus
 
 from ynab_unlinked import display
-from ynab_unlinked.config import ConfigV2
-from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
-from ynab_unlinked.config.models.shared import Checkpoint, EntityConfig
+from ynab_unlinked.config import ConfigV3
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.display import bullet_list, confirm, console, info, process, question
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.exceptions import ParsingError
-from ynab_unlinked.matcher import match_transactions
-from ynab_unlinked.models import MatchStatus, Transaction, TransactionWithYnabData
-from ynab_unlinked.payee import set_payee_from_ynab
-from ynab_unlinked.utils import (
-    display_partial_matches,
-    display_transaction_table,
-    display_transactions_to_upload,
-)
+from ynab_unlinked.models import assign_import_ids
+from ynab_unlinked.utils import display_import_table, display_transaction_table
 from ynab_unlinked.ynab_api.client import Client
 
-# Request transactions to the YNAB API from the last checkpoint date minus 10 days for buffer
-TRANSACTIONS_DAYES_BEFORE_LAST_EXTRACTION = 10
 
-
-def add_past_to_transactions(transactions: list[Transaction], checkpoint: Checkpoint | None):
-    if checkpoint is None:
-        return
-
-    for t in transactions:
-        if t.date < checkpoint.latest_date_processed + dt.timedelta(
-            days=TRANSACTION_GRACE_PERIOD_DAYS
-        ):
-            t.past = True
-
-
-def add_counter_to_existing_transactions(transactions: list[Transaction]):
-    """
-    This method check every transaction that has the same date, payee and amount
-    and increments its counter to ensure that they have a unique import ID when
-    being added to YNAB.
-    """
-    counters: dict[str, int] = {}
-    for t in transactions:
-        if t.id not in counters:
-            counters[t.id] = 0
-        else:
-            counters[t.id] += 1
-            t.counter = counters[t.id]
-
-
-def preprocess_transactions(transactions: list[Transaction], checkpoint: Checkpoint | None):
-    add_past_to_transactions(transactions, checkpoint)
-    add_counter_to_existing_transactions(transactions)
-
-
-def filter_transactions(
-    transactions: list[Transaction], checkpoint: Checkpoint | None
-) -> Generator[Transaction]:
-    # Checkpoint filtering has many issues when dealing with old trasactions that took time to
-    # be processed. While we rethink it lets just not filter them
-    # if checkpoint is None:
-    yield from transactions
-    return
-
-    # yield from (t for t in transactions if t.date >= checkpoint.latest_date_processed)
-
-
-def get_or_prompt_account_id(config: ConfigV2, entity_name: str, force_prompt: bool) -> str:
+def get_or_prompt_account_id(config: ConfigV3, entity_name: str, force_prompt: bool) -> str:
     if entity_name in config.entities and not force_prompt:
         return config.entities[entity_name].account_id
 
@@ -93,7 +38,7 @@ def get_or_prompt_account_id(config: ConfigV2, entity_name: str, force_prompt: b
 
     account_id = str(account.id)
     if not force_prompt:
-        config.entities[entity_name] = EntityConfig(account_id=account_id)
+        config.set_entity_account(entity_name, account_id)
         config.save()
 
     return account_id
@@ -105,7 +50,7 @@ def process_transactions(
     context: YnabUnlinkedContext,
 ) -> None:
     """
-    Process the transactions from the input file, match them with YNAB data, and upload them to YNAB.
+    Process the transactions from the input file and import them into YNAB.
 
     If the Entity calling this method does not have a config stored, the user will be prompted to select an account
     this entity should publish transactions to. This account will be used moving forward when using this entity.
@@ -115,10 +60,9 @@ def process_transactions(
     """
 
     config = context.config
-    show = context.show
-    reconcile = context.reconcile
-
-    acount_id = get_or_prompt_account_id(config, entity.name(), force_prompt=context.choose_account)
+    account_id = get_or_prompt_account_id(
+        config, entity.name(), force_prompt=context.choose_account
+    )
 
     try:
         parsed_input = entity.parse(input_file, context)
@@ -127,92 +71,60 @@ def process_transactions(
         display.console().print(f"  Message: {e.message}")
         raise typer.Exit(1) from e
 
-    entity_config = config.entity(entity.name())
-    checkpoint = entity_config.checkpoint if entity_config is not None else None
-
-    preprocess_transactions(parsed_input, checkpoint)
-
-    if show:
+    if context.show:
         display_transaction_table(parsed_input, context.formatter)
         return
 
-    transactions = [
-        TransactionWithYnabData(t)
-        for t in filter_transactions(
-            parsed_input,
-            checkpoint,
-        )
-    ]
-
-    if not transactions:
+    if not parsed_input:
         info("🎉 All done! Nothing to do.")
         return
 
+    pending = assign_import_ids(parsed_input)
+
     client = Client(config.api_key)
     budget_id = config.budget.id
-
-    earliest_transaction = min(t.date for t in transactions)
+    earliest_transaction = min(t.date for t in parsed_input)
 
     with process("Reading transactions..."):
         ynab_transactions = client.transactions(
             budget_id=budget_id,
-            account_id=acount_id,
+            account_id=account_id,
             since_date=earliest_transaction - dt.timedelta(days=context.buffer),
         )
     display.success("✔ Transactions read")
 
-    with process("Augmenting transactions..."):
-        match_transactions(transactions, ynab_transactions, reconcile, config)
-        set_payee_from_ynab(transactions, client, config)
-    display.success("✔ Transactions augmneted with YNAB information")
+    known_ids = {t.import_id for t in ynab_transactions if t.import_id is not None}
+    already_imported = {
+        p.import_id for p in pending if p.import_id in known_ids or p.legacy_import_id in known_ids
+    }
 
-    if reconcile:
-        for t in transactions:
-            if t.needs_creation:
-                t.cleared = TransactionClearedStatus.RECONCILED
+    display_import_table(pending, already_imported, context.formatter)
 
-    display_transactions_to_upload(transactions, context.formatter)
-
-    if not any(t.needs_creation for t in transactions):
+    to_create = [p for p in pending if p.import_id not in already_imported]
+    if not to_create:
         info("🎉 All done! Nothing to do.")
-        config.update_and_save(max(transactions, key=lambda t: t.date), entity.name())
         return
 
-    if partial_matches := [
-        t for t in transactions if t.match_status is MatchStatus.PARTIAL_MATCH and t.needs_creation
-    ]:
-        display_partial_matches(partial_matches, context.formatter)
-        display.info(
-            "\nIf these partial matches are ok, you can accept them and we will keep track of the "
-            "payee name for future reference."
+    display.info(f"Transactions to import:       {len(to_create)}")
+
+    if not confirm("Do you want to continue and create the transactions?"):
+        return
+
+    with process("Creating transactions..."):
+        duplicates = client.create_transactions(
+            budget_id=budget_id,
+            account_id=account_id,
+            transactions=to_create,
+            cleared=(
+                TransactionClearedStatus.RECONCILED
+                if context.reconcile
+                else TransactionClearedStatus.CLEARED
+            ),
         )
-        final_matching = (
-            MatchStatus.MATCHED
-            if confirm("Do you want to accept these matches?")
-            else MatchStatus.UNMATCHED
-        )
-        for t in partial_matches:
-            t.match_status = final_matching
-            if final_matching == MatchStatus.UNMATCHED:
-                t.reset_matching()
 
-        if final_matching == MatchStatus.MATCHED:
-            # If the user agreed to match these, add renaming rules to config
-            config.add_payee_rules(partial_matches)
+    if duplicates:
+        display.warning(f"YNAB rejected {len(duplicates)} of them as already imported:")
+        console().print(bullet_list(duplicates))
 
-    with process("Preparing transactions to upload..."):
-        new_transactions = [t for t in transactions if t.needs_creation]
-
-    display.info(f"Transactions to import:       {len(new_transactions)}")
-
-    if confirm("Do you want to continue and create the transactions?"):
-        with process("Creating/Updating transactions..."):
-            client.create_transactions(
-                budget_id=budget_id,
-                account_id=acount_id,
-                transactions=new_transactions,
-            )
-
-        config.update_and_save(max(transactions, key=lambda t: t.date), entity.name())
-
-    display.info("🎉 All done!")
+    created = len(to_create) - len(duplicates)
+    display.success(f"🎉 All done! {created} transaction{'' if created == 1 else 's'} imported.")

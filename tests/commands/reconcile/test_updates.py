@@ -7,7 +7,7 @@ import pytest
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
-from ynab_unlinked.config import ConfigV2
+from ynab_unlinked.config import ConfigV3
 
 from .harness import (
     CHECKING_ID,
@@ -19,14 +19,14 @@ from .harness import (
     updates_sent,
 )
 
-pytestmark = pytest.mark.version("V2")
+pytestmark = pytest.mark.version("V3")
 
 CHECKING = AccountFactory(id=CHECKING_ID, name="Checking")
 SAVINGS = AccountFactory(id=SAVINGS_ID, name="Savings")
 
 
 def test_reconcile_hands_the_app_the_pending_transactions_and_the_budget_formatter(
-    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV2, tui: TuiStub
+    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV3, tui: TuiStub
 ):
     given_ynab_data(
         ynab,
@@ -48,7 +48,7 @@ def test_reconcile_hands_the_app_the_pending_transactions_and_the_budget_formatt
 
 
 def test_reconcile_marks_every_cleared_transaction_of_a_selected_account(
-    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV2, tui: TuiStub
+    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV3, tui: TuiStub
 ):
     given_ynab_data(
         ynab,
@@ -72,7 +72,7 @@ def test_reconcile_marks_every_cleared_transaction_of_a_selected_account(
 
 
 def test_reconcile_only_updates_the_transactions_picked_in_the_app(
-    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV2, tui: TuiStub
+    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV3, tui: TuiStub
 ):
     given_ynab_data(
         ynab,
@@ -98,7 +98,7 @@ def test_reconcile_only_updates_the_transactions_picked_in_the_app(
 
 
 def test_reconcile_moves_the_checkpoint_to_the_latest_reconciled_transaction(
-    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV2, tui: TuiStub
+    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV3, tui: TuiStub
 ):
     given_ynab_data(
         ynab,
@@ -117,7 +117,7 @@ def test_reconcile_moves_the_checkpoint_to_the_latest_reconciled_transaction(
 
     assert result.exit_code == 0, result.output
     # The grace period rewinds the checkpoint so late-cleared transactions are seen again
-    assert ConfigV2.load().last_reconciliation_date == dt.date(2025, 5, 18)
+    assert ConfigV3.load().last_reconciliation_date == dt.date(2025, 5, 18)
 
 
 @pytest.mark.parametrize(
@@ -132,7 +132,7 @@ def test_reconcile_leaves_ynab_untouched_when_the_app_is_dismissed(
     expected_output: str,
     yul: CliRunner,
     ynab: YnabClientStub,
-    stored_config: ConfigV2,
+    stored_config: ConfigV3,
     tui: TuiStub,
 ):
     given_ynab_data(ynab, [TransactionDetailFactory(account_id=CHECKING_ID)], [CHECKING])
@@ -143,11 +143,11 @@ def test_reconcile_leaves_ynab_untouched_when_the_app_is_dismissed(
     assert result.exit_code == 0, result.output
     assert expected_output in result.output
     ynab.transactions().update_transactions.assert_not_called()
-    assert ConfigV2.load().last_reconciliation_date is None
+    assert ConfigV3.load().last_reconciliation_date is None
 
 
 def test_reconcile_does_nothing_when_the_confirmed_selection_is_empty(
-    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV2, tui: TuiStub
+    yul: CliRunner, ynab: YnabClientStub, stored_config: ConfigV3, tui: TuiStub
 ):
     given_ynab_data(
         ynab,
@@ -159,4 +159,4 @@ def test_reconcile_does_nothing_when_the_confirmed_selection_is_empty(
 
     assert result.exit_code == 0, result.output
     ynab.transactions().update_transactions.assert_not_called()
-    assert ConfigV2.load().last_reconciliation_date is None
+    assert ConfigV3.load().last_reconciliation_date is None

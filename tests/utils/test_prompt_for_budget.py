@@ -81,7 +81,7 @@ def test_selected_budget_details_are_mapped_into_the_config_budget(client, answe
     }
 
 
-@pytest.mark.version("V2")
+@pytest.mark.version("V3")
 @pytest.mark.usefixtures("config")
 def test_api_key_is_taken_from_the_config_when_not_provided(client, answer):
     answer("1")

@@ -11,7 +11,7 @@ from ynab import TransactionClearedStatus
 from ynab_unlinked.choices import Choice
 from ynab_unlinked.config import Config
 from ynab_unlinked.formatter import Formatter
-from ynab_unlinked.models import TransactionWithYnabData
+from ynab_unlinked.models import cleared_str
 
 POSITIVE_COLOR = "lightgreen"
 NEGATIVE_COLOR = "lightcoral"
@@ -44,13 +44,13 @@ class AccountTable(Container):
             negative_style=NEGATIVE_COLOR,
         )
 
-        cleared_str = balance_str(account.cleared_balance / 1000)
-        uncleared_str = balance_str(account.uncleared_balance / 1000)
+        cleared_balance = balance_str(account.cleared_balance / 1000)
+        uncleared_balance = balance_str(account.uncleared_balance / 1000)
         balance_str = balance_str(account.balance / 1000)
 
         return (
-            f"[dim]Cleared:[/dim] {cleared_str} + "
-            f"[dim]Uncleared:[/dim] {uncleared_str} "
+            f"[dim]Cleared:[/dim] {cleared_balance} + "
+            f"[dim]Uncleared:[/dim] {uncleared_balance} "
             f"[dim]= Balance[/dim] {balance_str}"
         )
 
@@ -60,7 +60,7 @@ class AccountTable(Container):
         if choice.is_selected:
             status = TransactionClearedStatus.RECONCILED
 
-        return TransactionWithYnabData.cleared_str(status)
+        return cleared_str(status)
 
     def choice_to_table(self) -> DataTable:
         table = DataTable(cursor_type="row")

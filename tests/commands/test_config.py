@@ -11,7 +11,7 @@ from tests.factories import PlanDetailFactory, SdkCurrencyFormatFactory
 from tests.helpers.config import ConfigFiles
 from tests.helpers.types import CliRunner
 
-pytestmark = pytest.mark.version("V2")
+pytestmark = pytest.mark.version("V3")
 
 # Wide enough that Rich does not wrap the JSON or the stored paths across lines.
 WIDE_TERMINAL = {"COLUMNS": "1000"}
@@ -25,7 +25,7 @@ def test_config_show_prints_the_stored_configuration(yul: CliRunner):
     shown = json.loads(result.output)
     assert shown["api_key"] == "my-api-key"
     assert shown["budget"]["name"] == "My Budget"
-    assert shown["version"] == "V2"
+    assert shown["version"] == "V3"
 
 
 def test_config_set_api_key_replaces_the_key_on_disk(

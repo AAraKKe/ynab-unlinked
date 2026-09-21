@@ -3,13 +3,13 @@ import json
 from pathlib import Path
 
 from tests.factories import DEFAULT_DATE
-from ynab_unlinked.config.models.v2 import ConfigV2
+from ynab_unlinked.config import ConfigV3
 
 BUDGET_ID = "00000000-0000-0000-0000-000000000001"
 ACCOUNT_ID = "00000000-0000-0000-0000-00000000000a"
 OTHER_ACCOUNT_ID = "00000000-0000-0000-0000-00000000000b"
 CLOSED_ACCOUNT_ID = "00000000-0000-0000-0000-00000000000c"
-REGISTERED_ENTITY = {"test": {"account_id": ACCOUNT_ID, "checkpoint": None}}
+REGISTERED_ENTITY = {"test": {"account_id": ACCOUNT_ID}}
 
 # The export under test covers the days leading to the frozen `today`
 THREE_DAYS_AGO = DEFAULT_DATE - dt.timedelta(days=3)
@@ -18,11 +18,7 @@ FIVE_DAYS_AGO = DEFAULT_DATE - dt.timedelta(days=5)
 TODAY = dt.datetime.combine(DEFAULT_DATE, dt.time())
 
 
-def write_config(
-    path: Path,
-    entities: dict[str, dict] | None = None,
-    payee_rules: dict[str, list[str]] | None = None,
-) -> None:
+def write_config(path: Path, entities: dict[str, dict] | None = None) -> None:
     path.write_text(
         json.dumps(
             {
@@ -43,12 +39,11 @@ def write_config(
                 },
                 "last_reconciliation_date": None,
                 "entities": REGISTERED_ENTITY if entities is None else entities,
-                "payee_rules": payee_rules or {},
-                "version": "V2",
+                "version": "V3",
             }
         )
     )
 
 
-def saved_config(config_file: Path) -> ConfigV2:
-    return ConfigV2.model_validate_json(config_file.read_text())
+def saved_config(config_file: Path) -> ConfigV3:
+    return ConfigV3.model_validate_json(config_file.read_text())

@@ -3,9 +3,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from tests.factories import TransactionFactory
-from tests.utils.builders import column, only_table, styles
+from tests.utils.builders import column, only_table
 from ynab_unlinked.formatter import Formatter
-from ynab_unlinked.utils import MAX_PAST_TRANSACTIONS_SHOWN, display_transaction_table
+from ynab_unlinked.utils import display_transaction_table
 
 
 def test_transaction_table_splits_the_amount_into_inflow_and_outflow(
@@ -25,30 +25,12 @@ def test_transaction_table_splits_the_amount_into_inflow_and_outflow(
     assert column(table, "Outflow") == ["", "-12.34€"]
 
 
-def test_transaction_table_dims_already_processed_transactions(
-    printed: MagicMock, formatter: Formatter
-):
-    display_transaction_table(
-        [TransactionFactory(payee="Old", past=True), TransactionFactory(payee="New")],
-        formatter,
-    )
-
-    assert styles(only_table(printed)) == ["gray37", "default"]
-
-
-def test_transaction_table_stops_listing_past_transactions_at_the_cutoff(
-    printed: MagicMock, formatter: Formatter
-):
-    transactions = [
-        TransactionFactory(payee=f"Past {index}", past=True)
-        for index in range(MAX_PAST_TRANSACTIONS_SHOWN + 2)
-    ]
-    transactions.append(TransactionFactory(payee="Recent"))
+def test_transaction_table_lists_every_row_of_the_export(printed: MagicMock, formatter: Formatter):
+    transactions = [TransactionFactory(payee=f"Payee {index}") for index in range(6)]
 
     display_transaction_table(transactions, formatter)
 
-    shown = column(only_table(printed), "Payee")
-    assert shown == [f"Past {index}" for index in range(MAX_PAST_TRANSACTIONS_SHOWN - 1)] + ["..."]
+    assert column(only_table(printed), "Payee") == [f"Payee {index}" for index in range(6)]
 
 
 def test_transaction_table_of_an_empty_extract_has_no_rows(
