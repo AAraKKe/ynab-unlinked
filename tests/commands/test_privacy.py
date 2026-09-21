@@ -1,9 +1,9 @@
-from pathlib import Path
+import pytest
 
-from pytest_mock import MockerFixture
-from typer.testing import CliRunner as TyperRunner
+from tests.helpers.config import ConfigFiles
+from tests.helpers.types import CliRunner
 
-from ynab_unlinked.main import app
+pytestmark = pytest.mark.version("missing")
 
 # Wide enough that absolute test paths don't get wrapped across lines by Rich.
 WIDE_TERMINAL = {"COLUMNS": "1000"}
@@ -14,31 +14,21 @@ def _flatten(text: str) -> str:
     return text.replace("\n", "")
 
 
-def test_privacy_command_prints_resolved_storage_path(
-    tmp_path: Path, mocker: MockerFixture
-) -> None:
-    config_file = tmp_path / "ynab-unlinked" / "config.json"
-    mocker.patch("ynab_unlinked.privacy.config_path", return_value=config_file)
-
-    result = TyperRunner().invoke(app, ["privacy"], env=WIDE_TERMINAL)
+def test_privacy_command_prints_resolved_storage_path(yul: CliRunner, config_files: ConfigFiles):
+    result = yul("privacy", env=WIDE_TERMINAL)
 
     assert result.exit_code == 0, result.output
     output = _flatten(result.output)
-    assert str(config_file.parent) in output
+    assert str(config_files.v2.parent) in output
     assert "yul config reset" in output
     assert "PRIVACY.md" in output
     assert "not affiliated" in output.lower()
 
 
-def test_privacy_command_runs_without_a_config_present(
-    tmp_path: Path, mocker: MockerFixture
-) -> None:
+def test_privacy_command_runs_without_a_config_present(yul: CliRunner, config_files: ConfigFiles):
     """`yul privacy` must work even when no config has been created yet."""
-    missing_config = tmp_path / "no-such-dir" / "config.json"
-    mocker.patch("ynab_unlinked.privacy.config_path", return_value=missing_config)
-    mocker.patch("ynab_unlinked.config.core.config_path", return_value=missing_config)
-
-    result = TyperRunner().invoke(app, ["privacy"], env=WIDE_TERMINAL)
+    result = yul("privacy", env=WIDE_TERMINAL)
 
     assert result.exit_code == 0, result.output
-    assert str(missing_config.parent) in _flatten(result.output)
+    assert not config_files.v2.exists()
+    assert str(config_files.v2.parent) in _flatten(result.output)

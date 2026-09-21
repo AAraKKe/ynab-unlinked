@@ -142,7 +142,7 @@ testpaths = "tests"
 markers = ["version: used to identify the Config version used in the test"]
 
 [tool.coverage.run]
-source_pkgs = ["ynab_unlinked", "tests"]
+source_pkgs = ["ynab_unlinked"]
 branch = true
 parallel = true
 omit = ["src/ynab_unlinked/__about__.py"]
@@ -169,7 +169,6 @@ exclude_also = [
 
 [tool.coverage.paths]
 ynab_unlinked = ["src/ynab_unlinked"]
-tests = ["tests"]
 
 # ------ Environment to run towncrier ------
 [tool.hatch.envs.tc]

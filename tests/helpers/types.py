@@ -7,7 +7,9 @@ from ynab_unlinked.models import Transaction
 
 
 class CliRunner(Protocol):
-    def __call__(self, *args: str, input: str | None = None) -> Result: ...
+    def __call__(
+        self, *args: str, input: str | None = None, env: dict[str, str] | None = None
+    ) -> Result: ...
 
 
 class LoadEntityCallback(Protocol):

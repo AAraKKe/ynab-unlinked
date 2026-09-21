@@ -136,3 +136,58 @@ def test_format_date(date_format: str, date_obj: dt.date, expected_str: str):
     currency_format = CurrencyFormatFactory.build()
     formatter = Formatter(date_format, currency_format)
     assert formatter.format_date(date_obj) == expected_str
+
+
+@pytest.mark.parametrize(
+    "currency_formatter, amount, expected",
+    [
+        pytest.param(
+            CurrencyFormatFactory.build(),
+            12.34,
+            "[green]12.34€[/green]",
+            id="a positive amount takes the positive style",
+        ),
+        pytest.param(
+            CurrencyFormatFactory.build(),
+            -12.34,
+            "[red]-12.34€[/red]",
+            id="a negative amount takes the negative style",
+        ),
+    ],
+    indirect=["currency_formatter"],
+)
+def test_amount_is_wrapped_in_the_requested_style(
+    currency_formatter: Formatter, amount: float, expected: str
+):
+    formatted = currency_formatter.format_amount(
+        amount, positive_style="green", negative_style="red"
+    )
+
+    assert formatted == expected
+
+
+@pytest.mark.xfail(
+    reason=(
+        "formatter.py:33 and formatter.py:36 return before the style is applied, so the "
+        "reconcile balances lose their colour for budgets that hide the symbol or put it first"
+    ),
+    strict=True,
+)
+@pytest.mark.parametrize(
+    "currency_formatter, expected",
+    [
+        pytest.param(
+            CurrencyFormatFactory.build(symbol_first=True, currency_symbol="$", iso_code="USD"),
+            "[green]$12.34[/green]",
+            id="the symbol comes first",
+        ),
+        pytest.param(
+            CurrencyFormatFactory.build(display_symbol=False),
+            "[green]12.34[/green]",
+            id="the symbol is hidden",
+        ),
+    ],
+    indirect=["currency_formatter"],
+)
+def test_style_survives_every_symbol_placement(currency_formatter: Formatter, expected: str):
+    assert currency_formatter.format_amount(12.34, positive_style="green") == expected

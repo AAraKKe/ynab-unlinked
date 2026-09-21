@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from ynab import CurrencyFormat, DateFormat, PlanDetail
+from ynab import PlanDetail
 
+from tests.factories import PlanDetailFactory
+from tests.helpers.config import ConfigFiles
 from ynab_unlinked.config import MAX_CONFIG_VERSION
 from ynab_unlinked.config.core import VERSION_MAPPING
 from ynab_unlinked.config.migrations.base import MigrationEngine, Version
+from ynab_unlinked.config.models import ConfigV1, DeltaConfigV1ToV2
 from ynab_unlinked.ynab_api import Client
 
 if TYPE_CHECKING:
@@ -39,42 +41,16 @@ def unlink(mocker: MockerFixture):
 @pytest.fixture(autouse=True)
 def ynab_client_mock(mocker: MockerFixture):
     budget_patch = mocker.patch.object(Client, "budget")
-    budget_patch.return_value = PlanDetail(
-        id="00000000-0000-0000-0000-000000000001",
-        name="My Budget",
-        date_format=DateFormat(format="DD/MM/YYYY"),
-        currency_format=CurrencyFormat(
-            iso_code="EUR",
-            decimal_digits=2,
-            decimal_separator=".",
-            symbol_first=False,
-            group_separator=",",
-            currency_symbol="€",
-            display_symbol=True,
-            example_format="€1,234.56",
-        ),
-    )
+    budget_patch.return_value = PlanDetailFactory()
     yield
 
 
-@contextmanager
-def mock_config_paths(origin: Version, destinoation: Version):
-    # Allows mocking the versions to be returned by both config versions
-    def path_and_method(v: Version):
-        if v.version == "V1":
-            return "ynab_unlinked.config.paths.v1_config_path"
-        else:
-            return f"ynab_unlinked.config.models.{v.version.lower()}.config_path"
-
-    with (
-        patch(path_and_method(origin)) as origin_path_patch,
-        patch(path_and_method(destinoation)) as destination_path_patch,
-    ):
-        origin_path_patch.return_value = Path(f"tests/assets/config_{origin.version}/config.json")
-        destination_path_patch.return_value = Path(
-            f"tests/assets/config_{destinoation.version}/config.json"
-        )
-        yield
+@pytest.fixture(autouse=True)
+def every_version_on_disk(config_files: ConfigFiles):
+    # Migrating and rolling back both persist their result, so each version needs its own
+    # scratch copy to compare against and to write to
+    for version in ALL_VERSION_PARAMS:
+        config_files.write_asset(version)
 
 
 def all_migrations_params(rollbback=False):
@@ -92,26 +68,28 @@ def all_migrations_params(rollbback=False):
 
 @pytest.mark.parametrize("origin, destination", all_migrations_params())
 def test_migrations_on_migrate(
-    origin: Version, destination: Version, unlink: UnlinkMock, migration_engine: MigrationEngine
+    origin: Version,
+    destination: Version,
+    unlink: UnlinkMock,
+    migration_engine: MigrationEngine,
 ):
-    with mock_config_paths(origin, destination):
-        origin_class = VERSION_MAPPING.get(origin.version)
-        destination_class = VERSION_MAPPING.get(destination.version)
+    origin_class = VERSION_MAPPING.get(origin.version)
+    destination_class = VERSION_MAPPING.get(destination.version)
 
-        assert origin_class is not None, f"There is no mapping for version {origin.version}"
-        assert destination_class is not None, f"There is no mapping for version {origin.version}"
+    assert origin_class is not None, f"There is no mapping for version {origin.version}"
+    assert destination_class is not None, f"There is no mapping for version {origin.version}"
 
-        origin_config = origin_class.load()
-        destination_config = destination_class.load()
+    origin_config = origin_class.load()
+    destination_config = destination_class.load()
 
-        migrated_config = migration_engine.migrate(origin_config, destination_class)
+    migrated_config = migration_engine.migrate(origin_config, destination_class)
 
-        assert migrated_config == destination_config
+    assert migrated_config == destination_config
 
-        should_unlink = origin.version == "V1"
-        # sourcery skip: no-conditionals-in-tests
-        if should_unlink:
-            unlink.rmtree.assert_called_once()
+    should_unlink = origin.version == "V1"
+    # sourcery skip: no-conditionals-in-tests
+    if should_unlink:
+        unlink.rmtree.assert_called_once()
 
 
 @pytest.mark.parametrize("origin, destination", all_migrations_params(True))
@@ -121,21 +99,53 @@ def test_migrations_on_rollback(
     unlink: UnlinkMock,
     migration_engine: MigrationEngine,
 ):
-    with mock_config_paths(origin, destination):
-        origin_class = VERSION_MAPPING.get(origin.version)
-        destination_class = VERSION_MAPPING.get(destination.version)
+    origin_class = VERSION_MAPPING.get(origin.version)
+    destination_class = VERSION_MAPPING.get(destination.version)
 
-        assert origin_class is not None, f"There is no mapping for version {origin.version}"
-        assert destination_class is not None, f"There is no mapping for version {origin.version}"
+    assert origin_class is not None, f"There is no mapping for version {origin.version}"
+    assert destination_class is not None, f"There is no mapping for version {origin.version}"
 
-        origin_config = origin_class.load()
-        destination_config = destination_class.load()
+    origin_config = origin_class.load()
+    destination_config = destination_class.load()
 
-        migrated_config = migration_engine.rollback(origin_config, destination_class)
+    migrated_config = migration_engine.rollback(origin_config, destination_class)
 
-        assert migrated_config == destination_config
+    assert migrated_config == destination_config
 
-        should_unlink = origin.version == "V1"
-        # sourcery skip: no-conditionals-in-tests
-        if should_unlink:
-            unlink.unlink.assert_called_once()
+    should_unlink = origin.version == "V1"
+    # sourcery skip: no-conditionals-in-tests
+    if should_unlink:
+        unlink.unlink.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "budget_details, expected_message",
+    [
+        pytest.param(
+            None,
+            "Could not find budget with ID",
+            id="the budget stored in v1 no longer exists in ynab",
+        ),
+        pytest.param(
+            PlanDetailFactory(currency_format=None),
+            "has no currency format",
+            id="the budget comes back without a currency format",
+        ),
+        pytest.param(
+            PlanDetailFactory(date_format=None),
+            "has no date format",
+            id="the budget comes back without a date format",
+        ),
+    ],
+)
+def test_migration_to_v2_needs_the_full_budget_details_from_ynab(
+    mocker: MockerFixture,
+    budget_details: PlanDetail | None,
+    expected_message: str,
+):
+    # V2 keeps the budget name and formats that V1 never stored, so they have to be fetched
+    mocker.patch.object(Client, "budget", return_value=budget_details)
+    config_v1 = ConfigV1.load()
+
+    with pytest.raises(ValueError, match=expected_message):
+        DeltaConfigV1ToV2().migrate(config_v1)
