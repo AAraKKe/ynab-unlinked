@@ -44,14 +44,6 @@ def test_pretty_payee_truncates_long_payees(payee: str, expected: str):
     assert TransactionFactory(payee=payee).pretty_payee == expected
 
 
-@pytest.mark.xfail(
-    reason=(
-        "models.py:30 truncates whenever len(payee) >= 15, so a payee of exactly 15 characters "
-        "is replaced by all 15 of its characters plus an ellipsis, which is longer than the "
-        "original and falsely suggests the name was cut"
-    ),
-    strict=True,
-)
 def test_pretty_payee_leaves_a_fifteen_character_payee_alone():
     payee = "Supermercado 24"
     assert len(payee) == 15
@@ -92,14 +84,6 @@ def test_hash_ignores_the_duplicate_counter():
     assert hash(first) == hash(second)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "models.py:57-62 rebuilds the base Transaction, so __post_init__ resets past and counter. "
-        "process.preprocess_transactions assigns the counter before wrapping, so duplicated rows "
-        "of the same export all end up with counter 0 and therefore the same import_id"
-    ),
-    strict=True,
-)
 def test_wrapping_keeps_the_duplicate_counter():
     duplicate = TransactionFactory(amount=-10.5)
     duplicate.counter = 1
@@ -240,14 +224,6 @@ def test_reset_matching_unlinks_the_ynab_payee():
     assert transaction.ynab_payee_id is None
 
 
-@pytest.mark.xfail(
-    reason=(
-        "models.py:140-145 leaves cleared and ynab_id behind. A partial match against a "
-        "reconciled YNAB transaction sets cleared to RECONCILED, so when the user rejects that "
-        "match the transaction is still created in YNAB as reconciled and locked"
-    ),
-    strict=True,
-)
 def test_reset_matching_restores_the_imported_cleared_status():
     transaction = TransactionWithYnabDataFactory()
     transaction.match_status = MatchStatus.PARTIAL_MATCH

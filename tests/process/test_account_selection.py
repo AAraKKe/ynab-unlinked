@@ -86,13 +86,6 @@ def test_a_first_time_entity_is_registered_before_processing(
     assert saved_config(config_file).entities["test"].account_id == ACCOUNT_ID
 
 
-@pytest.mark.xfail(
-    reason=(
-        "process.py:129 reads config.entities[entity] but get_or_prompt_account_id only stores "
-        "the entity when force_prompt is False, so `yul load -a` on a new entity raises KeyError"
-    ),
-    strict=True,
-)
 def test_choosing_an_account_for_an_unknown_entity_does_not_crash(
     config_file: Path,
     yul: CliRunner,

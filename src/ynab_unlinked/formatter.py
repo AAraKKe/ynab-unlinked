@@ -16,7 +16,7 @@ class Formatter:
 
     def format_amount(self, amount: float, positive_style="", negative_style="") -> str:
         sign = "-" if amount < 0 else ""
-        style = positive_style if amount > 0 else negative_style
+        style = negative_style if amount < 0 else positive_style
         end_style = ""
         if style:
             end_style = f"[/{style}]"
@@ -30,11 +30,13 @@ class Formatter:
             .replace("D", self.currency_format.decimal_separator)
         )
         if not self.currency_format.display_symbol:
-            return f"{sign}{amount_str}"
+            formatted = f"{sign}{amount_str}"
+        elif self.currency_format.symbol_first:
+            formatted = f"{sign}{self.currency_format.currency_symbol}{amount_str}"
+        else:
+            formatted = f"{sign}{amount_str}{self.currency_format.currency_symbol}"
 
-        if self.currency_format.symbol_first:
-            return f"{sign}{self.currency_format.currency_symbol}{amount_str}"
-        return f"{style}{sign}{amount_str}{self.currency_format.currency_symbol}{end_style}"
+        return f"{style}{formatted}{end_style}"
 
     def format_amount_milli(self, milli_amount: int) -> str:
         amount = milli_amount / 1000.0

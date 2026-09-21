@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, assert_never, cast
+from typing import TYPE_CHECKING, cast
 
 from ynab_unlinked.entities import Entity, InputType
 
@@ -19,7 +19,6 @@ class BBVA(Entity):
     def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
         import datetime as dt
 
-        from ynab_unlinked.exceptions import ParsingError
         from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import pdf, xls
         from ynab_unlinked.utils import extract_type
@@ -29,27 +28,15 @@ class BBVA(Entity):
             case InputType.XLSX | InputType.XLS:
                 generator = xls(input_file, read_after_row_like=XLSX_ROW_TO_READ)
                 field_reader = self.__extract_fields_from_xlsx_row
-            case InputType.PDF:
+            case _:
+                # extract_type already rejected every type other than the valid ones
                 generator = pdf(input_file, allow_empty_columns=False, expected_number_of_columns=3)
                 field_reader = self.__extract_fields_from_pdf_row
-            case (InputType.TXT | InputType.CSV | InputType.HTML) as file_type:
-                raise NotImplementedError(
-                    f"BBVA does not support input file of type {file_type.value!r}"
-                )
-            case never:
-                assert_never(never)
 
         transactions = []
 
         for row in generator:
-            parsed_row = field_reader(cast(list[str], row))
-            if parsed_row is None:
-                raise ParsingError(
-                    input_file,
-                    "Malformed Transaction Table: Could not extract the date, payee and a mount for one row",
-                )
-
-            date, payee, amount = parsed_row
+            date, payee, amount = field_reader(cast(list[str], row))
 
             # It can be that the row does not represent a transaction. Skip it
             try:
@@ -61,27 +48,34 @@ class BBVA(Entity):
                 Transaction(
                     date=parsed_date,
                     payee=payee,
-                    amount=float(amount.replace("€", "").replace(",", ".")),
+                    amount=self.__parse_amount(amount),
                 )
             )
 
         return transactions
 
-    def __extract_fields_from_pdf_row(self, row: list[str]) -> tuple[str, ...] | None:
+    def __parse_amount(self, raw: str) -> float:
+        # The pdf writes amounts in the Spanish format, "-1.234,56 €", with "." as thousands
+        # separator. The xlsx carries the number itself, already with a "." as decimal point
+        cleaned = raw.replace("€", "").strip()
+        if "," in cleaned:
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        return float(cleaned)
+
+    def __extract_fields_from_pdf_row(self, row: list[str]) -> tuple[str, ...]:
         # PDFs should have three columns
         # - Date with 2 lines for the date the transaction took place and when it was approved
         # - Concept, used for payee. Sometimes 2 lines including spending category
         # - Amount
-        if len(row) != 3:
-            return None
-
-        date = row[0].splitlines()[0]
-        payee = row[1].splitlines()[0]
+        # A blank cell has no lines at all. It stays empty so the row is skipped as the
+        # non transaction it is, the way the totals row is
+        date = row[0].splitlines()[0] if row[0] else ""
+        payee = row[1].splitlines()[0] if row[1] else ""
         amount = row[2]
 
         return date, payee, amount
 
-    def __extract_fields_from_xlsx_row(self, row: list[str]) -> tuple[str, ...] | None:
+    def __extract_fields_from_xlsx_row(self, row: list[str]) -> tuple[str, ...]:
         # XLSX fields are present from 1 to 4 for date, card number, payee and amount
         return str(row[1]), str(row[3]), str(row[4])
 

@@ -44,13 +44,6 @@ def test_a_load_with_nothing_to_do_still_moves_the_checkpoint(
     assert saved_config(config_file).entities["test"].checkpoint is not None
 
 
-@pytest.mark.xfail(
-    reason=(
-        "process.py:206 checkpoints transactions[0], and match_transactions sorted the list by "
-        "date, so the checkpoint records the earliest processed date instead of the latest"
-    ),
-    strict=True,
-)
 def test_the_checkpoint_records_the_latest_processed_date(
     config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, ynab: YnabClientStub
 ):

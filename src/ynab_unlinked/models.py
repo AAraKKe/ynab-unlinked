@@ -27,7 +27,7 @@ class Transaction:
 
     @property
     def pretty_payee(self) -> str:
-        return self.payee if len(self.payee) < 15 else f"{self.payee[:15]}..."
+        return self.payee if len(self.payee) <= 15 else f"{self.payee[:15]}..."
 
     def __hash__(self) -> int:
         return hash(f"{self.date:%m-%d-%Y}{self.payee}{self.amount}")
@@ -37,14 +37,6 @@ class Transaction:
         return sha256(
             f"{self.date:%m-%d-%Y}{self.payee}{self.amount}{self.counter}".encode()
         ).hexdigest()[:30]
-
-    @property
-    def inflow(self) -> float | None:
-        return self.amount if self.amount > 0 else None
-
-    @property
-    def outflow(self) -> float | None:
-        return self.amount if self.amount < 0 else None
 
     def __repr__(self) -> str:
         return (
@@ -60,6 +52,10 @@ class TransactionWithYnabData(Transaction):
             payee=transaction.payee,
             amount=transaction.amount,
         )
+        # __post_init__ resets both, but the counter is assigned before wrapping and is what
+        # keeps the import_id of duplicated rows of the same export apart
+        self.counter = transaction.counter
+        self.past = transaction.past
         self.match_status: MatchStatus = MatchStatus.UNMATCHED
         self.partial_match: TransactionDetail | None = None
         self.ynab_id: str | None = None
@@ -143,6 +139,9 @@ class TransactionWithYnabData(Transaction):
         self.partial_match = None
         self.ynab_payee = self.payee
         self.ynab_payee_id = None
+        self.ynab_id = None
+        self.ynab_cleared = None
+        self.cleared = TransactionClearedStatus.CLEARED
 
     def update_cleared_from_ynab(self, ynab_transaction: TransactionDetail, reconcile: bool):
         if ynab_transaction.cleared is TransactionClearedStatus.RECONCILED or reconcile:

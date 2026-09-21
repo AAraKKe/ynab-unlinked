@@ -4,7 +4,6 @@ from functools import partial
 
 from textual.app import App
 from textual.containers import Container, Grid, Horizontal, VerticalScroll
-from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Label, Static, Switch
 from ynab import TransactionClearedStatus
@@ -19,11 +18,6 @@ NEGATIVE_COLOR = "lightcoral"
 
 
 class AccountTable(Container):
-    class IncludeUncleared(Message):
-        def __init__(self, value: bool):
-            self.value = value
-            super().__init__()
-
     def __init__(self, choice: Choice, formatter: Formatter):
         self.formatter = formatter
         self.choice = choice
@@ -107,13 +101,10 @@ class AccountTable(Container):
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected):
         choice_id = event.row_key.value
-        if choice_id is None:
-            return
+        # Every row is added keyed by the id of the choice it renders
+        assert choice_id is not None
 
-        child = self.choice.to_dict().get(choice_id)
-        if child is None:
-            return
-
+        child = self.choice.to_dict()[choice_id]
         child.toggle_selection()
         self.refresh(recompose=True)
 
@@ -146,7 +137,7 @@ class ReconcileModal(ModalScreen[int]):
             counter_str = (
                 "All transactions"
                 if n_child_selected == len(choice.choices)
-                else f"{n_child_selected} transactions"
+                else f"{n_child_selected} transaction{'' if n_child_selected == 1 else 's'}"
             )
             accounts_lines.append(f"- {choice.title} ({counter_str})")
 

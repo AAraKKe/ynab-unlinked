@@ -122,13 +122,6 @@ def test_incomplete_budget_details_are_rejected(
         prompt_for_budget(api_key="an-api-key")
 
 
-@pytest.mark.xfail(
-    reason=(
-        "utils.py:53 passes a generator to console().print, so the user is asked to pick a "
-        "budget by number without ever seeing the numbered list"
-    ),
-    strict=True,
-)
 def test_budget_names_are_listed_before_asking_for_a_number(client, answer, capsys):
     answer("1")
 

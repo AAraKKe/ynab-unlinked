@@ -113,6 +113,10 @@ def reconcile(
         if child.transaction and child.is_selected
     ]
 
+    if not selected_transactions:
+        display.info("Nothing to reconcile.\n👋 Bye!")
+        return
+
     for transaction in selected_transactions:
         transaction.cleared = TransactionClearedStatus.RECONCILED
 

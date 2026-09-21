@@ -138,6 +138,46 @@ def test_a_transaction_that_did_not_go_through_is_dropped(
     assert [t.payee for t in transactions] == ["Restaurante Botin"]
 
 
+@pytest.mark.parametrize(
+    ("lines", "expected_payees"),
+    [
+        pytest.param(
+            [
+                "Transacciones",
+                "15 May 2025",
+                "Restaurante Botin",
+                "-34,80 €",
+                "Preautorizacion",
+                "0,00 €",
+                "Rechazada",
+            ],
+            ["Restaurante Botin"],
+            id="the-rejected-charge-above-is-a-zero-that-was-never-imported",
+        ),
+        pytest.param(
+            [
+                "Transacciones",
+                "15 May 2025",
+                "Preautorizacion",
+                "0,00 €",
+                "Rechazada",
+                "Mercadona",
+                "-12,05 €",
+            ],
+            ["Mercadona"],
+            id="the-rejected-charge-is-the-first-entry-of-the-list",
+        ),
+    ],
+)
+def test_a_marker_never_drops_a_transaction_it_does_not_follow(
+    export, cobee_context, lines: list[str], expected_payees: list[str]
+):
+    """A rejected charge of 0,00 € is skipped as a zero, so its marker has nothing to drop."""
+    transactions = Cobee().parse(export(lines), cobee_context())
+
+    assert [t.payee for t in transactions] == expected_payees
+
+
 def test_a_zero_amount_is_not_imported(export, cobee_context):
     input_file = export(
         ["Transacciones", "15 May 2025", "Preautorizacion", "0,00 €", "Mercadona", "-12,05 €"]
@@ -155,14 +195,6 @@ def test_an_amount_before_any_date_is_rejected(export, cobee_context):
         Cobee().parse(input_file, cobee_context())
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Amounts are cleaned with replace(',', '.') only, so the thousands separator in "
-        "'1.234,56 €' becomes '1.234.56', float() fails and the line is taken for something "
-        "that is not an amount. The transaction is dropped with no warning."
-    ),
-    strict=True,
-)
 def test_an_amount_over_a_thousand_euros_is_imported(export, cobee_context):
     input_file = export(["Transacciones", "15 May 2025", "Guarderia", "-1.234,56 €"])
 

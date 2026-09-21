@@ -52,7 +52,7 @@ def pdf(
     stderr_capture = io.StringIO()
 
     with contextlib.redirect_stderr(stderr_capture), pdfplumber.open(input_file) as pdf:
-        for page_number, page in enumerate(pdf.pages):
+        for page_number, page in enumerate(pdf.pages, start=1):
             table = page.extract_table(table_settings=table_settings or {})
             if table is None:
                 raise ParsingError(

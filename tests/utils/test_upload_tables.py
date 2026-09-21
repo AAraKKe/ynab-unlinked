@@ -47,13 +47,6 @@ def test_payee_line(transaction: TransactionWithYnabData, expected: str):
     assert payee_line(transaction) == expected
 
 
-@pytest.mark.xfail(
-    reason=(
-        "utils.py:136 interpolates a None ynab_payee, so a YNAB partial match without a payee "
-        "name renders the literal 'None' instead of the imported payee"
-    ),
-    strict=True,
-)
 def test_payee_line_without_a_ynab_payee_falls_back_to_the_imported_payee():
     transaction = TransactionWithYnabDataFactory(status=MatchStatus.MATCHED, payee="Mercadona")
     transaction.ynab_payee = None

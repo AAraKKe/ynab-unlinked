@@ -76,44 +76,18 @@ def test_a_pdf_without_a_transaction_table_is_reported(context_obj: YnabUnlinked
     assert "No transaction table" in error.value.message
 
 
-@pytest.mark.xfail(
-    reason=(
-        "A blank cell reaches __extract_fields_from_pdf_row as an empty string and "
-        "''.splitlines()[0] raises IndexError (bbva.py:79). Rows that are not transactions "
-        "are meant to be skipped, and the pdf parser only rejects None columns, not empty "
-        "ones, so any table with a blank cell aborts the import."
-    ),
-    strict=True,
-)
 def test_a_pdf_row_with_a_blank_cell_is_not_a_transaction(context_obj: YnabUnlinkedContext):
     transactions = BBVA().parse(assets.path("bbva/bbva_blank_cell.pdf"), context_obj)
 
     assert [t.payee for t in transactions] == ["Netflix.com"]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Amounts are cleaned with replace(',', '.') only, so '-1.234,56 €' becomes "
-        "'-1.234.56' and float() raises ValueError. A single purchase over a thousand "
-        "euros aborts the whole import with an unhandled error."
-    ),
-    strict=True,
-)
 def test_a_charge_over_a_thousand_euros_is_imported(context_obj: YnabUnlinkedContext):
     transactions = BBVA().parse(assets.path("bbva/bbva_large_amount.pdf"), context_obj)
 
     assert [t.amount for t in transactions] == [-1234.56]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "utils.py:29 raises LookupError for an unknown extension and utils.py:33 raises "
-        "AttributeError for one this entity does not read. Neither is a ParsingError, and "
-        "process.py:123 only catches ParsingError, so handing the command the wrong file "
-        "ends in a traceback instead of a message naming the formats BBVA reads."
-    ),
-    strict=True,
-)
 @pytest.mark.parametrize(
     "suffix",
     [

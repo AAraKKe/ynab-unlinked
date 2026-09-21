@@ -174,15 +174,6 @@ def test_the_payee_list_is_read_from_ynab_only_once(
         pytest.param(
             False,
             id="a brand new transaction",
-            marks=pytest.mark.xfail(
-                reason=(
-                    "--reconcile only reaches update_cleared_from_ynab, which runs on matched "
-                    "transactions only (matcher.py:66), so a brand new transaction is still "
-                    "uploaded as cleared despite the flag promising 'Import transactions as "
-                    "reconciled instead of cleared'"
-                ),
-                strict=True,
-            ),
         ),
     ],
 )
@@ -213,15 +204,6 @@ def test_reconcile_uploads_transactions_as_reconciled(
     assert [t.cleared for t in created_transactions()] == [TransactionClearedStatus.RECONCILED]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "preprocess_transactions numbers the duplicates on the parsed Transaction objects, but "
-        "models.py:58 rebuilds them as TransactionWithYnabData, whose dataclass __post_init__ "
-        "resets counter (and past) to 0. Both copies end up with the same import_id and YNAB "
-        "drops the second one"
-    ),
-    strict=True,
-)
 def test_duplicated_transactions_in_the_export_are_both_uploaded(
     config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, created_transactions
 ):
@@ -255,13 +237,6 @@ def test_a_parsing_error_stops_the_load_with_an_error_code(
     assert "Column 3 is missing" in result.output
 
 
-@pytest.mark.xfail(
-    reason=(
-        "process.py:148 takes the minimum date of an empty list, so an export with no "
-        "transactions dies with ValueError instead of reporting nothing to do"
-    ),
-    strict=True,
-)
 def test_an_empty_export_reports_nothing_to_do(
     config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, ynab: YnabClientStub
 ):

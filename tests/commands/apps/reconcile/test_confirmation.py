@@ -90,13 +90,6 @@ def test_declining_the_confirmation_returns_to_the_app_with_the_selection_intact
             [CLEARED, UNCLEARED],
             "1 transaction",
             id="a-single-transaction-is-not-pluralised",
-            marks=pytest.mark.xfail(
-                reason=(
-                    "apps/reconcile.py:149 always appends 'transactions', so the confirmation "
-                    "reads '1 transactions' when a single transaction is selected"
-                ),
-                strict=True,
-            ),
         ),
     ],
 )
