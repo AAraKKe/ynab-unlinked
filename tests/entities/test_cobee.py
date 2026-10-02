@@ -59,7 +59,7 @@ def test_only_the_lines_below_the_transactions_heading_are_read(
 ):
     heading, *_ = IDENTIFIERS[language]
     # The page shows the available balance above the heading, in the same shape as an amount
-    input_file = export([heading, "15 May 2025", "Restaurante Botin", "-34,80 €"])
+    input_file = export([heading, "15 May 2025", "Restaurante Botin", "-34.80 €"])
 
     transactions = Cobee().parse(input_file, cobee_context(language))
 
@@ -74,12 +74,12 @@ def test_a_date_heading_applies_to_every_transaction_below_it(export, cobee_cont
             "Transacciones",
             "15 May 2025",
             "Restaurante Botin",
-            "-34,80 €",
+            "-34.80 €",
             "Mercadona",
-            "-12,05 €",
+            "-12.05 €",
             "2 May 2025",
             "Cafeteria Lolina",
-            "-2,50 €",
+            "-2.50 €",
         ]
     )
 
@@ -101,9 +101,9 @@ def test_money_added_to_the_card_is_not_a_transaction(export, cobee_context, lan
             heading,
             "1 May 2025",
             accumulation,
-            "150,00 €",
+            "150.00 €",
             "Restaurante Botin",
-            "-34,80 €",
+            "-34.80 €",
         ]
     )
 
@@ -126,9 +126,9 @@ def test_a_transaction_that_did_not_go_through_is_dropped(
             heading,
             "15 May 2025",
             "Restaurante Botin",
-            "-34,80 €",
+            "-34.80 €",
             "Mercadona",
-            "-12,05 €",
+            "-12.05 €",
             IDENTIFIERS[language][status],
         ]
     )
@@ -146,9 +146,9 @@ def test_a_transaction_that_did_not_go_through_is_dropped(
                 "Transacciones",
                 "15 May 2025",
                 "Restaurante Botin",
-                "-34,80 €",
+                "-34.80 €",
                 "Preautorizacion",
-                "0,00 €",
+                "0.00 €",
                 "Rechazada",
             ],
             ["Restaurante Botin"],
@@ -159,10 +159,10 @@ def test_a_transaction_that_did_not_go_through_is_dropped(
                 "Transacciones",
                 "15 May 2025",
                 "Preautorizacion",
-                "0,00 €",
+                "0.00 €",
                 "Rechazada",
                 "Mercadona",
-                "-12,05 €",
+                "-12.05 €",
             ],
             ["Mercadona"],
             id="the-rejected-charge-is-the-first-entry-of-the-list",
@@ -172,7 +172,7 @@ def test_a_transaction_that_did_not_go_through_is_dropped(
 def test_a_marker_never_drops_a_transaction_it_does_not_follow(
     export, cobee_context, lines: list[str], expected_payees: list[str]
 ):
-    """A rejected charge of 0,00 € is skipped as a zero, so its marker has nothing to drop."""
+    """A rejected charge of 0.00 € is skipped as a zero, so its marker has nothing to drop."""
     transactions = Cobee().parse(export(lines), cobee_context())
 
     assert [t.payee for t in transactions] == expected_payees
@@ -180,7 +180,7 @@ def test_a_marker_never_drops_a_transaction_it_does_not_follow(
 
 def test_a_zero_amount_is_not_imported(export, cobee_context):
     input_file = export(
-        ["Transacciones", "15 May 2025", "Preautorizacion", "0,00 €", "Mercadona", "-12,05 €"]
+        ["Transacciones", "15 May 2025", "Preautorizacion", "0.00 €", "Mercadona", "-12.05 €"]
     )
 
     transactions = Cobee().parse(input_file, cobee_context())
@@ -189,18 +189,34 @@ def test_a_zero_amount_is_not_imported(export, cobee_context):
 
 
 def test_an_amount_before_any_date_is_rejected(export, cobee_context):
-    input_file = export(["Transacciones", "Restaurante Botin", "-34,80 €"])
+    input_file = export(["Transacciones", "Restaurante Botin", "-34.80 €"])
 
     with pytest.raises(ValueError, match="not valid"):
         Cobee().parse(input_file, cobee_context())
 
 
-def test_an_amount_over_a_thousand_euros_is_imported(export, cobee_context):
-    input_file = export(["Transacciones", "15 May 2025", "Guarderia", "-1.234,56 €"])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("-1,234.56 €", id="english-separators-as-the-cobee-page-writes-them"),
+        pytest.param("-1.234,56 €", id="spanish-separators"),
+    ],
+)
+def test_an_amount_over_a_thousand_euros_is_imported(export, cobee_context, raw: str):
+    input_file = export(["Transacciones", "15 May 2025", "Guarderia", raw])
 
     transactions = Cobee().parse(input_file, cobee_context())
 
     assert [t.amount for t in transactions] == [-1234.56]
+
+
+def test_a_dot_is_the_decimal_separator_on_the_cobee_page(export, cobee_context):
+    # Regression: stripping every dot as a thousands separator turned 21.90 into 2190
+    input_file = export(["Transacciones", "15 May 2025", "Cafeteria", "-21.90 €"])
+
+    transactions = Cobee().parse(input_file, cobee_context())
+
+    assert [t.amount for t in transactions] == [-21.90]
 
 
 @pytest.mark.parametrize(
@@ -235,7 +251,7 @@ def test_the_load_command_needs_the_language_of_the_export(tmp_path: Path, yul: 
     """The headings are localised, so an export read with the wrong language finds nothing."""
     input_file = tmp_path / "cobee.html"
     input_file.write_text(
-        cobee_export(["Transactions", "15 May 2025", "Restaurante Botin", "-34,80 €"]),
+        cobee_export(["Transactions", "15 May 2025", "Restaurante Botin", "-34.80 €"]),
         encoding="utf-8",
     )
 

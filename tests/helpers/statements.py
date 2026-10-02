@@ -113,17 +113,17 @@ COBEE_TRANSACTIONS = [
     "Transacciones",
     "15 May 2025",
     "Restaurante Botin",
-    "-34,80 €",
+    "-34.80 €",
     "Mercadona",
-    "-12,05 €",
+    "-12.05 €",
     "Anulada",
     "2 May 2025",
     "Acumulación en tarjeta",
-    "150,00 €",
+    "150.00 €",
     "Preautorizacion",
-    "0,00 €",
+    "0.00 €",
     "Cafeteria Lolina",
-    "-2,50 €",
+    "-2.50 €",
 ]
 
 # Sabadell writes the card details twice and only starts listing operations after the

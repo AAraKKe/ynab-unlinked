@@ -131,9 +131,9 @@ class SabadellParser:
         return raw.title()
 
     def __parse_amount(self, raw: str) -> float:
-        # Sabadell uses "." as thousands separator and "," as decimal separator: 1.212,16EUR
-        cleaned = raw.replace("EUR", "").strip().replace(".", "").replace(",", ".")
-        return float(cleaned)
+        from ynab_unlinked.parsers import parse_amount
+
+        return parse_amount(raw)
 
     def name(self) -> str:
         return "sabadell"
