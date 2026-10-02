@@ -103,6 +103,7 @@ class Cobee:
         import html_text
 
         from ynab_unlinked.models import Transaction
+        from ynab_unlinked.parsers import parse_amount
 
         text = html_text.extract_text(input_file.read_text())  # type: ignore
 
@@ -134,11 +135,8 @@ class Cobee:
                 date = try_date
 
             if "€" in line:
-                # Cobee uses "." as thousands separator and "," as decimal separator
-                amount_str = line.replace("€", "").strip().replace(".", "").replace(",", ".")
-
                 try:
-                    amount = float(amount_str)
+                    amount = parse_amount(line)
                 except ValueError:
                     # If we could not convert this to float it means this is not an amount line.
                     continue

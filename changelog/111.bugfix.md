@@ -1,0 +1,1 @@
+Fix Cobee amounts being imported a hundred times too large: the page writes `21.90 €` with a dot as the decimal separator, and the recent thousands-separator fix stripped it. Amounts are now parsed by one function that accepts both `1.234,56` and `1,234.56` for every entity.

@@ -55,12 +55,9 @@ class BBVA(Entity):
         return transactions
 
     def __parse_amount(self, raw: str) -> float:
-        # The pdf writes amounts in the Spanish format, "-1.234,56 €", with "." as thousands
-        # separator. The xlsx carries the number itself, already with a "." as decimal point
-        cleaned = raw.replace("€", "").strip()
-        if "," in cleaned:
-            cleaned = cleaned.replace(".", "").replace(",", ".")
-        return float(cleaned)
+        from ynab_unlinked.parsers import parse_amount
+
+        return parse_amount(raw)
 
     def __extract_fields_from_pdf_row(self, row: list[str]) -> tuple[str, ...]:
         # PDFs should have three columns
