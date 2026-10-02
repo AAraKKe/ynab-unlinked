@@ -7,6 +7,7 @@ from ynab_unlinked.parsers import parse_amount
     ("raw", "expected"),
     [
         pytest.param("21.90 €", 21.90, id="a-dot-before-two-digits-is-the-decimal-separator"),
+        pytest.param("-€21.90", -21.90, id="the-symbol-comes-first-on-the-cobee-page"),
         pytest.param("21,90EUR", 21.90, id="a-comma-before-two-digits-is-the-decimal-separator"),
         pytest.param("-1.234,56 €", -1234.56, id="spanish-thousands-and-decimals"),
         pytest.param("-1,234.56 €", -1234.56, id="english-thousands-and-decimals"),
@@ -26,7 +27,16 @@ def test_parse_amount(raw: str, expected: float):
     assert parse_amount(raw) == expected
 
 
-@pytest.mark.parametrize("raw", ["Restaurante Botin", "€", ""])
-def test_a_line_without_digits_is_not_an_amount(raw: str):
-    with pytest.raises(ValueError, match="does not contain an amount"):
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("Restaurante Botin", id="a-payee"),
+        pytest.param("€", id="the-symbol-alone"),
+        pytest.param("", id="an-empty-line"),
+        pytest.param("Ahorras €9.86", id="a-savings-note-that-mentions-an-amount"),
+        pytest.param("12 May 2025", id="a-date"),
+    ],
+)
+def test_a_line_that_is_not_only_an_amount_is_rejected(raw: str):
+    with pytest.raises(ValueError, match="is not an amount"):
         parse_amount(raw)

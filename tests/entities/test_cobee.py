@@ -212,11 +212,37 @@ def test_an_amount_over_a_thousand_euros_is_imported(export, cobee_context, raw:
 
 def test_a_dot_is_the_decimal_separator_on_the_cobee_page(export, cobee_context):
     # Regression: stripping every dot as a thousands separator turned 21.90 into 2190
-    input_file = export(["Transacciones", "15 May 2025", "Cafeteria", "-21.90 €"])
+    input_file = export(["Transacciones", "15 May 2025", "Cafeteria", "-€21.90"])
 
     transactions = Cobee().parse(input_file, cobee_context())
 
     assert [t.amount for t in transactions] == [-21.90]
+
+
+def test_the_savings_note_under_a_purchase_is_not_a_transaction(export, cobee_context):
+    # Regression: every purchase is followed by how it was paid and how much tax it saved.
+    # Parsing "Ahorras €9.86" as an amount imported a fake inflow per purchase
+    input_file = export(
+        [
+            "Transacciones",
+            "1 Oct 2026",
+            "Glovo 01OCT M1Z4XTCK",
+            "-€21.90",
+            "Pagado de tu salario",
+            "Ahorras €9.86",
+            "GRUPO FIKAFE S.L.",
+            "-€9.90",
+            "Pago Compartido",
+            "Ahorras €1.78",
+        ]
+    )
+
+    transactions = Cobee().parse(input_file, cobee_context())
+
+    assert [(t.payee, t.amount) for t in transactions] == [
+        ("Glovo 01OCT M1Z4XTCK", -21.90),
+        ("GRUPO FIKAFE S.L.", -9.90),
+    ]
 
 
 @pytest.mark.parametrize(
