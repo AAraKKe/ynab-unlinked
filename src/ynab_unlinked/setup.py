@@ -13,7 +13,7 @@ import typer
 from ynab_unlinked.config import ConfigV3, get_config
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.display import bold, success
+from ynab_unlinked.display import bold, error, success
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.privacy import privacy_notice
 from ynab_unlinked.utils import prompt_for_api_key, prompt_for_budget
@@ -60,14 +60,21 @@ def load_context() -> YnabUnlinkedContext | None:
     return _build_context(cast(ConfigV3, config))
 
 
-def ensure_config(context: typer.Context) -> YnabUnlinkedContext:
-    """Make sure ``context.obj`` has a valid config, prompting setup if missing."""
+def ensure_config(context: typer.Context, *, interactive: bool = True) -> YnabUnlinkedContext:
+    """Make sure ``context.obj`` has a valid config, prompting setup if missing.
+
+    With ``interactive=False`` a missing config is an error, because setup needs answers
+    only a person can give.
+    """
     obj: YnabUnlinkedContext | None = context.obj
     if obj is not None:
         return obj
 
     config = get_config()
     if config is None:
+        if not interactive:
+            error("No configuration found. Run `yul setup` before using --yes.")
+            raise typer.Exit(1)
         config = run_setup()
 
     if config is None:
