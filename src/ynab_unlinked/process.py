@@ -15,9 +15,17 @@ from ynab_unlinked.utils import display_import_table, display_transaction_table
 from ynab_unlinked.ynab_api.client import Client
 
 
-def get_or_prompt_account_id(config: ConfigV3, entity_name: str, force_prompt: bool) -> str:
+def get_or_prompt_account_id(
+    config: ConfigV3, entity_name: str, force_prompt: bool, interactive: bool = True
+) -> str:
     if entity_name in config.entities and not force_prompt:
         return config.entities[entity_name].account_id
+
+    if not interactive:
+        display.error(
+            f"No saved account for {entity_name}. Run this load once without --yes to select one."
+        )
+        raise typer.Exit(1)
 
     display.info(f"Lets select the account for {entity_name.capitalize()}:")
     client = Client(config.api_key)
@@ -57,11 +65,14 @@ def process_transactions(
 
     If the user called `yul -a` the user will always be promptped to select
     and account and the selected account won't be saved for this particular entity.
+
+    With `yul load --yes` nothing is asked: the import goes ahead without confirmation and an entity
+    with no saved account is an error.
     """
 
     config = context.config
     account_id = get_or_prompt_account_id(
-        config, entity.name(), force_prompt=context.choose_account
+        config, entity.name(), force_prompt=context.choose_account, interactive=not context.yes
     )
 
     try:
@@ -107,7 +118,7 @@ def process_transactions(
 
     display.info(f"Transactions to import:       {len(to_create)}")
 
-    if not confirm("Do you want to continue and create the transactions?"):
+    if not context.yes and not confirm("Do you want to continue and create the transactions?"):
         return
 
     with process("Creating transactions..."):

@@ -4,7 +4,7 @@ from typing import Annotated
 
 import typer
 
-from ynab_unlinked import entities
+from ynab_unlinked import display, entities
 from ynab_unlinked.setup import ensure_config
 
 load = typer.Typer(
@@ -45,9 +45,25 @@ def load_callback(
             show_default=True,
         ),
     ] = 15,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            help=(
+                "Import without asking for confirmation, for use without a terminal. Exits with an "
+                "error instead of prompting when an answer is needed: there is no config yet, the "
+                "entity has no saved account, or --acount is used."
+            ),
+        ),
+    ] = False,
 ):
-    obj = ensure_config(context)
+    if yes and account:
+        display.error("--yes cannot be used with -a/--acount: selecting an account needs a prompt.")
+        raise typer.Exit(1)
 
+    obj = ensure_config(context, interactive=not yes)
+
+    obj.yes = yes
     obj.show = show
     obj.reconcile = reconcile
     obj.choose_account = account

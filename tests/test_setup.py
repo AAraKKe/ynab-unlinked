@@ -88,6 +88,32 @@ def test_a_command_without_a_config_runs_the_setup_first(
     ],
     indirect=True,
 )
+def test_yes_fails_instead_of_running_the_setup(
+    config: str,
+    config_files: ConfigFiles,
+    yul: CliRunner,
+    load_entity: LoadEntityCallback,
+    ynab_api: YnabClientStub,
+):
+    load_entity(TODAY, [TransactionFactory(date=THREE_DAYS_AGO, payee="Coffee Shop")])
+
+    result = yul("load --yes test")
+
+    assert result.exit_code != 0
+    assert "Welcome to ynab-unlinked" not in result.output
+    assert config_files.v2.is_file() == (config == "broken")
+    ynab_api.api("budget").get_plans.assert_not_called()
+    ynab_api.api("transactions").create_transaction.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        pytest.param("missing", id="there is no config file"),
+        pytest.param("broken", id="the config file has no version"),
+    ],
+    indirect=True,
+)
 @pytest.mark.usefixtures("config")
 def test_no_context_is_built_when_the_config_cannot_be_read():
     assert load_context() is None

@@ -17,8 +17,19 @@ COFFEE = {"payee": "Coffee Shop", "amount": -12.34}
 BAKERY = {"payee": "Bakery", "amount": -5.0}
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        pytest.param("load --show test", id="on its own"),
+        pytest.param("load --yes --show test", id="--yes does not turn it into an import"),
+    ],
+)
 def test_show_only_lists_the_parsed_transactions(
-    config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, ynab: YnabClientStub
+    config_file: Path,
+    yul: CliRunner,
+    load_entity: LoadEntityCallback,
+    ynab: YnabClientStub,
+    command: str,
 ):
     load_entity(
         TODAY,
@@ -28,11 +39,12 @@ def test_show_only_lists_the_parsed_transactions(
         ],
     )
 
-    result = yul("load --show test")
+    result = yul(command)
 
     assert result.exit_code == 0, result.output
     assert "Coffee Shop" in result.output
     ynab.api("transactions").get_transactions_by_account.assert_not_called()
+    ynab.api("transactions").create_transaction.assert_not_called()
 
 
 def test_new_transactions_are_imported_with_the_payee_from_the_export(
@@ -109,6 +121,7 @@ def test_declining_the_confirmation_uploads_nothing(
     result = yul("load test", input="n\n")
 
     assert result.exit_code == 0, result.output
+    assert "Do you want to continue" in result.output
     ynab.api("transactions").create_transaction.assert_not_called()
 
 
@@ -139,12 +152,14 @@ def test_the_cleared_status_the_transactions_are_imported_with(
     assert all(not t.approved for t in created_transactions())
 
 
+@pytest.mark.parametrize("command", ["load test", "load --yes test"])
 def test_a_parsing_error_stops_the_load_with_an_error_code(
     config_file: Path,
     yul: CliRunner,
     load_entity: LoadEntityCallback,
     ynab: YnabClientStub,
     mocker: MockerFixture,
+    command: str,
 ):
     load_entity(TODAY, [TransactionFactory(date=THREE_DAYS_AGO, **COFFEE)])
     mocker.patch(
@@ -152,7 +167,7 @@ def test_a_parsing_error_stops_the_load_with_an_error_code(
         side_effect=ParsingError(input_file=Path("export.xls"), message="Column 3 is missing"),
     )
 
-    result = yul("load test")
+    result = yul(command)
 
     assert result.exit_code == 1
     assert "Column 3 is missing" in result.output
