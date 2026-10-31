@@ -6,6 +6,33 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 0.10.0 (2026-10-31)
+
+### Fresh Out of the Feature Oven
+* [[#117](https://github.com/AAraKKe/ynab-unlinked/issues/117)] `yul load --yes` imports without asking for confirmation so it can run unattended, and exits with an error instead of prompting when there is no config, the entity has no saved account, or `-a/--acount` is used.
+
+### Polished Until It Shines
+* [[#109](https://github.com/AAraKKe/ynab-unlinked/issues/109)] `yul load` now identifies transactions by YNAB's own import id convention (`YNAB:<milliunits>:<date>:<occurrence>`) and lets YNAB do the matching against transactions you entered yourself. The local date, amount and payee matcher, the partial-match prompt and the payee rename rules are gone; two identical purchases on the same day now import as two transactions, transactions already in YNAB are dimmed instead of re-sent, and anything YNAB rejects as a duplicate is reported. The config moves to V3, dropping payee rules and per-entity checkpoints.
+
+### Bugs Squashed, Peace Restored
+* [[#108](https://github.com/AAraKKe/ynab-unlinked/issues/108)] Fix a batch of bugs found while raising test coverage: duplicated rows in one export were uploaded with the same import id so YNAB kept only one; amounts were truncated instead of rounded to milliunits; the checkpoint recorded the earliest processed date instead of the latest; `--reconcile` did not apply to new transactions; rejecting a partial match against a reconciled transaction created it as reconciled; very short payees matched unrelated YNAB payees; the resolved YNAB payee was never sent on upload; `yul load -a` crashed for an entity without a config entry; an empty export crashed; BBVA and Cobee could not read amounts over a thousand and BBVA crashed on a blank PDF cell; a Cobee cancellation marker could drop the wrong transaction; an unsupported input file ended in a traceback instead of an error message; the budget list was not shown during setup; a partial match without a payee rendered `None`; amount colours were dropped for symbol-first currencies; reconciling with nothing selected crashed; the reconcile confirmation read "1 transactions".
+* [[#111](https://github.com/AAraKKe/ynab-unlinked/issues/111)] Fix Cobee amounts being imported a hundred times too large: the page writes `21.90 €` with a dot as the decimal separator, and the recent thousands-separator fix stripped it. Amounts are now parsed by one function that accepts both `1.234,56` and `1,234.56` for every entity.
+* [[#101](https://github.com/AAraKKe/ynab-unlinked/issues/101)] Fix Sabadell parsing of amounts with thousands separators (e.g. `1.212,16EUR`), which previously crashed the `load sabadell` command.
+
+### Under the Hood Upgrades
+* [[#110](https://github.com/AAraKKe/ynab-unlinked/issues/110)] Bump platformdirs from 4.11.10 to 4.11.11 in the python-dependencies group
+* [[#107](https://github.com/AAraKKe/ynab-unlinked/issues/107)] Bump platformdirs from 4.11.9 to 4.11.10 in the python-dependencies group
+* [[#115](https://github.com/AAraKKe/ynab-unlinked/issues/115)] Bump the github-actions group across 1 directory with 3 updates
+* [[#100](https://github.com/AAraKKe/ynab-unlinked/issues/100)] Bump the github-actions group across 1 directory with 5 updates
+* [[#106](https://github.com/AAraKKe/ynab-unlinked/issues/106)] Bump the github-actions group with 2 updates
+* [[#116](https://github.com/AAraKKe/ynab-unlinked/issues/116)] Bump the python-dependencies group across 1 directory with 4 updates
+* [[#104](https://github.com/AAraKKe/ynab-unlinked/issues/104)] Bump the python-dependencies group across 1 directory with 7 updates
+* Bump ynab from 4.1.0 to 4.4.0
+
+### For the Builders: Dev Experience Upgrades
+* [[#103](https://github.com/AAraKKe/ynab-unlinked/issues/103)] Add `AGENTS.md` and `CLAUDE.md` with a project overview and workflow for coding agents.
+* [[#105](https://github.com/AAraKKe/ynab-unlinked/issues/105)] Raise test coverage of `src` from 51% to 98% with behaviour tests for matching, the load pipeline, entities, parsers, config, reconcile and the TUI. Strict xfails pin the bugs found on the way. Coverage now reports `src` only.
+
 ## ynab-unlinked 0.9.0 (2026-05-01)
 
 ### Fresh Out of the Feature Oven
