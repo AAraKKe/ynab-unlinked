@@ -4,7 +4,7 @@ import datetime as dt
 import uuid
 
 import pytest
-from urllib3.exceptions import MaxRetryError, NewConnectionError
+from urllib3.exceptions import MaxRetryError, NewConnectionError, ReadTimeoutError
 from ynab import ApiException
 
 from tests.helpers.types import CliRunner, LoadEntityCallback
@@ -20,6 +20,12 @@ OFFLINE = MaxRetryError(
     reason=NewConnectionError(None, "Failed to resolve 'api.ynab.com'"),  # type: ignore[arg-type]
 )
 
+TIMED_OUT = MaxRetryError(
+    pool=None,  # type: ignore[arg-type]
+    url="/plans",
+    reason=ReadTimeoutError(None, "/plans", "Read timed out."),  # type: ignore[arg-type]
+)
+
 
 @pytest.mark.parametrize(
     ("failure", "message"),
@@ -29,8 +35,9 @@ OFFLINE = MaxRetryError(
         (ApiException(status=500, reason="Internal Server Error"), "YNAB answered 500"),
         (ApiException(status=0, reason="SSL handshake failed"), "Could not reach YNAB"),
         (OFFLINE, "Could not reach YNAB"),
+        (TIMED_OUT, "YNAB did not answer in time"),
     ],
-    ids=["token-rejected", "rate-limited", "server-error", "tls", "offline"],
+    ids=["token-rejected", "rate-limited", "server-error", "tls", "offline", "timed-out"],
 )
 def test_a_failed_ynab_call_is_one_line_and_exit_code_1(
     yul: CliRunner, ynab_api: YnabClientStub, failure: Exception, message: str

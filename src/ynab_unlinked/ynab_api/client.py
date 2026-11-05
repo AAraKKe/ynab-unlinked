@@ -1,6 +1,6 @@
 import datetime as dt
 from collections.abc import Sequence
-from typing import Literal, Protocol, TypedDict, overload
+from typing import Any, Literal, Protocol, TypedDict, overload
 from uuid import UUID
 
 from ynab import (
@@ -35,6 +35,37 @@ FULL_SYNC_SINCE = dt.date(1900, 1, 1)
 one year ago when none is given."""
 
 
+REQUEST_TIMEOUT: tuple[float, float] = (10, 60)
+"""Seconds to connect to YNAB and to wait for each part of its answer. Without one, a stalled
+connection would hang `yul load` and the app's sync forever."""
+
+
+class _TimedApiClient(ApiClient):
+    """The SDK's client with `REQUEST_TIMEOUT` on every request that names none.
+
+    Every endpoint method of the SDK goes through `call_api`, so no call of `Client` can be
+    made without a timeout.
+    """
+
+    def call_api(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        method: Any,
+        url: Any,
+        header_params: Any = None,
+        body: Any = None,
+        post_params: Any = None,
+        _request_timeout: Any = None,
+    ) -> Any:
+        return super().call_api(
+            method,
+            url,
+            header_params,
+            body,
+            post_params,
+            REQUEST_TIMEOUT if _request_timeout is None else _request_timeout,
+        )
+
+
 class ApisType(TypedDict):
     budget: type[PlansApi]
     accounts: type[AccountsApi]
@@ -58,7 +89,7 @@ class BalanceAdjustment(Protocol):
 class Client:
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.__client = ApiClient(Configuration(access_token=api_key))
+        self.__client = _TimedApiClient(Configuration(access_token=api_key))
         self._apis: ApisType = {
             "budget": PlansApi,
             "accounts": AccountsApi,

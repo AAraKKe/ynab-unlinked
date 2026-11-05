@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from urllib3.exceptions import HTTPError
+from urllib3.exceptions import HTTPError, MaxRetryError, NewConnectionError
+from urllib3.exceptions import TimeoutError as RequestTimeout
 from ynab import ApiException
 
 YNAB_ERRORS: tuple[type[Exception], ...] = (ApiException, HTTPError)
@@ -24,8 +25,18 @@ def api_reason(error: ApiException) -> str | None:
     return reason if isinstance(reason, str) else None
 
 
+def timed_out(error: BaseException) -> bool:
+    """Whether YNAB did not answer in time (`REQUEST_TIMEOUT`), after urllib3's retries too."""
+    if isinstance(error, MaxRetryError) and error.reason is not None:
+        error = error.reason
+    # urllib3 makes a refused or unresolved connection a timeout too, for old callers
+    return isinstance(error, RequestTimeout) and not isinstance(error, NewConnectionError)
+
+
 def ynab_error_message(error: Exception) -> str:
     """One line for the CLI: why the call failed and what to do about it."""
+    if timed_out(error):
+        return "YNAB did not answer in time. Check your internet connection and try again."
     if isinstance(error, ApiException) and (status := api_status(error)):
         if status == 401:
             return "YNAB rejected the token. Run `yul config set api_key` to enter a new one."

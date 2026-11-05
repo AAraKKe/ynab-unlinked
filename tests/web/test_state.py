@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
+from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 from ynab import TransactionsResponse, TransactionsResponseData
 
 from tests.factories import TransactionDetailFactory
@@ -14,6 +15,7 @@ from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store
 from ynab_unlinked.web.state import AppState, NotConfiguredError
+from ynab_unlinked.web.wording import YNAB_TIMED_OUT
 from ynab_unlinked.ynab_api import Client
 
 pytestmark = pytest.mark.version("V4")
@@ -124,6 +126,25 @@ async def test_a_reset_deletes_the_budget_copy_and_forgets_the_config(
     assert not app_state.configured
     app_state.sync_in_background()
     assert not app_state.syncing
+
+
+async def test_a_resync_that_ynab_never_answers_gives_up_and_lets_a_reset_run(
+    app_state: AppState, ynab_api: YnabClientStub, store_file: Path
+):
+    # What the client raises once `REQUEST_TIMEOUT` passed with no answer
+    ynab_api.api("transactions").get_transactions.side_effect = MaxRetryError(
+        pool=None,  # type: ignore[arg-type]
+        url="/plans/budget/transactions",
+        reason=ReadTimeoutError(None, "/transactions", "Read timed out."),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(MaxRetryError):
+        await asyncio.wait_for(app_state.resync(), 5)
+
+    assert not app_state.syncing
+    assert app_state.sync_error == YNAB_TIMED_OUT
+    # The reset waits for the sync: it would hang forever if the sync never ended
+    await asyncio.wait_for(app_state.reset([store_file]), 5)
 
 
 async def test_a_sync_during_a_resync_joins_it(app_state: AppState, ynab_api: YnabClientStub):

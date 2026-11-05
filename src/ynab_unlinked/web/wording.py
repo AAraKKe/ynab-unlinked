@@ -11,11 +11,12 @@ import re
 
 from ynab import ApiException, PlanSummary
 
-from ynab_unlinked.ynab_api.errors import api_reason, api_status
+from ynab_unlinked.ynab_api.errors import api_reason, api_status, timed_out
 
 COPY_TITLE = "Copying your budget from YNAB"
 COPY_NOTE = "The first time can take a minute."
 COPY_FAILED = "Could not copy your budget from YNAB. Check your connection and try again."
+YNAB_TIMED_OUT = "YNAB did not answer in time. Check your connection and try again."
 
 _NUMBER = re.compile(r"\d{4,}")
 
@@ -43,6 +44,8 @@ def human_size(size: int) -> str:
 
 def ynab_error_message(error: Exception) -> str:
     """What to tell the user when a call to YNAB fails."""
+    if timed_out(error):
+        return YNAB_TIMED_OUT
     if isinstance(error, ApiException):
         status = api_status(error)
         if status == 401:
@@ -81,6 +84,7 @@ __all__ = [
     "COPY_FAILED",
     "COPY_NOTE",
     "COPY_TITLE",
+    "YNAB_TIMED_OUT",
     "budget_caption",
     "copy_error_message",
     "copy_line",

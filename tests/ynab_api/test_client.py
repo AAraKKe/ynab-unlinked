@@ -1,14 +1,22 @@
 """Every test here asserts on the call the wrapper makes to the generated YNAB API."""
 
 import datetime as dt
+import socket
+import time
+from collections.abc import Iterator
 from uuid import UUID
 
 import pytest
+from pytest_mock import MockerFixture
 from ynab import ApiException, TransactionClearedStatus
 
 from tests.factories import PendingImportFactory, TransactionDetailFactory
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked.web.wording import YNAB_TIMED_OUT
+from ynab_unlinked.web.wording import ynab_error_message as web_error_message
+from ynab_unlinked.ynab_api import client as client_module
 from ynab_unlinked.ynab_api.client import Client
+from ynab_unlinked.ynab_api.errors import YNAB_ERRORS, timed_out, ynab_error_message
 
 BUDGET_ID = "00000000-0000-0000-0000-000000000001"
 ACCOUNT_ID = "00000000-0000-0000-0000-00000000000a"
@@ -300,3 +308,45 @@ def test_transaction_exists_lets_other_errors_through(client: Client, ynab_api: 
 
     with pytest.raises(ApiException):
         client.transaction_exists(BUDGET_ID, "t-1")
+
+
+@pytest.fixture
+def silent_ynab() -> Iterator[str]:
+    """A server that accepts the connection and never answers, like a stalled YNAB."""
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen(8)
+        yield f"http://127.0.0.1:{server.getsockname()[1]}"
+
+
+def test_a_request_that_gets_no_answer_gives_up_with_one_line(
+    silent_ynab: str, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(client_module, "REQUEST_TIMEOUT", (0.2, 0.2))
+    client = Client(api_key="an-api-key")
+    client._Client__client.configuration.host = silent_ynab  # type: ignore[attr-defined]
+
+    started = time.monotonic()
+    with pytest.raises(YNAB_ERRORS) as raised:
+        client.budgets()
+
+    assert time.monotonic() - started < 10
+    assert timed_out(raised.value)
+    assert ynab_error_message(raised.value) == (
+        "YNAB did not answer in time. Check your internet connection and try again."
+    )
+    assert web_error_message(raised.value) == YNAB_TIMED_OUT
+
+
+def test_every_request_carries_the_timeout(mocker: MockerFixture):
+    client = Client(api_key="an-api-key")
+    request = mocker.patch.object(
+        client._Client__client.rest_client,  # type: ignore[attr-defined]
+        "request",
+        side_effect=ApiException(status=500, reason="stop here"),
+    )
+
+    with pytest.raises(ApiException):
+        client.accounts(BUDGET_ID)
+
+    assert request.call_args.kwargs["_request_timeout"] == client_module.REQUEST_TIMEOUT == (10, 60)

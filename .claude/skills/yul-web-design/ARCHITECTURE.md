@@ -33,7 +33,9 @@ src/ynab_unlinked/
   store/                 SQLite transaction store and sync (2.7)
   commands/              CLI. Thin: parse args, call core, print.
   web/                   NiceGUI app, only importable when the `web` extra is installed (3)
-  ynab_api/client.py     the only place that talks to the SDK
+  ynab_api/client.py     the only place that talks to the SDK; every request has
+                         REQUEST_TIMEOUT (10 s to connect, 60 s per read) unless it names one
+  ynab_api/errors.py     YNAB_ERRORS, api_status, timed_out(error), the CLI's one line message
 ```
 
 Rules:
@@ -605,7 +607,8 @@ web/
   buckets.py           STYLES (BucketStyle: title, group_title, series slot, colour per bucket),
                        NET_WORTH_ORDER, SETTINGS_ORDER, SERIES_BUCKETS
   wording.py           pure (no NiceGUI): plural, short_date, human_size, budget_caption,
-                       ynab_error_message, copy_error_message, copy_line, COPY_*
+                       ynab_error_message (a timeout reads YNAB_TIMED_OUT, also the sync
+                       chip's error), copy_error_message, copy_line, COPY_*
   ynab.py              fetch_budgets(token), load_budget(client, id) -> Budget,
                        stored_accounts(sdk accounts), fallback_accounts(config)
   paths.py             every page's path (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,

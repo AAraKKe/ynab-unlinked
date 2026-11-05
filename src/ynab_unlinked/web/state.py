@@ -26,9 +26,10 @@ from ynab_unlinked.entities.registry import LoaderSpec, loaders
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.local_data import delete_local_data
 from ynab_unlinked.store import Store, StoredAccount, StoreError, SyncResult, store_path
-from ynab_unlinked.web.wording import plural
+from ynab_unlinked.web.wording import YNAB_TIMED_OUT, plural
 from ynab_unlinked.web.ynab import stored_accounts
 from ynab_unlinked.ynab_api import Client
+from ynab_unlinked.ynab_api.errors import timed_out
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +235,8 @@ class AppState:
         try:
             result = await run.io_bound(self.store.sync, client, config.budget.id, progress)
         except Exception as error:
-            self.sync_error = str(error)
+            # A stalled YNAB gives up after `REQUEST_TIMEOUT`, in the user's words
+            self.sync_error = YNAB_TIMED_OUT if timed_out(error) else str(error)
             raise
         self.sync_error = None
         self.last_sync = await run.io_bound(self.store.last_sync, config.budget.id)
