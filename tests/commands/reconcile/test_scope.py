@@ -9,6 +9,7 @@ from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.ynab_api import FULL_SYNC_SINCE
 
 from .harness import CHECKING_ID, RECONCILED, TuiStub, given_ynab_data
 
@@ -48,7 +49,10 @@ def test_reconcile_stops_when_there_is_nothing_left_to_reconcile(
     ("command", "last_reconciliation_date", "expected_since_date"),
     [
         pytest.param(
-            "reconcile", None, None, id="without-a-checkpoint-every-transaction-is-fetched"
+            "reconcile",
+            None,
+            FULL_SYNC_SINCE,
+            id="without-a-checkpoint-every-transaction-is-fetched",
         ),
         pytest.param(
             "reconcile",
@@ -71,7 +75,7 @@ def test_reconcile_stops_when_there_is_nothing_left_to_reconcile(
         pytest.param(
             "reconcile --all",
             dt.date(2025, 5, 10),
-            None,
+            FULL_SYNC_SINCE,
             id="all-ignores-the-checkpoint-altogether",
         ),
     ],

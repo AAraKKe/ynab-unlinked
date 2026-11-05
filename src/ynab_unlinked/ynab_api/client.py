@@ -25,6 +25,10 @@ from ynab_unlinked.models import PendingImport, milliunits
 
 NOT_FOUND_STATUS = 404
 
+FULL_SYNC_SINCE = dt.date(1900, 1, 1)
+"""The `since_date` that asks for every transaction. YNAB's get_transactions defaults to about
+one year ago when none is given."""
+
 
 class ApisType(TypedDict):
     budget: type[PlansApi]

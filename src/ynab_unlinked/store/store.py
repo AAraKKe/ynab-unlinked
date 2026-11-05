@@ -15,11 +15,7 @@ from ynab import Account, ApiException, TransactionClearedStatus, TransactionDet
 
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 from ynab_unlinked.store import migrations
-from ynab_unlinked.ynab_api import Client
-
-# YNAB's get_transactions defaults to one year ago without a since_date, so a full sync asks
-# for everything explicitly. The balance history needs the starting balance transaction.
-FULL_SYNC_SINCE = dt.date(1900, 1, 1)
+from ynab_unlinked.ynab_api import FULL_SYNC_SINCE, Client
 
 # What YNAB answers when the server knowledge of a delta request is no longer valid. The only
 # way out is a full fetch.

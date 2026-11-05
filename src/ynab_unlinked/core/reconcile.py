@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from ynab import Account, TransactionClearedStatus, TransactionDetail
 
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
-from ynab_unlinked.ynab_api.client import Client
+from ynab_unlinked.ynab_api.client import FULL_SYNC_SINCE, Client
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,10 @@ def reconciliation_overview(
     reconcile are left out.
     """
     progress.start("Getting transactions from YNAB")
-    transactions = client.transactions(budget_id=budget_id, since_date=since)
+    # Without a date YNAB answers about one year only, not all of them
+    transactions = client.transactions(
+        budget_id=budget_id, since_date=FULL_SYNC_SINCE if since is None else since
+    )
     accounts = client.accounts(budget_id=budget_id)
     progress.done()
 

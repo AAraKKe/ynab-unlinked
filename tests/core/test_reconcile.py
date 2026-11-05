@@ -12,7 +12,7 @@ from ynab_unlinked.core.reconcile import (
     reconcile,
     reconciliation_overview,
 )
-from ynab_unlinked.ynab_api import Client
+from ynab_unlinked.ynab_api import FULL_SYNC_SINCE, Client
 
 CHECKING_ID = uuid.UUID(int=10)
 SAVINGS_ID = uuid.UUID(int=11)
@@ -94,16 +94,23 @@ def test_reconciliation_overview_groups_what_is_left_per_account(
     ] == expected
 
 
-@pytest.mark.parametrize("since", [None, dt.date(2025, 5, 1)], ids=["everything", "a-date"])
+@pytest.mark.parametrize(
+    ("since", "since_date"),
+    [
+        # Without a since_date YNAB only answers about one year
+        pytest.param(None, FULL_SYNC_SINCE, id="everything-asks-for-it-explicitly"),
+        pytest.param(dt.date(2025, 5, 1), dt.date(2025, 5, 1), id="a-date"),
+    ],
+)
 def test_reconciliation_overview_asks_ynab_for_the_transactions_since_the_date(
-    client: Client, ynab_api: YnabClientStub, since: dt.date | None
+    client: Client, ynab_api: YnabClientStub, since: dt.date | None, since_date: dt.date
 ):
     ynab_holds(ynab_api, [], [CHECKING])
 
     reconciliation_overview(client, BUDGET_ID, since=since)
 
     call = ynab_api.api("transactions").get_transactions.call_args
-    assert call.kwargs == {"plan_id": BUDGET_ID, "since_date": since}
+    assert call.kwargs == {"plan_id": BUDGET_ID, "since_date": since_date}
 
 
 def test_reconcile_patches_every_transaction_as_reconciled(
