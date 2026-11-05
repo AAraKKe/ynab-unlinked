@@ -144,11 +144,6 @@ def test_migrations_on_rollback(
     "budget_details, expected_message",
     [
         pytest.param(
-            None,
-            "Could not find budget with ID",
-            id="the budget stored in v1 no longer exists in ynab",
-        ),
-        pytest.param(
             PlanDetailFactory(currency_format=None),
             "has no currency format",
             id="the budget comes back without a currency format",

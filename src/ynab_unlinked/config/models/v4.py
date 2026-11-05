@@ -60,9 +60,9 @@ class ConfigV4(BaseModel):
     last_reconciliation_date: dt.date | None = None
     # Keyed by Entity.name()
     loaders: dict[str, LoaderConfig] = Field(default_factory=dict)
-    accounts: list[TrackedAccount] = Field(default_factory=list)
+    accounts: list[TrackedAccount] = Field(default_factory=list[TrackedAccount])
     adjustments: Adjustments = Field(default_factory=Adjustments)
-    debt_mappings: list[DebtMapping] = Field(default_factory=list)
+    debt_mappings: list[DebtMapping] = Field(default_factory=list[DebtMapping])
     version_number: str = Field(default="V4", alias="version")
 
     model_config = ConfigDict(validate_by_alias=True, serialize_by_alias=True)

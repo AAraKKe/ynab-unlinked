@@ -30,7 +30,7 @@ def isolated_migration_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     and an unbuilt engine.
     """
     monkeypatch.setattr(MigrationEngine, "_deltas", {})
-    monkeypatch.setattr(core, "_MIGRATION_ENGINE", None)
+    monkeypatch.setattr(core, "_engine", None)
 
 
 @pytest.fixture

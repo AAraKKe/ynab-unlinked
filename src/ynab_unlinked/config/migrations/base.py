@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from functools import reduce
-from typing import cast
+from typing import Any, cast
 
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 
@@ -51,13 +50,18 @@ class Delta[V1: Versioned, V2: Versioned](ABC):
         return self.on_rollback(destination)
 
 
+# A registry chains deltas between different versions, so it holds them with their versions
+# erased; `MigrationEngine` checks the type of what the chain produces.
+type AnyDelta = Delta[Any, Any]
+
+
 class DeltaRegistry:
     def __init__(self, cls: str):
         self.cls = cls
-        self.origins: dict[str, Delta] = {}
-        self.destinations: dict[str, Delta] = {}
+        self.origins: dict[str, AnyDelta] = {}
+        self.destinations: dict[str, AnyDelta] = {}
 
-    def add_delta(self, delta: Delta):
+    def add_delta(self, delta: AnyDelta) -> None:
         """Registers delta in the registry"""
         if delta.origin.version in self.origins:
             raise ValueError(
@@ -66,7 +70,7 @@ class DeltaRegistry:
         self.origins[delta.origin.version] = delta
         self.destinations[delta.destination.version] = delta
 
-    def migration_sequence(self, origin: Version, destination: Version) -> Sequence[Delta]:
+    def migration_sequence(self, origin: Version, destination: Version) -> Sequence[AnyDelta]:
         """
         Returns a sequence of detlas to be chained to reach the version in `destination`
         from the `origin` version.
@@ -80,7 +84,7 @@ class DeltaRegistry:
         if origin == destination:
             return []
 
-        sequence = []
+        sequence: list[AnyDelta] = []
         is_rollback = origin > destination
         current_delta = (
             self.destinations.get(origin.version)
@@ -115,7 +119,7 @@ class DeltaRegistry:
 class MigrationEngine:
     _deltas: dict[str, DeltaRegistry] = {}
 
-    def __init__(self, cls: str, *deltas: Delta):
+    def __init__(self, cls: str, *deltas: AnyDelta):
         if cls in self.__class__._deltas:
             raise ValueError(f"The class {cls!r} has already been registered for migrations")
 
@@ -125,7 +129,7 @@ class MigrationEngine:
 
         self.__class__._deltas[cls] = registry
 
-    def __prepare_sequence(self, origin: Version, destination: Version) -> Sequence[Delta]:
+    def __prepare_sequence(self, origin: Version, destination: Version) -> Sequence[AnyDelta]:
         origin_entity, _ = origin
         destination_entity, _ = destination
 
@@ -142,18 +146,17 @@ class MigrationEngine:
     def migrate[V: Versioned](
         self, origin: Versioned, to_type: type[V], progress: Progress = NO_PROGRESS
     ) -> V:
-        deltas: Sequence[Delta[Versioned, V]] = self.__prepare_sequence(
-            origin.version(), to_type.version()
-        )
+        deltas = self.__prepare_sequence(origin.version(), to_type.version())
 
         # Nothing to report when the origin already is the requested version
         if not deltas:
             progress = NO_PROGRESS
 
         progress.start(f"Migrating {origin.version()} to {to_type.version()}")
+        result: Versioned = origin
         try:
-            # Use of cast because migrate does not produce the same type as output as its input and reduce expects that
-            result = cast(V, reduce(lambda result, delta: delta.migrate(result), deltas, origin))
+            for delta in deltas:
+                result = delta.migrate(result)
         except Exception:
             # Stop the spinner a frontend may be showing, but do not announce success
             progress.done()
@@ -169,16 +172,11 @@ class MigrationEngine:
         return result
 
     def rollback[V: Versioned](self, destination: Versioned, to_type: type[V]) -> V:
-        deltas: Sequence[Delta[Versioned, V]] = self.__prepare_sequence(
-            destination.version(), to_type.version()
-        )
+        deltas = self.__prepare_sequence(destination.version(), to_type.version())
 
-        # Ignore typing for a similar reason as in migrate but with the complication that
-        # now the types to be returned are inverted
-        result: V = reduce(
-            lambda result, delta: delta.rollback(result),  # type: ignore
-            deltas,
-            destination,
-        )
+        result: Versioned = destination
+        for delta in deltas:
+            result = delta.rollback(result)
 
-        return result
+        # The registry erases the versions of its deltas: the last one ends at `to_type`
+        return cast(V, result)

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Final
+from typing import Final, cast
 
 from pydantic import ValidationError
 
@@ -39,16 +39,16 @@ class ConfigError(ValueError):
 
 # Deltas are registered on a registry shared by every MigrationEngine, so a second engine for
 # the same class would be rejected. Build the one engine for the config lazily and reuse it.
-_MIGRATION_ENGINE: MigrationEngine | None = None
+_engine: MigrationEngine | None = None
 
 
 def migration_engine() -> MigrationEngine:
-    global _MIGRATION_ENGINE
-    if _MIGRATION_ENGINE is None:
-        _MIGRATION_ENGINE = MigrationEngine(
+    global _engine
+    if _engine is None:
+        _engine = MigrationEngine(
             "Config", DeltaConfigV1ToV2(), DeltaConfigV2ToV3(), DeltaConfigV3ToV4()
         )
-    return _MIGRATION_ENGINE
+    return _engine
 
 
 def config_version() -> Version:
@@ -71,7 +71,8 @@ def config_version() -> Version:
 
     if not isinstance(content, dict) or "version" not in content:
         raise ConfigError(f"The config file {latest_config_path} has no version, it is malformed.")
-    return Version("Config", str(content["version"]))
+    version = cast(dict[str, object], content)["version"]
+    return Version("Config", str(version))
 
 
 def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
@@ -103,7 +104,7 @@ def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
 
 
 @contextmanager
-def edit_config(fallback: LATEST_CONFIG_TYPE | None = None) -> Iterator[LATEST_CONFIG_TYPE]:
+def edit_config(fallback: LATEST_CONFIG_TYPE | None = None) -> Generator[LATEST_CONFIG_TYPE]:
     """Change the config on disk in a block: read again, change what the block yields, save.
 
     The file is read again first, so what another process (the CLI or the app) saved since

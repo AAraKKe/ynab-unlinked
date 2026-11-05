@@ -20,8 +20,6 @@ class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
         client = Client(origin.api_key)
 
         budget_details = client.budget(origin.budget_id)
-        if budget_details is None:
-            raise ValueError(f"Could not find budget with ID {origin.budget_id}")
 
         if budget_details.currency_format is None:
             raise ValueError(f"Budget {budget_details.name!r} has no currency format")
