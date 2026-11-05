@@ -5,9 +5,10 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import re
-from collections import Counter
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from decimal import ROUND_HALF_UP, Decimal
 
 from ynab import TransactionClearedStatus
 
@@ -16,9 +17,13 @@ from ynab_unlinked.ynab_api.client import Client
 
 logger = logging.getLogger(__name__)
 
-_LEADING_PM_SIGNS = re.compile(r"([+\-\s]*)(.*)")
-_INVALID_AMOUNT_CHARS = re.compile(r"[^\d\.,+\-]")
 _SEPARATORS = (".", ",")
+_CURRENCY = r"[^\s\d.,+\-]+"
+_AMOUNT = re.compile(
+    rf"(?P<sign_before>[+-]*)\s*(?P<prefix>{_CURRENCY})?\s*(?P<sign_after>[+-]*)\s*"
+    r"(?:(?P<whole>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?P<fraction>\d*))?|\.(?P<bare_fraction>\d+))"
+    rf"\s*(?P<suffix>{_CURRENCY})?"
+)
 
 
 @dataclass(frozen=True)
@@ -149,63 +154,68 @@ def parse_amount_to_milliunits(
     """
     Parse what a user typed as a balance (`123.45`, `-50`, `$1,000.00`) into milliunits.
 
-    Lenient on purpose: anything that is not a digit, `.`, `,`, `+` or `-` is dropped (so a
-    currency symbol or ISO code before or after the number is fine), the group separator is
-    ignored, extra decimals are rounded to three and mixing `+` and `-` is rejected. Returns
-    None when the text holds no number.
+    Strict, because the result is written to YNAB without a dialog in between: a currency
+    symbol or a three letter ISO code may come before or after the number and a run of one
+    sign (`-`, `+`) before it, nothing else. Group separators are only accepted between
+    groups of three digits, so `12,34` in a `.` decimal budget is rejected rather than read
+    as 1,234. Extra decimals are rounded to three. Returns None for anything else.
 
     Pass the budget's separators to read amounts the way the budget writes them: with
-    `decimal_separator=","` and `group_separator="."`, `1.000,50` is 1000500. A group
-    separator other than `.` or `,` (a space, an apostrophe) is dropped like any symbol.
+    `decimal_separator=","` and `group_separator="."`, `1.000,50` is 1000500. Any group
+    separator works (a space, an apostrophe) as long as it sits between digits.
     """
     if decimal_separator not in _SEPARATORS:
         raise ValueError(f"Unsupported decimal separator {decimal_separator!r}")
     if group_separator == decimal_separator:
         raise ValueError("The decimal and group separators must differ")
 
-    # Rewrite the budget's separators into the `.` decimal and `,` group the parsing below
-    # expects. A single table, so swapping `.` and `,` happens in one pass.
-    roles = {decimal_separator: "."}
-    if group_separator in _SEPARATORS:
-        roles[group_separator] = ","
-
-    cleaned = _cleanup_amount(text.translate(str.maketrans(roles)))
-    if not cleaned:
+    normalised = _normalise(text, decimal_separator, group_separator)
+    if normalised is None or (match := _AMOUNT.fullmatch(normalised)) is None:
         logger.warning("Could not parse currency value: %s", text)
         return None
 
-    try:
-        value = _to_float(_keep_one_leading_sign(cleaned))
-    except ValueError as e:
-        logger.warning("Could not parse currency value: %s (Reason: %s)", text, e)
+    signs = match["sign_before"] + match["sign_after"]
+    currencies = [c for c in (match["prefix"], match["suffix"]) if c]
+    if len(set(signs)) > 1 or len(currencies) > 1 or not all(map(_is_currency, currencies)):
+        logger.warning("Could not parse currency value: %s", text)
         return None
 
-    return int(f"{value:.3f}".replace(".", ""))
+    whole = (match["whole"] or "0").replace(",", "")
+    fraction = match["fraction"] or match["bare_fraction"] or "0"
+    value = Decimal(f"{whole}.{fraction}") * 1000
+    milliunits = int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))
+    return -milliunits if signs.startswith("-") else milliunits
 
 
-def _cleanup_amount(value: str) -> str:
-    cleaned = _INVALID_AMOUNT_CHARS.sub("", value)
-    if cleaned.startswith("."):
-        cleaned = cleaned.lstrip(".").lstrip(",")
-        cleaned = f"0.{cleaned}"
-    return cleaned.strip(".,+")
+def _normalise(text: str, decimal_separator: str, group_separator: str) -> str | None:
+    """`text` with the `.` decimal and `,` group separators `_AMOUNT` reads.
+
+    A group separator only counts between two digits, so a space separator does not eat the
+    space before the currency. None when a `.` or `,` is left that is neither: `1.5` in a
+    budget with `,` decimals.
+    """
+    placeholder = "\0"
+    if group_separator:
+        between_digits = rf"(?<=\d){re.escape(group_separator)}(?=\d)"
+        text = re.sub(between_digits, placeholder, text)
+
+    if any(separator in text for separator in _SEPARATORS if separator != decimal_separator):
+        return None
+    return text.replace(decimal_separator, ".").replace(placeholder, ",").strip()
 
 
-def _keep_one_leading_sign(value: str) -> str:
-    """Collapse the leading run of signs into a single `-` when the run starts with one."""
-    signs = Counter(value)
-    if signs.get("+", 0) > 0 and signs.get("-", 0) > 0:
-        raise ValueError(f"The value {value} contains an unsupported set of +/- signs")
+def _is_currency(token: str) -> bool:
+    """A three letter ISO code (`EUR`) or a currency symbol, maybe after letters (`€`, `US$`)."""
+    # Upper case like ISO 4217 writes them, so that `12abc` is not taken for an amount
+    if len(token) == 3 and token.isascii() and token.isalpha() and token.isupper():
+        return True
 
-    match = _LEADING_PM_SIGNS.match(value.lstrip())
-    assert match is not None  # both groups accept the empty string
-    leading_signs, rest = match[1], match[2]
-    sign = "-" if leading_signs.startswith("-") else ""
-    return f"{sign}{rest}"
-
-
-def _to_float(value: str) -> float:
-    try:
-        return float(value.replace(",", "_"))
-    except ValueError:
-        raise ValueError(f"Cannot convert the value {value} into a number") from None
+    split = len(token)
+    while split and unicodedata.category(token[split - 1]) == "Sc":
+        split -= 1
+    letters, symbol = token[:split], token[split:]
+    return (
+        bool(symbol)
+        and len(letters) <= 2
+        and (not letters or letters.isascii() and letters.isalpha())
+    )

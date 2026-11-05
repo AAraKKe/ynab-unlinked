@@ -244,8 +244,19 @@ def test_create_adjustments_does_not_reach_ynab_with_nothing_to_adjust(
         pytest.param("  - $ 1,234.56 ", -1_234_560, id="whitespace_and_symbols"),
         pytest.param("+€50", 50_000, id="leading_plus_and_euro"),
         pytest.param("---$700", -700_000, id="repeated_minus_signs"),
-        # A comma is always a thousands separator, even after a euro sign
-        pytest.param("€99,99", 9_999_000, id="comma_is_never_a_decimal_separator"),
+        pytest.param("US$12.50", 12_500, id="symbol_after_letters"),
+        pytest.param("1,234,567.891", 1_234_567_891, id="several_groups"),
+        pytest.param("0.0005", 1, id="half_a_milliunit_rounds_up"),
+        # Read as 1,234 before: a typo for 12.34 must not write a balance 100 times too big
+        pytest.param("12,34", None, id="a_group_of_two_digits"),
+        pytest.param("€99,99", None, id="comma_decimals_in_a_dot_budget"),
+        pytest.param("1,2345", None, id="a_group_of_four_digits"),
+        pytest.param("50,", None, id="a_trailing_group_separator"),
+        pytest.param("1e5", None, id="scientific_notation"),
+        pytest.param("12abc", None, id="letters_that_are_no_currency"),
+        pytest.param("100 dollars", None, id="a_currency_name"),
+        pytest.param("EUR 5 USD", None, id="two_currencies"),
+        pytest.param("1_000", None, id="an_underscore"),
         pytest.param("abc", None, id="invalid_alpha"),
         pytest.param("", None, id="invalid_empty"),
         pytest.param("$", None, id="invalid_just_symbol"),
@@ -272,7 +283,11 @@ def test_parse_amount_to_milliunits(text: str, expected: int | None):
         pytest.param("€ 1.000,50", 1_000_500, id="leading_euro"),
         pytest.param("EUR -12,30", -12_300, id="leading_iso_code"),
         pytest.param("12,30 EUR", 12_300, id="trailing_iso_code"),
+        pytest.param("€1.000,50", 1_000_500, id="leading_euro_without_space"),
         pytest.param("1,2,3", None, id="invalid_multiple_decimals"),
+        pytest.param("1.5", None, id="a_dot_that_is_no_group_of_three"),
+        pytest.param("1,234.56", None, id="dot_decimals_in_a_comma_budget"),
+        pytest.param(".5", None, id="a_dot_where_the_decimal_comma_goes"),
     ],
 )
 def test_parse_amount_with_comma_decimals(text: str, expected: int | None):
@@ -307,9 +322,12 @@ def test_a_number_without_separators_reads_the_same_with_any_separators(
     [
         pytest.param("1 000,50", 1_000_500, id="space_group"),
         pytest.param("1 000", 1_000_000, id="space_group_no_decimals"),
+        pytest.param("1 000,50 €", 1_000_500, id="space_group_and_trailing_symbol"),
     ],
 )
-def test_a_group_separator_that_is_not_a_dot_or_comma_is_dropped(text: str, expected: int):
+def test_a_group_separator_that_is_not_a_dot_or_comma_is_read_between_digits(
+    text: str, expected: int
+):
     assert parse_amount_to_milliunits(text, decimal_separator=",", group_separator=" ") == expected
 
 
