@@ -322,7 +322,7 @@ async def test_with_nothing_waiting_needs_you_says_so_in_one_quiet_line(
         ),
         (
             {"sabadell": 40, "test": 1},
-            f"Last imports · Cobee never · Sabadell {home.short_date(days_ago(40), dt.date.today())}",
+            "Last imports · Cobee never · Sabadell {40 days ago}",
         ),
         (
             {"sabadell": 1, "cobee": 0},
@@ -335,6 +335,11 @@ async def test_the_last_imports_line_lists_the_banks_in_registry_order(
     store: Store, user: User, expected: str
 ):
     await _home(user)
+
+    # The day the import was logged on this computer: 40 days of UTC time can cross a
+    # daylight saving change and land on another local day than 40 calendar days ago
+    forty_days_ago = (now() - dt.timedelta(days=40)).astimezone().date()
+    expected = expected.replace("{40 days ago}", home.short_date(forty_days_ago, dt.date.today()))
 
     # BBVA is not set up in the config and the "test" loader is not a bank yul ships
     assert _text(user, "last-imports") == expected
