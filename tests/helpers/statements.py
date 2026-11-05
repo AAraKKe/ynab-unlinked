@@ -1,6 +1,6 @@
 """Generators for the binary fixtures under `tests/assets`.
 
-Run `hatch run dev:python tests/helpers/statements.py` to rewrite every fixture this module
+Run `uv run python tests/helpers/statements.py` to rewrite every fixture this module
 owns. They are generated rather than hand made: there is no PDF writing library in the
 dependency tree, so `write_pdf` emits a minimal PDF by hand, a grid of stroked lines plus
 Helvetica text placed inside it, which is what pdfplumber needs to recover a table with
