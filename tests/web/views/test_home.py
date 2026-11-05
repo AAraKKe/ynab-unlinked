@@ -24,13 +24,16 @@ pytestmark = pytest.mark.version("V4")
 
 CLEARED = TransactionClearedStatus.CLEARED
 RECONCILED = TransactionClearedStatus.RECONCILED
-NOW = dt.datetime.now(dt.UTC)
-TODAY = dt.date.today()
 LOADERS = ("sabadell", "cobee", "test")  # the loaders in the V4 config asset
 
 
+def now() -> dt.datetime:
+    """Read in the test, never at import: the suite may run across midnight."""
+    return dt.datetime.now(dt.UTC)
+
+
 def days_ago(days: int) -> dt.date:
-    return TODAY - dt.timedelta(days=days)
+    return dt.date.today() - dt.timedelta(days=days)
 
 
 def account(id: str, balance: int, *, closed: bool = False) -> StoredAccount:
@@ -77,7 +80,7 @@ def log_import(store: Store, budget_id: str, loader: str, days: int) -> None:
         "import",
         f"Imported 2 transactions to Checking from {loader}.txt",
         {"loader": loader, "file": f"{loader}.txt", "created": 2},
-        at=NOW - dt.timedelta(days=days),
+        at=now() - dt.timedelta(days=days),
     )
 
 
@@ -166,7 +169,7 @@ async def test_the_hero_shows_net_worth_with_debt_netted_and_the_change_since_th
             "reconcile",
             "Reconciled 3 transactions in 1 account",
             {"count": 3},
-            at=NOW - dt.timedelta(days=reconciled_days_ago),
+            at=now() - dt.timedelta(days=reconciled_days_ago),
         )
 
     await _home(user)
@@ -319,7 +322,7 @@ async def test_with_nothing_waiting_needs_you_says_so_in_one_quiet_line(
         ),
         (
             {"sabadell": 40, "test": 1},
-            f"Last imports · Cobee never · Sabadell {home.short_date(days_ago(40), TODAY)}",
+            f"Last imports · Cobee never · Sabadell {home.short_date(days_ago(40), dt.date.today())}",
         ),
         (
             {"sabadell": 1, "cobee": 0},
@@ -426,21 +429,21 @@ async def test_recent_activity_is_newest_first_with_counts_in_bold(
         "reconcile",
         "Reconciled 21 transactions in 3 accounts",
         {"count": 21},
-        at=NOW - dt.timedelta(days=2),
+        at=now() - dt.timedelta(days=2),
     )
     store.log(
         budget.budget.id,
         "sync",
         "Synced · 6 changes from YNAB",
         {"changes": 6, "full": False},
-        at=NOW - dt.timedelta(minutes=2),
+        at=now() - dt.timedelta(minutes=2),
     )
     store.log(
         budget.budget.id,
         "adjustment",
         "Balance of Broker set to 3,000.00€ (+10.00€)",
         {},
-        at=NOW - dt.timedelta(days=1),
+        at=now() - dt.timedelta(days=1),
     )
 
     await _home(user)
@@ -499,7 +502,7 @@ async def test_home_waits_for_the_first_sync_and_then_shows_the_budget(
 
     store = Store(store_file)
     upsert(store, budget.budget.id, accounts=[account("checking", 1_000_000)])
-    state().last_sync = NOW
+    state().last_sync = now()
     syncing.return_value = False
 
     await user.should_not_see("First sync running…", retries=40)
@@ -516,7 +519,8 @@ async def test_home_waits_for_the_first_sync_and_then_shows_the_budget(
     ids=["seconds", "minutes", "hours"],
 )
 def test_relative_time_for_recent_entries(ago: dt.timedelta, expected: str):
-    assert home.relative_time(NOW - ago, NOW) == expected
+    current = now()
+    assert home.relative_time(current - ago, current) == expected
 
 
 def test_relative_time_shows_the_day_for_older_entries_and_the_year_when_it_differs():
@@ -549,6 +553,6 @@ def test_relative_time_shows_the_day_for_older_entries_and_the_year_when_it_diff
     ids=["import", "count-next-to-an-amount", "no-count-for-the-kind", "not-a-number"],
 )
 def test_activity_message_markup(kind: str, message: str, details: dict, expected: str):
-    entry = Activity(at=NOW, kind=kind, message=message, details=details)
+    entry = Activity(at=now(), kind=kind, message=message, details=details)
 
     assert home.message_markup(entry) == expected

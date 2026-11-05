@@ -42,11 +42,14 @@ CHECKING = str(uuid.UUID(int=24))
 CARD = str(uuid.UUID(int=25))
 ADJUSTMENT_PAYEE = "Balance Adjustment"
 
-TODAY = dt.date.today()
+
+def today() -> dt.date:
+    """Read in the test, never at import: the suite may run across midnight."""
+    return dt.date.today()
 
 
 def ago(days: int) -> dt.date:
-    return TODAY - dt.timedelta(days=days)
+    return today() - dt.timedelta(days=days)
 
 
 # (account, days ago, amount in milliunits, payee)
@@ -289,17 +292,18 @@ def _transaction(day: dt.date, payee: str) -> StoredTransaction:
 
 
 @pytest.mark.parametrize(
-    ("payees", "expected"),
+    ("payees", "expected_days_ago"),
     [
-        ([(40, ADJUSTMENT_PAYEE), (3, "Dividend")], ago(40)),
-        ([(40, "Starting Balance"), (3, "Dividend")], ago(3)),
+        ([(40, ADJUSTMENT_PAYEE), (3, "Dividend")], 40),
+        ([(40, "Starting Balance"), (3, "Dividend")], 3),
         ([], None),
     ],
     ids=["latest-adjustment-wins", "latest-transaction-without-adjustments", "no-history"],
 )
-def test_a_by_hand_balance_was_last_set_by_its_latest_adjustment(payees, expected):
+def test_a_by_hand_balance_was_last_set_by_its_latest_adjustment(payees, expected_days_ago):
     transactions = [_transaction(ago(days), payee) for days, payee in payees]
 
+    expected = None if expected_days_ago is None else ago(expected_days_ago)
     assert last_set(transactions, ADJUSTMENT_PAYEE) == expected
 
 
@@ -314,7 +318,7 @@ def test_a_by_hand_balance_was_last_set_by_its_latest_adjustment(payees, expecte
     ids=["today", "30-days-is-fresh", "31-days-is-stale", "never-set"],
 )
 def test_a_by_hand_balance_is_stale_after_30_days(days, expected):
-    assert by_hand_pill(None if days is None else ago(days), TODAY) == expected
+    assert by_hand_pill(None if days is None else ago(days), today()) == expected
 
 
 @pytest.mark.parametrize(
@@ -401,7 +405,7 @@ async def test_accepting_creates_one_adjustment_and_logs_it(
         "Set by hand",
         ADJUSTMENT_PAYEE,
         TransactionClearedStatus.RECONCILED,
-        TODAY,
+        today(),
     )
     no_sync.assert_called()
 
@@ -629,13 +633,13 @@ async def test_at_the_limit_unpicked_chips_say_why_they_cannot_be_added(
 async def test_range_pills_change_the_chart_dates(seeded: Store, no_sync, user: User):
     await open_networth(user)
     first_day = chart_series(user)[0]["data"][0][0]
-    assert dt.date.fromisoformat(first_day) == range_start("6M", TODAY, ago(400))
+    assert dt.date.fromisoformat(first_day) == range_start("6M", today(), ago(400))
 
-    start = range_start("1M", TODAY, ago(400))
+    start = range_start("1M", today(), ago(400))
     user.find(marker="range-1M").click()
-    await eventually(lambda: len(chart_series(user)[0]["data"]) == (TODAY - start).days + 1)
+    await eventually(lambda: len(chart_series(user)[0]["data"]) == (today() - start).days + 1)
     data = chart_series(user)[0]["data"]
-    assert data[-1] == [TODAY.isoformat(), 82_180.0]
+    assert data[-1] == [today().isoformat(), 82_180.0]
 
     user.find(marker="range-All").click()
     await eventually(lambda: chart_series(user)[0]["data"][0][0] < start.isoformat())
@@ -643,7 +647,7 @@ async def test_range_pills_change_the_chart_dates(seeded: Store, no_sync, user: 
     # Over a year: one point a week from the first transaction, ending today
     assert dt.date.fromisoformat(data[0][0]) - ago(400) < dt.timedelta(days=7)
     assert len(data) < 70
-    assert data[-1] == [TODAY.isoformat(), 82_180.0]
+    assert data[-1] == [today().isoformat(), 82_180.0]
     first = dt.date.fromisoformat(data[0][0])
     assert texts(user, "nw-delta") == f"▲ 22,180.00€ since {first.day} {first:%b %Y}"
 
@@ -658,7 +662,7 @@ async def test_the_account_drawer_lists_its_transactions(seeded: Store, no_sync,
     assert len(user.find(marker="drawer-tx").elements) == 2
     assert ADJUSTMENT_PAYEE in rows[0]
     drawer_series = chart_series(user, "drawer-chart")
-    assert drawer_series[0]["data"][-1] == [TODAY.isoformat(), 46_300.0]
+    assert drawer_series[0]["data"][-1] == [today().isoformat(), 46_300.0]
 
 
 async def test_the_first_sync_fills_the_view_when_it_lands(
