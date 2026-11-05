@@ -11,6 +11,9 @@ Cookies are scoped by host, not by port, and every page served from another `127
 request must name exactly `127.0.0.1:<port>` as its Host (a page reaching the app through a
 rebound DNS name is refused), and websocket handshakes and requests that change something must
 come from the app's own origin when the browser says where they come from.
+
+Being "same site" also means such a page could put the app in a frame and trick a click on
+it, so every HTTP response tells the browser never to show the app inside a frame.
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ from urllib.parse import urlencode
 from starlette.datastructures import URL, QueryParams
 from starlette.requests import HTTPConnection
 from starlette.responses import HTMLResponse, PlainTextResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starlette.websockets import WebSocketClose
 
 HOST = "127.0.0.1"
@@ -36,6 +39,13 @@ _DEFAULT_HTTP_PORT = 80
 
 # RFC 6455 "policy violation": the handshake did not carry a valid session
 _WS_POLICY_VIOLATION = 1008
+
+# Sent on every HTTP response: no page, of any origin, may show the app in a frame
+FRAME_HEADERS = (
+    (b"x-frame-options", b"DENY"),
+    (b"content-security-policy", b"frame-ancestors 'none'"),
+    (b"x-content-type-options", b"nosniff"),
+)
 
 
 def new_token() -> str:
@@ -93,6 +103,23 @@ def _bounce(target: str, token: str, cookie: str) -> HTMLResponse:
     return response
 
 
+def _with_frame_headers(send: Send) -> Send:
+    """`send`, adding `FRAME_HEADERS` to the start of every response."""
+
+    async def wrapped(message: Message) -> None:
+        if message["type"] == "http.response.start":
+            names = {name.lower() for name, _ in FRAME_HEADERS}
+            headers = [
+                (name, value)
+                for name, value in message.get("headers", [])
+                if name.lower() not in names
+            ]
+            message = {**message, "headers": [*headers, *FRAME_HEADERS]}
+        await send(message)
+
+    return wrapped
+
+
 class TokenGuard:
     """ASGI middleware that lets a request through only with the session token or cookie.
 
@@ -126,6 +153,8 @@ class TokenGuard:
         if scope["type"] not in ("http", "websocket"):
             await self.app(scope, receive, send)
             return
+        if scope["type"] == "http":
+            send = _with_frame_headers(send)
 
         connection = HTTPConnection(scope)
         if self._trusted(scope, connection):

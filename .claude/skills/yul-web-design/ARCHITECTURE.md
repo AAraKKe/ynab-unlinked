@@ -662,7 +662,9 @@ web/
   `TokenGuard(app, token, port)` also refuses any request whose `Host` is not exactly
   `127.0.0.1:<port>` (DNS rebinding), and websocket handshakes and non GET/HEAD requests
   whose `Origin` is present and not `http://127.0.0.1:<port>` (a page served from another
-  loopback port is "same site", so SameSite does not stop it). Tests talk to
+  loopback port is "same site", so SameSite does not stop it). Every HTTP response, refused
+  ones included, carries `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors
+  'none'` and `X-Content-Type-Options: nosniff` (`FRAME_HEADERS`). Tests talk to
   `http://127.0.0.1:8765` (`tests.helpers.web.BASE_URL`).
 
 ### 3.2 Shell contract for views

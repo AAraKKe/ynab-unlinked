@@ -51,6 +51,25 @@ async def test_the_cookie_alone_opens_the_app_afterwards(guest: User):
     assert response.headers.get("X-Nicegui-Content") == "page"
 
 
+@pytest.mark.parametrize("path", ["/", "/settings", "/yul-static/yul.css"])
+async def test_every_response_forbids_framing_the_app(user: User, path: str):
+    response = await user.http_client.get(path)
+
+    assert response.status_code == 200
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+async def test_refused_and_bounce_responses_forbid_framing_too(guest: User):
+    refused = await guest.http_client.get("/settings")
+    bounce = await guest.http_client.get(f"/?token={TOKEN}")
+
+    for response in (refused, bounce):
+        assert response.headers["x-frame-options"] == "DENY"
+        assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
+
+
 def websocket_scope(*headers: tuple[bytes, bytes]) -> dict[str, Any]:
     return {
         "type": "websocket",
