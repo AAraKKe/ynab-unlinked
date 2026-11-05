@@ -174,7 +174,7 @@ async def test_statements_are_detected_reviewed_and_imported(
         if a.kind == "import"
     )
     assert logged == [
-        ("Imported 2 transactions to 💳 Maxima from tarjeta_maxima.xlsx", "bbva", 2, 1, 0),
+        ("Imported 2 transactions to 💳 Maxima from tarjeta_maxima.xlsx", "BBVA Credit Card", 2, 1, 0),
         ("Imported 2 transactions to 💳 Oro from movements.txt", "sabadell", 2, 0, 1),
     ]
 

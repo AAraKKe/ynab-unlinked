@@ -156,7 +156,7 @@ async def test_a_new_token_is_saved_only_if_it_sees_the_budget(
     assert LatestConfig.load().api_key == saved_token
 
 
-async def test_the_data_tab_says_where_the_token_is_without_console_markup(
+async def test_the_data_tab_says_where_the_token_is_in_plain_words(
     user: User, config_v4: LatestConfig
 ):
     await _open_tab(user, "data-privacy")
@@ -164,9 +164,7 @@ async def test_the_data_tab_says_where_the_token_is_without_console_markup(
 
     [label] = user.find(marker="token-location").elements
     assert isinstance(label, ui.label)
-    assert label.text.startswith("In plaintext at “")
-    assert label.text.endswith("(no keychain found on this computer).")
-    assert "[cyan]" not in label.text
+    assert label.text == "In the settings file, since no keychain was found on this computer."
 
 
 async def test_resync_rebuilds_the_budget_copy_and_keeps_the_activity(

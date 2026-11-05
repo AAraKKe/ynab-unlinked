@@ -898,7 +898,7 @@ class ImportFlow:
         assert item.candidate is not None
         account_name = self.account_name(plan.account_id)
         details = {
-            "loader": item.candidate.loader.key,
+            "loader": item.candidate.loader.name,  # the config key, what Home looks up
             "account_id": plan.account_id,
             "account_name": account_name,
             "file": item.name,
