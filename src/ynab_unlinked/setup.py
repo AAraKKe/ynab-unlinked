@@ -13,7 +13,7 @@ import typer
 from ynab_unlinked.config import LatestConfig, get_config
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.display import bold, error, success
+from ynab_unlinked.display import CliProgress, bold, error, success
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.privacy import privacy_notice
 from ynab_unlinked.utils import prompt_for_api_key, prompt_for_budget
@@ -50,7 +50,8 @@ def load_context() -> YnabUnlinkedContext | None:
     bail out.
     """
     try:
-        config = get_config()
+        with CliProgress() as progress:
+            config = get_config(progress)
     except Exception:
         return None
 
@@ -82,7 +83,8 @@ def ensure_config(
             raise typer.Exit(1)
         return obj
 
-    config = get_config()
+    with CliProgress() as progress:
+        config = get_config(progress)
     if config is None:
         if not interactive:
             error("No configuration found. Run `yul setup` before using --yes.")

@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from pathlib import Path
 
 from rich import box
 from rich.prompt import Prompt
@@ -11,9 +10,7 @@ from ynab import PlanDetail
 from ynab_unlinked.config import get_config
 from ynab_unlinked.config.models.v2 import Budget, CurrencyFormat
 from ynab_unlinked.core.importing import ImportRow
-from ynab_unlinked.display import console, process, question
-from ynab_unlinked.entities import InputType
-from ynab_unlinked.exceptions import ParsingError
+from ynab_unlinked.display import CliProgress, console, process, question
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import Transaction
 from ynab_unlinked.ynab_api.client import Client
@@ -31,34 +28,12 @@ def prompt_for_api_key() -> str:
     return question("What is the API Key to connect to YNAB?", password=True)
 
 
-def extract_type(input_file: Path, valid: Sequence[InputType] | None = None) -> InputType:
-    from ynab_unlinked.entities._sniff import suffix
-
-    extension = suffix(input_file)
-    valid_extensions = [v.value for v in valid] if valid else [v.value for v in InputType]
-    supported = ", ".join(valid_extensions)
-
-    if extension not in InputType:
-        raise ParsingError(
-            input_file=input_file,
-            message=f"Extension {extension!r} is not supported. Supported formats: {supported}",
-        )
-
-    if extension not in valid_extensions:
-        raise ParsingError(
-            input_file=input_file,
-            message=(
-                f"Input files of type {extension!r} cannot be read. Supported formats: {supported}"
-            ),
-        )
-
-    return InputType(extension)
-
-
 def prompt_for_budget(api_key: str | None = None) -> Budget:
     # If no api_key is provided, try to get it from the config
     if api_key is None:
-        if (config := get_config()) is None:
+        with CliProgress() as progress:
+            config = get_config(progress)
+        if config is None:
             raise RuntimeError("Could not find config and no API key was provided.")
         api_key = config.api_key
 

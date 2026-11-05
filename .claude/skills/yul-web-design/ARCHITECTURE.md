@@ -190,8 +190,8 @@ class LoaderSpec:
     build: Callable[[Mapping[str, str]], Entity]          # options -> entity instance
     extras: Callable[[Mapping[str, str]], Any] | None     # options -> context.extras (cobee)
 
-    def accepts(self, input_file: Path) -> bool           # suffix in input_types, same rule
-                                                          # as utils.extract_type
+    def accepts(self, input_file: Path) -> bool           # lower cased suffix in input_types,
+                                                          # same rule as _sniff.extract_type
     def context_extras(self, options) -> Any              # extras(options), or None
 
 AUTO = "auto"

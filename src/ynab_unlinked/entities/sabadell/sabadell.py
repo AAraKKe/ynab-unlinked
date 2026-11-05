@@ -27,7 +27,7 @@ class SabadellParser:
 
     def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
         from ynab_unlinked.entities import InputType
-        from ynab_unlinked.utils import extract_type
+        from ynab_unlinked.entities._sniff import extract_type
 
         input_type = extract_type(input_file, valid=[InputType.TXT, InputType.XLS])
 

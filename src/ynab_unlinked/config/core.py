@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Final
 
-from ynab_unlinked.display import CliProgress
+from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 
 from .constants import LATEST_VERSION
 from .migrations import MigrationEngine, Version
@@ -65,8 +65,11 @@ def config_version() -> Version:
         return Version("Config", content["version"])
 
 
-def get_config() -> LATEST_CONFIG_TYPE | None:
-    """Get the latest supported version of the config running any migrations if needed"""
+def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
+    """Get the latest supported version of the config running any migrations if needed.
+
+    `progress` shows the migration steps: the CLI passes its `CliProgress`.
+    """
     version = config_version()
 
     if (current_config := VERSION_MAPPING.get(version.version)) is None:
@@ -78,6 +81,4 @@ def get_config() -> LATEST_CONFIG_TYPE | None:
     if current_config is LATEST_CONFIG_TYPE:
         return LATEST_CONFIG_TYPE.load()
 
-    return migration_engine().migrate(
-        current_config.load(), LATEST_CONFIG_TYPE, progress=CliProgress()
-    )
+    return migration_engine().migrate(current_config.load(), LATEST_CONFIG_TYPE, progress=progress)

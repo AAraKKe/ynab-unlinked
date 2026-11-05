@@ -21,9 +21,9 @@ class BBVA(Entity):
     def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
         import datetime as dt
 
+        from ynab_unlinked.entities._sniff import extract_type
         from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import pdf, xls
-        from ynab_unlinked.utils import extract_type
 
         input_type = extract_type(input_file, valid=VALID_TYPES)
         match input_type:

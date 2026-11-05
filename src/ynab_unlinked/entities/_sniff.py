@@ -1,10 +1,16 @@
-"""Helpers shared by the `sniff` implementations of the entities."""
+"""Helpers shared by the entities: reading the file type, and the head of a file for `sniff`.
+
+No UI here: entities are used by the CLI and the web app alike.
+"""
 
 import contextlib
 import io
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
+
+from ynab_unlinked.entities import InputType
+from ynab_unlinked.exceptions import ParsingError
 
 from ._protocol import Match
 
@@ -26,6 +32,29 @@ def suffix(input_file: Path) -> str:
     Every check of a file type goes through this, so detection, `accepts` and `parse` agree.
     """
     return input_file.suffix[1:].lower()
+
+
+def extract_type(input_file: Path, valid: Sequence[InputType] | None = None) -> InputType:
+    """The type of `input_file`, which must be one of `valid`; a `ParsingError` otherwise."""
+    extension = suffix(input_file)
+    valid_extensions = [v.value for v in valid] if valid else [v.value for v in InputType]
+    supported = ", ".join(valid_extensions)
+
+    if extension not in InputType:
+        raise ParsingError(
+            input_file=input_file,
+            message=f"Extension {extension!r} is not supported. Supported formats: {supported}",
+        )
+
+    if extension not in valid_extensions:
+        raise ParsingError(
+            input_file=input_file,
+            message=(
+                f"Input files of type {extension!r} cannot be read. Supported formats: {supported}"
+            ),
+        )
+
+    return InputType(extension)
 
 
 def wrong_suffix(input_file: Path, accepted: Sequence[str]) -> Match | None:

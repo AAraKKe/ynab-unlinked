@@ -10,8 +10,9 @@ from tests.factories import PlanDetailFactory
 from tests.helpers import assets
 from tests.helpers.config import ConfigFiles
 from ynab_unlinked.config import Adjustments, ConfigV4, LoaderConfig, get_config
-from ynab_unlinked.config.models import ConfigV2
 from ynab_unlinked.config.core import ConfigError
+from ynab_unlinked.config.models import ConfigV2
+from ynab_unlinked.display import CliProgress
 from ynab_unlinked.ynab_api import Client
 
 
@@ -120,8 +121,20 @@ def test_migrating_shows_progress_but_loading_the_latest_version_does_not(
     config_files: ConfigFiles, capsys: pytest.CaptureFixture[str]
 ):
     config_files.write_asset("V3")
-    get_config()
+    get_config(CliProgress())
     assert "Migration done!" in capsys.readouterr().out
 
-    get_config()
+    get_config(CliProgress())
     assert "Migration done!" not in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("isolated_migration_registry")
+def test_a_migration_without_a_progress_prints_nothing(
+    config_files: ConfigFiles, capsys: pytest.CaptureFixture[str]
+):
+    # The web app loads the config without a terminal to draw a spinner on
+    config_files.write_asset("V3")
+
+    assert isinstance(get_config(), ConfigV4)
+
+    assert capsys.readouterr().out == ""

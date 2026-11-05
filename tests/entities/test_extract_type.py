@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 
 from ynab_unlinked.entities import InputType
+from ynab_unlinked.entities._sniff import extract_type
 from ynab_unlinked.exceptions import ParsingError
-from ynab_unlinked.utils import extract_type
 
 
 @pytest.mark.parametrize(
