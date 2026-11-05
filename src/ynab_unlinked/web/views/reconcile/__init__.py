@@ -6,7 +6,6 @@ from ynab_unlinked.web.views.reconcile.data import (
     ReconcileData,
     gap_candidates,
     scope_start,
-    transaction_detail,
 )
 from ynab_unlinked.web.views.reconcile.view import ReconcileView, reconcile_view
 
@@ -16,5 +15,4 @@ __all__ = [
     "gap_candidates",
     "reconcile_view",
     "scope_start",
-    "transaction_detail",
 ]

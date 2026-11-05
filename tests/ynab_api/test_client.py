@@ -10,7 +10,7 @@ import pytest
 from pytest_mock import MockerFixture
 from ynab import ApiException, TransactionClearedStatus
 
-from tests.factories import PendingImportFactory, TransactionDetailFactory
+from tests.factories import PendingImportFactory
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.web.wording import YNAB_TIMED_OUT
 from ynab_unlinked.web.wording import ynab_error_message as web_error_message
@@ -248,7 +248,9 @@ def test_create_transactions_returns_the_import_ids_ynab_rejected(
 def test_update_transactions_does_not_reach_ynab_with_nothing_to_update(
     client: Client, ynab_api: YnabClientStub
 ):
-    client.update_transactions(budget_id=BUDGET_ID, transactions=[])
+    client.update_transactions(
+        budget_id=BUDGET_ID, transaction_ids=[], cleared=TransactionClearedStatus.RECONCILED
+    )
 
     assert ynab_api.registry == {}
 
@@ -256,25 +258,30 @@ def test_update_transactions_does_not_reach_ynab_with_nothing_to_update(
 def test_update_transactions_patches_each_transaction_by_id(
     client: Client, ynab_api: YnabClientStub
 ):
-    transactions = [
-        TransactionDetailFactory(
-            id="t-1", account_id=UUID(ACCOUNT_ID), cleared=TransactionClearedStatus.RECONCILED
-        ),
-        TransactionDetailFactory(
-            id="t-2", account_id=UUID(ACCOUNT_ID), cleared=TransactionClearedStatus.CLEARED
-        ),
-    ]
-
-    client.update_transactions(budget_id=BUDGET_ID, transactions=transactions)
+    client.update_transactions(
+        budget_id=BUDGET_ID,
+        transaction_ids=["t-1", "t-2"],
+        cleared=TransactionClearedStatus.RECONCILED,
+    )
 
     call = ynab_api.api("transactions").update_transactions.call_args
     assert call.kwargs["plan_id"] == BUDGET_ID
     updated = call.kwargs["data"].transactions
     assert [(t.id, t.cleared) for t in updated] == [
         ("t-1", TransactionClearedStatus.RECONCILED),
-        ("t-2", TransactionClearedStatus.CLEARED),
+        ("t-2", TransactionClearedStatus.RECONCILED),
     ]
-    assert all(t.account_id == UUID(ACCOUNT_ID) for t in updated)
+
+
+def test_update_transactions_sends_no_account_so_a_moved_transaction_stays_where_it_is(
+    client: Client, ynab_api: YnabClientStub
+):
+    client.update_transactions(
+        budget_id=BUDGET_ID, transaction_ids=["t-1"], cleared=TransactionClearedStatus.RECONCILED
+    )
+
+    data = ynab_api.api("transactions").update_transactions.call_args.kwargs["data"]
+    assert data.to_dict() == {"transactions": [{"id": "t-1", "cleared": "reconciled"}]}
 
 
 def test_account_reads_one_account_by_its_uuid(client: Client, ynab_api: YnabClientStub):

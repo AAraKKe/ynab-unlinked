@@ -8,12 +8,11 @@ the log entry of a lock. The view (`view`) keeps the selection and draws it.
 from __future__ import annotations
 
 import datetime as dt
-import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from ynab import TransactionClearedStatus, TransactionDetail
+from ynab import TransactionClearedStatus
 
 from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.core.balances import parse_amount_to_milliunits
@@ -60,28 +59,6 @@ def gap_candidates(transactions: Sequence[StoredTransaction], difference: int) -
             pairs.update((id_, other))
         seen.setdefault(effect, []).append(id_)
     return pairs
-
-
-def transaction_detail(transaction: StoredTransaction, account_name: str) -> TransactionDetail:
-    """The SDK object `core.reconcile` patches, rebuilt from the stored row.
-
-    `Client.update_transactions` only sends the id, the account and the cleared status; the
-    rest fills the fields the SDK model requires.
-    """
-    return TransactionDetail(
-        id=transaction.id,
-        date=transaction.date,
-        amount=transaction.amount,
-        cleared=transaction.cleared,
-        approved=transaction.approved,
-        account_id=uuid.UUID(transaction.account_id),
-        account_name=account_name,
-        deleted=False,
-        payee_name=transaction.payee_name,
-        memo=transaction.memo,
-        import_id=transaction.import_id,
-        subtransactions=[],
-    )
 
 
 @dataclass
@@ -220,5 +197,4 @@ __all__ = [
     "parse_bank_balance",
     "pending_title",
     "scope_start",
-    "transaction_detail",
 ]

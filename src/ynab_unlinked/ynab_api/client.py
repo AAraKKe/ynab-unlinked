@@ -187,19 +187,22 @@ class Client:
 
         return response.data.duplicate_import_ids or []
 
-    def update_transactions(self, budget_id: str, transactions: list[TransactionDetail]):
-        if not transactions:
+    def update_transactions(
+        self, budget_id: str, transaction_ids: Sequence[str], cleared: TransactionClearedStatus
+    ) -> None:
+        """Set the cleared status of the transactions, and nothing else.
+
+        Only the id and the status are sent: an account id read earlier could be stale and
+        would move a transaction the user moved in YNAB meanwhile back where it was.
+        """
+        if not transaction_ids:
             return
 
         api = self.api("transactions")
 
         to_update = [
-            SaveTransactionWithIdOrImportId(
-                id=t.id,
-                account_id=t.account_id,
-                cleared=t.cleared,
-            )
-            for t in transactions
+            SaveTransactionWithIdOrImportId(id=transaction_id, cleared=cleared)
+            for transaction_id in transaction_ids
         ]
         api.update_transactions(
             plan_id=budget_id,

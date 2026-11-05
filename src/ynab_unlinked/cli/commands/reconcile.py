@@ -11,7 +11,11 @@ from ynab_unlinked.cli.commands.apps.reconcile import Reconcile
 from ynab_unlinked.cli.display import CliProgress
 from ynab_unlinked.cli.setup import ensure_config
 from ynab_unlinked.config import LatestConfig, update_config
-from ynab_unlinked.core.reconcile import next_reconciliation_date, reconciliation_overview
+from ynab_unlinked.core.reconcile import (
+    RowToLock,
+    next_reconciliation_date,
+    reconciliation_overview,
+)
 from ynab_unlinked.core.reconcile import reconcile as reconcile_transactions
 from ynab_unlinked.ynab_api import Client
 
@@ -125,7 +129,10 @@ def reconcile(
 
     with CliProgress() as progress:
         latest_date = reconcile_transactions(
-            client, budget_id=budget_id, transactions=selected_transactions, progress=progress
+            client,
+            budget_id=budget_id,
+            rows=[RowToLock.of(t) for t in selected_transactions],
+            progress=progress,
         )
 
     if latest_date is None:

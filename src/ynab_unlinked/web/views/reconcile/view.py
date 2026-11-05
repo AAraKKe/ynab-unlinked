@@ -45,7 +45,6 @@ from ynab_unlinked.web.views.reconcile.data import (
     parse_bank_balance,
     pending_title,
     scope_start,
-    transaction_detail,
 )
 from ynab_unlinked.web.views.reconcile.groups import AccountGroup, Row
 from ynab_unlinked.web.wording import plural, short_date, ynab_error_message
@@ -433,14 +432,10 @@ class ReconcileView:
             self.footer.clear()
             with self.footer:
                 footer.locking(count)
-        details = [
-            transaction_detail(row.transaction, group.account.name)
-            for group, rows in batches
-            for row in rows
-        ]
+        rows_to_lock = [row.transaction for _, rows in batches for row in rows]
         try:
             config, client = state().require()
-            await run.io_bound(reconcile, client, config.budget.id, details)
+            await run.io_bound(reconcile, client, config.budget.id, rows_to_lock)
         except Exception as error:
             self.busy = False
             shell.notify(f"Nothing was locked. {ynab_error_message(error)}", "error")

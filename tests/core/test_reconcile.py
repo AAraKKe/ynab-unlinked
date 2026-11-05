@@ -1,5 +1,6 @@
 import datetime as dt
 import uuid
+from dataclasses import dataclass
 
 import pytest
 from ynab import Account, TransactionClearedStatus, TransactionDetail
@@ -8,6 +9,7 @@ from tests.core.conftest import BUDGET_ID
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.core.reconcile import (
+    RowToLock,
     next_reconciliation_date,
     reconcile,
     reconciliation_overview,
@@ -121,17 +123,34 @@ def test_reconcile_patches_every_transaction_as_reconciled(
         on(SAVINGS_ID, "s1", 2, cleared=UNCLEARED),
     ]
 
-    latest = reconcile(client, BUDGET_ID, transactions)
+    latest = reconcile(client, BUDGET_ID, [RowToLock.of(t) for t in transactions])
 
     assert latest == dt.date(2025, 5, 20)
     call = ynab_api.api("transactions").update_transactions.call_args
     assert call.kwargs["plan_id"] == BUDGET_ID
     assert [(t.id, t.account_id, t.cleared) for t in call.kwargs["data"].transactions] == [
-        ("c1", CHECKING_ID, RECONCILED),
-        ("s1", SAVINGS_ID, RECONCILED),
+        ("c1", None, RECONCILED),
+        ("s1", None, RECONCILED),
     ]
     # The caller still holds the transactions as YNAB returned them
     assert transactions[1].cleared is UNCLEARED
+
+
+@dataclass(frozen=True)
+class PlainRow:
+    id: str
+    date: dt.date
+    payee: str
+
+
+def test_reconcile_takes_any_row_with_an_id_and_a_date(client: Client, ynab_api: YnabClientStub):
+    rows = [PlainRow("a", dt.date(2025, 5, 3), "Shop"), PlainRow("b", dt.date(2025, 5, 9), "Bar")]
+
+    assert reconcile(client, BUDGET_ID, rows) == dt.date(2025, 5, 9)
+    sent = ynab_api.api("transactions").update_transactions.call_args.kwargs["data"]
+    assert sent.to_dict() == {
+        "transactions": [{"id": "a", "cleared": "reconciled"}, {"id": "b", "cleared": "reconciled"}]
+    }
 
 
 def test_reconcile_with_nothing_selected_never_reaches_ynab(

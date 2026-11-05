@@ -112,7 +112,10 @@ def seed(ynab_api: YnabClientStub, store_file: Path, config_v4: LatestConfig) ->
 def updated(ynab_api: YnabClientStub) -> dict[str, TransactionClearedStatus]:
     call = ynab_api.api("transactions").update_transactions.call_args
     assert call is not None, "YNAB was not asked to update anything"
-    return {t.id: t.cleared for t in call.kwargs["data"].transactions}
+    sent = call.kwargs["data"].transactions
+    # The account of the stored row could be stale: sending it would move the transaction back
+    assert all(t.account_id is None for t in sent)
+    return {t.id: t.cleared for t in sent}
 
 
 def classes(user: User, marker: str) -> list[str]:

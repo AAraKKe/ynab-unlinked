@@ -150,12 +150,22 @@ def reconciliation_overview(
     # account in the order YNAB lists accounts, accounts without transactions omitted,
     # closed accounts omitted
 
+class ReconcileRow(Protocol):        # what reconcile needs of a transaction
+    id: str                          # (read only properties)
+    date: dt.date
+
+@dataclass(frozen=True)
+class RowToLock:                     # a plain ReconcileRow; RowToLock.of(TransactionDetail)
+    id: str
+    date: dt.date
+
 def reconcile(
-    client: Client, budget_id: str, transactions: Sequence[TransactionDetail],
+    client: Client, budget_id: str, rows: Sequence[ReconcileRow],
     progress: Progress = NullProgress(),
 ) -> dt.date | None
-    # patches cleared=RECONCILED (on copies, the caller's objects are untouched), returns
-    # the latest transaction date or None if empty (YNAB is not called then)
+    # Client.update_transactions(budget_id, ids, RECONCILED) sends only {id, cleared}: an
+    # account id read earlier could be stale and move the transaction back. Returns the
+    # latest row date or None if empty (YNAB is not called then)
 
 def next_reconciliation_date(locked: Iterable[dt.date],
                              remaining: Iterable[dt.date] = ()) -> dt.date | None
@@ -697,7 +707,7 @@ web/
       tables.py        badge, plan_table, transactions_table
       cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
     reconcile/         /reconcile   per account cleared vs bank balance, lock (see 3.5)
-      data.py          scope_start, gap_candidates, transaction_detail, ReconcileData (read,
+      data.py          scope_start, gap_candidates, ReconcileData (read,
                        open_transactions, has_anything), parse_bank_balance, lock_confirmation,
                        lock_log, lock_checkpoint, pending_title
       groups.py        Row, AccountGroup: the selection and the elements that show it
@@ -1099,8 +1109,8 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   row counts its amount, a cleared one minus its amount), then pairs (hash lookup, linear)
   when no single row does.
 - Lock (per account or all): `shell.confirm`, then `core.reconcile.reconcile` through
-  `run.io_bound` with `TransactionDetail`s rebuilt from the stored rows
-  (`transaction_detail()`). Once YNAB answered, the rows are drawn locked, `invalidate()`
+  `run.io_bound` with the stored rows themselves (a `StoredTransaction` is a
+  `ReconcileRow`). Once YNAB answered, the rows are drawn locked, `invalidate()`
   runs, `store.log("reconcile", "Reconciled n transactions in m accounts", {"count",
   "accounts": [{"id", "name", "count"}]})` through `run.io_bound`, and only then
   `last_reconciliation_date = next_reconciliation_date(locked dates, dates of the rows still
