@@ -256,7 +256,7 @@ async def test_a_token_gone_from_the_keychain_is_asked_for_and_the_rest_is_kept(
     config = LatestConfig.load()
     assert config.api_key == "my-new-token"
     assert config.loaders == config_v4.loaders
-    assert memory_keychain.passwords[(keychain.SERVICE, keychain.ACCOUNT)] == "my-new-token"
+    assert memory_keychain.passwords[(keychain.service_name(), keychain.ACCOUNT)] == "my-new-token"
 
 
 async def test_the_first_config_save_runs_off_the_event_loop(

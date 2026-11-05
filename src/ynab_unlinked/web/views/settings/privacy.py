@@ -25,7 +25,7 @@ SERVER_DESCRIPTION = "On this computer only. Nothing is sent anywhere but YNAB."
 def token_wording() -> str:
     """Where the token is kept, in the app's words (the CLI has its own in `privacy`)."""
     if (name := keychain.backend_name()) is not None:
-        return f"In your {name}, as the item “{keychain.SERVICE}”. Not in any file."
+        return f"In your {name}, as the item “{keychain.service_name()}”. Not in any file."
     return "In the settings file, since no keychain was found on this computer."
 
 

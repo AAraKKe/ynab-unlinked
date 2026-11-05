@@ -20,11 +20,12 @@ DEFAULT_SERVICE = "ynab-unlinked"
 
 
 def service_name() -> str:
-    """The keychain item for this run.
+    """The keychain item for this run: what the user sees in Keychain Access.
 
     `YUL_KEYCHAIN_SERVICE` when set. Otherwise a run with `YUL_HOME` (a scratch run) gets
     an item of its own, `ynab-unlinked (<YUL_HOME>)`, so it can never overwrite the token of
-    the real config; without either it is `ynab-unlinked`.
+    the real config; without either it is `ynab-unlinked`. Read at every use, so a change
+    of the environment after import (a test, a scratch run) picks its own item.
     """
     if name := os.environ.get(SERVICE_ENV):
         return name
@@ -33,8 +34,6 @@ def service_name() -> str:
     return DEFAULT_SERVICE
 
 
-SERVICE = service_name()
-"""The keychain item: what the user sees in Keychain Access or the Credential Manager."""
 ACCOUNT = "YNAB Personal Access Token"
 REFERENCE = "@keychain"
 """What the config file holds in `api_key` when the token lives in the keychain."""
@@ -92,7 +91,7 @@ def store(token: str) -> None:
     import keyring
 
     try:
-        keyring.set_password(SERVICE, ACCOUNT, token)
+        keyring.set_password(service_name(), ACCOUNT, token)
     except Exception as error:
         raise KeychainError(str(error)) from error
 
@@ -104,7 +103,7 @@ def read() -> str | None:
     import keyring
 
     try:
-        return keyring.get_password(SERVICE, ACCOUNT)
+        return keyring.get_password(service_name(), ACCOUNT)
     except Exception as error:
         raise KeychainError(str(error)) from error
 
@@ -115,7 +114,7 @@ def delete() -> None:
     from keyring.errors import PasswordDeleteError
 
     try:
-        keyring.delete_password(SERVICE, ACCOUNT)
+        keyring.delete_password(service_name(), ACCOUNT)
     except PasswordDeleteError:
         pass
     except Exception as error:

@@ -15,13 +15,30 @@ from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.cli.context_object import YnabUnlinkedContext
 from ynab_unlinked.cli.utils import split_quoted_string
+from ynab_unlinked import keychain
 from ynab_unlinked.config import ConfigV3, ConfigV4, get_config
+from ynab_unlinked.config.paths import HOME_ENV, web_storage_dir
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.main import app
+from ynab_unlinked.store import store_path
 from ynab_unlinked.ynab_api import Client
 
 # Sets a scratch storage path for NiceGUI and provides its simulated `User` (tests/web)
 pytest_plugins = ["nicegui.testing.user_plugin"]
+
+
+@pytest.fixture(autouse=True)
+def yul_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Every file yul reads or writes lives under a scratch `YUL_HOME` for every test.
+
+    The code honours `YUL_HOME` everywhere, so a test that skips the other fixtures, or a
+    module that imports a path function the fixtures do not patch, still never reaches the
+    real config, budget copy, preferences or keychain item.
+    """
+    home = tmp_path / "data"
+    monkeypatch.setenv(HOME_ENV, str(home))
+    monkeypatch.delenv(keychain.SERVICE_ENV, raising=False)
+    return home
 
 
 @pytest.fixture(autouse=True)
@@ -100,7 +117,8 @@ def config_files(tmp_path: Path, mocker: MockerFixture) -> ConfigFiles:
     """
     Point every config path the app resolves into a scratch directory.
 
-    Nothing exists there until a test, or the `config` fixture, writes it, so tests are free
+    Apart from `YUL_HOME` (which holds the budget copy and the preferences), so a reset
+    lists the config folder and the store as two paths, as on a real install. Nothing exists there until a test, or the `config` fixture, writes it, so tests are free
     to save, migrate and reset configs without touching the checked in assets.
     """
     files = ConfigFiles(
@@ -124,34 +142,19 @@ def config_files(tmp_path: Path, mocker: MockerFixture) -> ConfigFiles:
     return files
 
 
-@pytest.fixture(autouse=True)
-def store_file(tmp_path: Path, mocker: MockerFixture) -> Path:
-    """
-    Point the local store into a scratch directory, apart from the config one.
+@pytest.fixture
+def store_file(yul_home: Path) -> Path:
+    """Where the local store lives in this test: `store.sqlite` under the scratch `YUL_HOME`.
 
-    Autouse so that no test, `yul config reset` ones included, can reach the real store.
     Nothing exists there until a test opens a `Store` on it.
     """
-    path = tmp_path / "data" / "store.sqlite"
-    for module in (
-        "ynab_unlinked.store",
-        "ynab_unlinked.store.paths",
-        "ynab_unlinked.privacy",
-        "ynab_unlinked.local_data",
-        "ynab_unlinked.web.state",
-        "ynab_unlinked.activity",
-    ):
-        mocker.patch(f"{module}.store_path", return_value=path)
-    return path
+    return store_path()
 
 
-@pytest.fixture(autouse=True)
-def web_storage(tmp_path: Path, mocker: MockerFixture) -> Path:
-    """Point the web app preferences directory into a scratch directory, like `store_file`."""
-    path = tmp_path / "data" / "web"
-    for module in ("ynab_unlinked.local_data", "ynab_unlinked.privacy"):
-        mocker.patch(f"{module}.web_storage_dir", return_value=path)
-    return path
+@pytest.fixture
+def web_storage(yul_home: Path) -> Path:
+    """Where the web app preferences live in this test, under the scratch `YUL_HOME`."""
+    return web_storage_dir()
 
 
 @pytest.fixture

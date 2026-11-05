@@ -392,7 +392,7 @@ class LoaderConfig(BaseModel):
 # A save while the token is unread writes `REFERENCE` back, never an empty token.
 # `save()` writes a 0600 temp file in the same directory (created 0700) and `os.replace`s it.
 # `keychain.read()` returns None when `YUL_NO_KEYCHAIN` is set. The item is
-# `keychain.SERVICE`: `YUL_KEYCHAIN_SERVICE`, else `ynab-unlinked (<YUL_HOME>)` when
+# `keychain.service_name()`, read at each use: `YUL_KEYCHAIN_SERVICE`, else `ynab-unlinked (<YUL_HOME>)` when
 # `YUL_HOME` is set, else `ynab-unlinked`.
 
 class TrackedAccount(BaseModel):

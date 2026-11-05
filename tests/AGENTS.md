@@ -66,6 +66,9 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
 
 ## Fixtures and helpers to reach for
 
+- `yul_home` (root conftest, autouse) sets `YUL_HOME` to a folder under `tmp_path` for every
+  test, so no test reaches the real config, budget copy, preferences or keychain item, even
+  without the fixtures below. `keychain.service_name()` follows it; never cache it.
 - `config_files` (root conftest) points every config path into a scratch directory and returns
   the `ConfigFiles` paths. `config` writes the asset for `@pytest.mark.version("V1".."V4")` there
   and yields the version; `"missing"` leaves it empty. Use `"V4"` (the latest) unless the test is
@@ -100,7 +103,7 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
   started cannot leak its task or error into the next test. `fresh_nicegui()`
   (`tests/helpers/web.py`) wraps NiceGUI's global reset, which otherwise unloads
   `ynab_unlinked` from `sys.modules`.
-- `store_file` (root conftest, autouse) points `store_path()` into `tmp_path`. Seed the store
+- `store_file` (root conftest) is `store_path()` under the scratch `YUL_HOME`. Seed the store
   with `tests.helpers.store.upsert` and `Store.log(..., at=...)` after one empty `Store.sync` so
   `last_sync` is set (the `store` fixture in `tests/web/views/test_home.py`), or through
   `Store.sync` with the `ynab_api` stub answering (`serve()` in `test_networth.py`).

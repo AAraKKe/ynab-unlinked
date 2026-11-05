@@ -27,7 +27,7 @@ def token_location(*, markup: bool = True) -> str:
         return f"[cyan]{text}[/cyan]" if markup else f"“{text}”"
 
     if (name := keychain.backend_name()) is not None:
-        return f"in your {name} (item {name_of(keychain.SERVICE)})"
+        return f"in your {name} (item {name_of(keychain.service_name())})"
     return f"in plaintext at {name_of(storage_path())} (no keychain found on this computer)"
 
 

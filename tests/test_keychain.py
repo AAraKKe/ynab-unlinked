@@ -12,7 +12,9 @@ from ynab_unlinked.local_data import delete_local_data
 
 pytestmark = pytest.mark.version("V4")
 
-ITEM = (keychain.SERVICE, keychain.ACCOUNT)
+
+def item() -> tuple[str, str]:
+    return (keychain.service_name(), keychain.ACCOUNT)
 
 
 def on_disk(config_files: ConfigFiles) -> str:
@@ -27,7 +29,7 @@ def test_the_token_moves_to_the_keychain_the_first_time_the_config_is_read(
     loaded = LatestConfig.load()
 
     assert loaded.api_key == "my-api-key"
-    assert memory_keychain.passwords[ITEM] == "my-api-key"
+    assert memory_keychain.passwords[item()] == "my-api-key"
     assert on_disk(config_files) == keychain.REFERENCE
     assert LatestConfig.load().api_key == "my-api-key"
 
@@ -40,7 +42,7 @@ def test_saving_writes_the_new_token_to_the_keychain_only(
 
     loaded.save()
 
-    assert memory_keychain.passwords[ITEM] == "a-new-token"
+    assert memory_keychain.passwords[item()] == "a-new-token"
     assert on_disk(config_files) == keychain.REFERENCE
     assert "a-new-token" not in config_files.read("V4")
 
@@ -71,7 +73,7 @@ def test_deleting_the_local_data_removes_the_token_from_the_keychain(
     config: str, memory_keychain: MemoryKeyring
 ):
     LatestConfig.load()
-    assert ITEM in memory_keychain.passwords
+    assert item() in memory_keychain.passwords
 
     delete_local_data()
 
@@ -114,14 +116,14 @@ def test_a_new_token_replaces_the_unread_one(
     loaded.api_key = "a-new-token"
     loaded.save()
 
-    assert memory_keychain.passwords[ITEM] == "a-new-token"
+    assert memory_keychain.passwords[item()] == "a-new-token"
     assert LatestConfig.load().api_key == "a-new-token"
 
 
 def test_no_keychain_never_reads_the_keychain(
     memory_keychain: MemoryKeyring, monkeypatch: pytest.MonkeyPatch
 ):
-    memory_keychain.passwords[ITEM] = "the-real-token"
+    memory_keychain.passwords[item()] = "the-real-token"
     monkeypatch.setenv(keychain.NO_KEYCHAIN_ENV, "1")
 
     assert keychain.read() is None
