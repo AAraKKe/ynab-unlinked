@@ -16,6 +16,7 @@ from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
 from tests.process.builders import ACCOUNT_ID, BUDGET_ID, THREE_DAYS_AGO, TODAY
 from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.setup import load_context
 
 API_KEY = "a-personal-access-token"
@@ -106,17 +107,67 @@ def test_yes_fails_instead_of_running_the_setup(
     ynab_api.api("transactions").create_transaction.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "config",
-    [
-        pytest.param("missing", id="there is no config file"),
-        pytest.param("broken", id="the config file has no version"),
-    ],
-    indirect=True,
-)
+@pytest.mark.version("missing")
 @pytest.mark.usefixtures("config")
-def test_no_context_is_built_when_the_config_cannot_be_read():
+def test_no_context_is_built_when_there_is_no_config():
     assert load_context() is None
+
+
+@pytest.mark.version("broken")
+@pytest.mark.usefixtures("config")
+def test_a_config_that_cannot_be_read_is_a_config_error_not_a_missing_config():
+    # Treating it as missing would run the setup over the user's file
+    with pytest.raises(ConfigError):
+        load_context()
+
+
+UNREADABLE_CONFIGS = [
+    pytest.param('{"version": "V4", "api_key": "my-api', id="truncated-json"),
+    pytest.param('{"version": "V4", "budget": 3}', id="not-a-v4-config"),
+    pytest.param("[1, 2]", id="json-that-is-not-an-object"),
+    pytest.param('{"api_key": "my-api-key"}', id="no-version"),
+]
+
+
+@pytest.mark.version("missing")
+@pytest.mark.parametrize("content", UNREADABLE_CONFIGS)
+def test_an_unreadable_config_is_an_error_pointing_at_reset(
+    config_files: ConfigFiles, yul: CliRunner, content: str
+):
+    config_files.write("V4", content)
+
+    result = yul("config show", env={"COLUMNS": "1000"})
+
+    assert result.exit_code == 1, result.output
+    # A clean exit with a message, not a traceback
+    assert isinstance(result.exception, SystemExit)
+    assert str(config_files.v2) in result.output
+    assert "yul config reset" in result.output
+
+
+@pytest.mark.version("missing")
+@pytest.mark.parametrize("content", UNREADABLE_CONFIGS)
+def test_privacy_and_reset_work_on_an_unreadable_config(
+    config_files: ConfigFiles, yul: CliRunner, content: str
+):
+    config_files.write("V4", content)
+
+    assert yul("privacy").exit_code == 0
+
+    result = yul("config reset --yes")
+    assert result.exit_code == 0, result.output
+    assert not config_files.v2.exists()
+
+
+@pytest.mark.version("V4")
+@pytest.mark.usefixtures("config")
+def test_privacy_does_not_read_the_config(yul: CliRunner, mocker: MockerFixture):
+    # Reading it reads the keychain too, which can raise a system prompt
+    get_config = mocker.patch("ynab_unlinked.setup.get_config")
+
+    assert yul("privacy").exit_code == 0
+
+    get_config.assert_not_called()
 
 
 @pytest.mark.version("V4")

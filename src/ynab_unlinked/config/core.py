@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Final
 
+from pydantic import ValidationError
+
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 
 from .constants import LATEST_VERSION
@@ -28,7 +30,8 @@ VERSION_MAPPING: Final[dict[str, type[Config]]] = {
 LATEST_CONFIG_TYPE = ConfigV4
 
 
-class ConfigError(ValueError): ...
+class ConfigError(ValueError):
+    """The config file exists but cannot be used: not JSON, not a config, or from a newer yul."""
 
 
 # Deltas are registered on a registry shared by every MigrationEngine, so a second engine for
@@ -56,13 +59,16 @@ def config_version() -> Version:
         # This can happen when we run the tool for the first time. Return the latest verison
         return LATEST_VERSION
 
-    with open(latest_config_path) as config_file:
-        content = json.load(config_file)
-        if "version" not in content:
-            raise ConfigError(
-                "Configuration file malformatted. Run `yul config reset` to reconfigure yul."
-            )
-        return Version("Config", content["version"])
+    try:
+        content = json.loads(latest_config_path.read_text())
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise ConfigError(
+            f"The config file {latest_config_path} is not valid JSON: {error}"
+        ) from error
+
+    if not isinstance(content, dict) or "version" not in content:
+        raise ConfigError(f"The config file {latest_config_path} has no version, it is malformed.")
+    return Version("Config", str(content["version"]))
 
 
 def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
@@ -78,7 +84,16 @@ def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
     if not current_config.exists():
         return None
 
-    if current_config is LATEST_CONFIG_TYPE:
-        return LATEST_CONFIG_TYPE.load()
+    try:
+        loaded = current_config.load()
+    except ValidationError as error:
+        # Also what pydantic raises for a file that is not JSON
+        raise ConfigError(
+            f"The config file {current_config.path()} is not a valid {version.version} config: "
+            f"{error}"
+        ) from error
 
-    return migration_engine().migrate(current_config.load(), LATEST_CONFIG_TYPE, progress=progress)
+    if isinstance(loaded, LATEST_CONFIG_TYPE):
+        return loaded
+
+    return migration_engine().migrate(loaded, LATEST_CONFIG_TYPE, progress=progress)

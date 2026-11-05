@@ -43,23 +43,23 @@ def _build_context(config: LatestConfig) -> YnabUnlinkedContext:
 
 
 def load_context() -> YnabUnlinkedContext | None:
-    """Try to load the persisted config and wrap it in a YnabUnlinkedContext.
+    """Load the persisted config and wrap it in a YnabUnlinkedContext.
 
-    Returns ``None`` if no config exists or the file cannot be loaded
-    (e.g. corrupted). The caller decides whether to prompt setup or
-    bail out.
+    Returns ``None`` if no config exists; the caller decides whether to prompt setup or bail
+    out. Raises ``ConfigError`` when the file exists but cannot be read.
     """
-    try:
-        with CliProgress() as progress:
-            config = get_config(progress)
-    except Exception:
-        return None
+    with CliProgress() as progress:
+        config = get_config(progress)
 
     if config is None:
         return None
 
     return _build_context(cast(LatestConfig, config))
 
+
+CONFIG_UNREADABLE = (
+    "Run `yul config reset` to delete it and set yul up again, or fix the file by hand."
+)
 
 TOKEN_MISSING = (
     "Your YNAB token is no longer in the keychain. Run `yul config set api_key` to enter it "
@@ -70,34 +70,32 @@ TOKEN_MISSING = (
 def ensure_config(
     context: typer.Context, *, interactive: bool = True, require_token: bool = True
 ) -> YnabUnlinkedContext:
-    """Make sure ``context.obj`` has a valid config, prompting setup if missing.
+    """Make sure ``context.obj`` has a valid config, loading it or prompting setup if missing.
 
-    With ``interactive=False`` a missing config is an error, because setup needs answers
-    only a person can give. A config whose token left the keychain is an error too, unless
-    ``require_token`` is false (what `yul config set api_key` passes).
+    The config is only read here, by the commands that need it: `yul privacy` and
+    `yul config reset` work even when the file is broken. An unreadable config is an error
+    pointing at `yul config reset`. With ``interactive=False`` a missing config is an error,
+    because setup needs answers only a person can give. A config whose token left the
+    keychain is an error too, unless ``require_token`` is false (what `yul config set
+    api_key` passes).
     """
     obj: YnabUnlinkedContext | None = context.obj
-    if obj is not None:
-        if require_token and not obj.config.api_key:
-            error(TOKEN_MISSING)
-            raise typer.Exit(1)
-        return obj
+    if obj is None:
+        try:
+            obj = load_context()
+        except ConfigError as unreadable:
+            error(f"{unreadable}\n{CONFIG_UNREADABLE}")
+            raise typer.Exit(1) from unreadable
 
-    with CliProgress() as progress:
-        config = get_config(progress)
-    if config is None:
+    if obj is None:
         if not interactive:
             error("No configuration found. Run `yul setup` before using --yes.")
             raise typer.Exit(1)
-        config = run_setup()
+        obj = _build_context(run_setup())
 
-    if config is None:
-        raise ConfigError("Unexpected error: config could not be loaded after setup")
-
-    if require_token and not config.api_key:
+    if require_token and not obj.config.api_key:
         error(TOKEN_MISSING)
         raise typer.Exit(1)
 
-    obj = _build_context(cast(LatestConfig, config))
     context.obj = obj
     return obj

@@ -3,7 +3,7 @@ import typer
 from ynab_unlinked import app, web
 from ynab_unlinked.commands import config_app, load, privacy_command
 from ynab_unlinked.commands.app import app_command
-from ynab_unlinked.setup import load_context, run_setup
+from ynab_unlinked.setup import run_setup
 
 app.add_typer(load, name="load")
 app.add_typer(config_app, name="config")
@@ -27,11 +27,9 @@ def cli(context: typer.Context):
     The first time the command is run you will be asked some questions to setup your YNAB connection. After that,
     transaction processing won't require any input unless there are some actions to take for specific transactions.
     """
-    # Load the persisted config when one exists. Commands that need a
-    # config call ``ensure_config`` to either pick it up here or prompt
-    # setup. Commands that don't (``setup``, ``privacy``, ``config reset``)
-    # simply ignore ``context.obj``.
-    context.obj = load_context()
+    # Nothing is loaded here: the commands that need the config call ``ensure_config``, so
+    # ``setup``, ``privacy`` and ``config reset`` never read it (nor the keychain) and keep
+    # working when the file is broken.
 
 
 def main():
