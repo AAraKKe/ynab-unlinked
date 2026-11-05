@@ -34,14 +34,17 @@ FAVICON = (
 )
 
 
-def build(token: str) -> Callable[[], Any]:
-    """Register the guard, the assets, the pages and the views. Returns the root page."""
+def build(token: str, port: int) -> Callable[[], Any]:
+    """Register the guard, the assets, the pages and the views. Returns the root page.
+
+    `port` is the one the server listens on: the guard only accepts requests addressed to it.
+    """
     # Imported here so their @shell.view registrations run whenever the app is built
     from ynab_unlinked.web import views
     from ynab_unlinked.web.views import onboarding
 
     views.register()
-    app.add_middleware(TokenGuard, token=token)
+    app.add_middleware(TokenGuard, token=token, port=port)
     app.add_static_files(theme.STATIC_ROUTE, STATIC_DIR)
     theme.install()
     ui.button.default_props("no-caps")
@@ -76,7 +79,7 @@ def run(
 
     state().load()
     app.on_startup(state().sync_in_background)
-    root = build(token)
+    root = build(token, port)
 
     if announce is not None:
         announce(f"yul is running at {entry_url(port, token)}")

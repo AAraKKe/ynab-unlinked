@@ -5,6 +5,9 @@ from contextlib import contextmanager
 from nicegui.testing.general import nicegui_reset_globals
 
 TOKEN = "test-session-token"
+PORT = 8765
+"""The port the test app pretends to listen on: its guard only accepts this Host."""
+BASE_URL = f"http://127.0.0.1:{PORT}"
 
 
 @contextmanager

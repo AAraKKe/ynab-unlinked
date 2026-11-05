@@ -559,7 +559,7 @@ History as built:
 web/
   __init__.py          nothing heavy: available() (find_spec, never imports NiceGUI),
                        storage_dir() (user data dir / "web": browser prefs and their secret)
-  app.py               build(token) -> root page (guard, static files, CSS, views, /onboarding);
+  app.py               build(token, port) -> root page (guard, static files, CSS, views, /onboarding);
                        run(port: int | None, open_browser: bool, announce=None)
   state.py             AppState / state(): config, client, store, formatter, loaders, last_sync
   accounts.py          effective_accounts() / by_hand_accounts() / effective_nettings():
@@ -598,10 +598,16 @@ web/
   `storage_dir()`, not in a `.nicegui` folder in the working directory.
 - `security.TokenGuard` (pure ASGI, sees http and websocket scopes, NiceGUI's static,
   upload and socket.io routes included): `?token=<token>` answers a tiny page that sets the
-  HttpOnly, SameSite=Strict cookie `yul_session` and navigates to the same path without the
+  HttpOnly, SameSite=Strict cookie `yul_session_<port>` (`cookie_name(port)`: cookies ignore
+  ports, so two runs do not clobber each other) and navigates to the same path without the
   token (a page, not a 302: browsers drop SameSite=Strict cookies on a redirect chain that
   started outside the site, as when another program opens the browser). Afterwards the
   cookie is required; everything else gets 403, websockets are closed with 1008.
+  `TokenGuard(app, token, port)` also refuses any request whose `Host` is not exactly
+  `127.0.0.1:<port>` (DNS rebinding), and websocket handshakes and non GET/HEAD requests
+  whose `Origin` is present and not `http://127.0.0.1:<port>` (a page served from another
+  loopback port is "same site", so SameSite does not stop it). Tests talk to
+  `http://127.0.0.1:8765` (`tests.helpers.web.BASE_URL`).
 
 ### 3.2 Shell contract for views
 

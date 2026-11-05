@@ -7,11 +7,11 @@ from nicegui import core, ui
 from nicegui.testing.general import prepare_simulation
 from nicegui.testing.user import User
 
-from tests.helpers.web import TOKEN, fresh_nicegui
+from tests.helpers.web import BASE_URL, PORT, TOKEN, fresh_nicegui
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.web import app as web_app
 from ynab_unlinked.web import state as web_state
-from ynab_unlinked.web.security import COOKIE_NAME
+from ynab_unlinked.web.security import cookie_name
 from ynab_unlinked.web.state import state
 
 
@@ -32,10 +32,10 @@ async def guest(
         try:
             prepare_simulation()
             state().reload()
-            ui.run(web_app.build(TOKEN), storage_secret="test storage secret")
+            ui.run(web_app.build(TOKEN, PORT), storage_secret="test storage secret")
             async with core.app.router.lifespan_context(core.app):
                 transport = httpx.ASGITransport(core.app)
-                async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
                     yield User(client)
         finally:
             os.environ.pop("NICEGUI_USER_SIMULATION", None)
@@ -44,5 +44,5 @@ async def guest(
 @pytest.fixture
 async def user(guest: User) -> User:
     """A browser that already traded the session token for the cookie."""
-    guest.http_client.cookies.set(COOKIE_NAME, TOKEN)
+    guest.http_client.cookies.set(cookie_name(PORT), TOKEN)
     return guest
