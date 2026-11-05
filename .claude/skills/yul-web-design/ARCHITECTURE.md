@@ -351,6 +351,7 @@ class LoaderConfig(BaseModel):
 # load means the keychain lost it: the CLI says to run `yul config set api_key`, the web
 # app keeps the config in `state().token_lost` and onboarding asks for the token only.
 # A save while the token is unread writes `REFERENCE` back, never an empty token.
+# `save()` writes a 0600 temp file in the same directory (created 0700) and `os.replace`s it.
 # `keychain.read()` returns None when `YUL_NO_KEYCHAIN` is set.
 
 class TrackedAccount(BaseModel):
@@ -441,6 +442,7 @@ class StoreError(Exception)                       # store written by a newer sch
 
 class Store:
     def __init__(self, path: Path): ...          # creates dir and schema if missing, migrates
+        # the dir is created 0700 and the file 0600 (an existing file is set to 0600)
     def sync(self, client: Client, budget_id: str, progress: Progress = NullProgress()) -> SyncResult
         # no knowledge stored for this budget -> full fetch
         # (client.transactions_with_knowledge with since_date=FULL_SYNC_SINCE, 1900-01-01,

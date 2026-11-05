@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -103,7 +104,12 @@ class Store:
 
     def __init__(self, path: Path):
         self.path = path
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        # The budget's transactions are for the user only (SQLite gives its journal the same mode)
+        if not path.exists():
+            os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
+        with suppress(OSError):
+            path.chmod(0o600)
         with self._connect() as conn:
             self._migrate(conn)
 

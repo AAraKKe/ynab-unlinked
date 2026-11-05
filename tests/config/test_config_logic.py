@@ -1,9 +1,12 @@
 import json
+import stat
+from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
 
 from tests.helpers.config import ConfigFiles
-from ynab_unlinked.config import Config
+from ynab_unlinked.config import Config, LatestConfig
 from ynab_unlinked.config.core import VERSION_MAPPING
 
 # This module tests the central logic of the config object. It does not focus on each particular
@@ -72,3 +75,49 @@ def test_set_entity_account_creates_an_unknown_entity(config: str):
     entity = config_obj.entity("brand-new")
     assert entity is not None
     assert entity.account_id == "brand-new-account"
+
+
+def _mode(path: Path) -> int:
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+@pytest.mark.version("missing")
+def test_a_new_config_is_readable_by_the_user_only(config: str, config_files: ConfigFiles):
+    config_files.write_asset("V4")
+    loaded = LatestConfig.load()
+    config_files.path("V4").unlink()
+    config_files.path("V4").parent.rmdir()
+
+    loaded.save()
+
+    path = config_files.path("V4")
+    assert _mode(path) == 0o600
+    assert _mode(path.parent) == 0o700
+    assert LatestConfig.load() == loaded
+
+
+@pytest.mark.version("V4")
+def test_saving_makes_an_existing_world_readable_config_private(
+    config: str, config_files: ConfigFiles
+):
+    config_files.path("V4").chmod(0o644)
+
+    LatestConfig.load().save()
+
+    assert _mode(config_files.path("V4")) == 0o600
+
+
+@pytest.mark.version("V4")
+def test_a_failed_save_leaves_the_old_file_whole(
+    config: str, config_files: ConfigFiles, mocker: MockerFixture
+):
+    before = config_files.read("V4")
+    loaded = LatestConfig.load()
+    loaded.set_entity_account("sabadell", "another-account")
+    mocker.patch("ynab_unlinked.config.models.v4.os.replace", side_effect=OSError("disk full"))
+
+    with pytest.raises(OSError, match="disk full"):
+        loaded.save()
+
+    assert config_files.read("V4") == before
+    assert [p.name for p in config_files.path("V4").parent.iterdir()] == ["config.json"]

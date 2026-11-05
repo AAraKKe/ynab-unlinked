@@ -1,5 +1,6 @@
 import datetime as dt
 import sqlite3
+import stat
 import uuid
 from collections.abc import Sequence
 from contextlib import closing
@@ -84,6 +85,17 @@ def test_opening_creates_the_schema_and_its_directory(tmp_path: Path):
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master")}
     assert version == SCHEMA_VERSION
     assert {"accounts", "transactions", "sync_state", "activity"} <= tables
+
+
+def test_the_store_and_its_directory_are_for_the_user_only(tmp_path: Path):
+    path = tmp_path / "nested" / "store.sqlite"
+
+    Store(path)
+    path.chmod(0o644)  # one written by 1.0.0
+    Store(path)
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
 
 
 def test_reopening_keeps_what_was_stored(tmp_path: Path):

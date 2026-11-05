@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import os
+import tempfile
 from enum import StrEnum
 from pathlib import Path
 
@@ -53,6 +55,22 @@ class Adjustments(BaseModel):
     cleared: ClearedStatus = ClearedStatus.CLEARED
 
 
+def _write_private(path: Path, text: str) -> None:
+    """Write through a user only temp file in the same directory, then swap it in."""
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # mkstemp creates the file with mode 0o600
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            file.write(text)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temp, path)
+    except BaseException:
+        Path(temp).unlink(missing_ok=True)
+        raise
+
+
 class ConfigV4(BaseModel):
     api_key: str
     budget: Budget
@@ -82,7 +100,8 @@ class ConfigV4(BaseModel):
         """Write the file; the token goes to the keychain when there is one.
 
         The file then holds `keychain.REFERENCE` in its place. Without a keychain, or when it
-        refuses the token, the token is written in plain text as before.
+        refuses the token, the token is written in plain text as before. The file is readable
+        by the user only and replaced in one step, so a crash never leaves half of it.
         """
         on_disk = self
         if self.api_key and self.api_key != keychain.REFERENCE and keychain.available():
@@ -94,8 +113,7 @@ class ConfigV4(BaseModel):
                 on_disk = self.model_copy(update={"api_key": keychain.REFERENCE})
         elif not self.api_key and self._keychain_unread:
             on_disk = self.model_copy(update={"api_key": keychain.REFERENCE})
-        self.path().parent.mkdir(parents=True, exist_ok=True)
-        self.path().write_text(on_disk.model_dump_json(indent=4))
+        _write_private(self.path(), on_disk.model_dump_json(indent=4))
 
     @staticmethod
     def load() -> ConfigV4:

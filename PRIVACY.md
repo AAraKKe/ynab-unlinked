@@ -73,7 +73,7 @@ You can run `yul privacy` at any time to print the resolved paths on your machin
 The keychain protects the token with your user session: another program running as you may still be allowed to read it, and macOS asks before a new program does. Where no keychain exists and the token is stored in plaintext, anyone with read access to the file above can use it as if they were you. We strongly recommend:
 
 - Use full-disk encryption (FileVault, LUKS, BitLocker).
-- Restrict file permissions to your user (`chmod 600` on macOS/Linux).
+- Keep the files private to your user. yul writes the config file and `store.sqlite` readable by your user only (mode 600 on macOS/Linux); check this if you copy them elsewhere.
 - If you suspect the file has leaked, **revoke the token immediately** in YNAB → Account Settings → Developer Settings, and generate a new one.
 
 ## Dependencies that touch your data
