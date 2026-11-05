@@ -8,7 +8,7 @@ import pytest
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
-from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config import LatestConfig, update_config
 from ynab_unlinked.store import Store
 
 from .harness import (
@@ -120,6 +120,30 @@ def test_reconcile_moves_the_checkpoint_to_the_latest_reconciled_transaction(
     assert result.exit_code == 0, result.output
     # Only `--buffer` rewinds the next scope; the checkpoint itself is not moved back
     assert LatestConfig.load().last_reconciliation_date == dt.date(2025, 5, 20)
+
+
+def test_reconcile_keeps_the_settings_the_app_saved_while_the_tui_was_open(
+    yul: CliRunner, ynab: YnabClientStub, stored_config: LatestConfig, tui: TuiStub
+):
+    given_ynab_data(
+        ynab,
+        [TransactionDetailFactory(id="t1", account_id=CHECKING_ID, var_date=dt.date(2025, 5, 20))],
+        [CHECKING],
+    )
+    run = tui.app_class.return_value.run.side_effect
+
+    def app_saves_meanwhile() -> int:
+        update_config(lambda saved: setattr(saved.adjustments, "memo", "Saved by the app"))
+        return run()
+
+    tui.app_class.return_value.run.side_effect = app_saves_meanwhile
+
+    result = yul("reconcile")
+
+    assert result.exit_code == 0, result.output
+    on_disk = LatestConfig.load()
+    assert on_disk.last_reconciliation_date == dt.date(2025, 5, 20)
+    assert on_disk.adjustments.memo == "Saved by the app"
 
 
 def test_reconcile_keeps_the_checkpoint_before_what_was_left_unreconciled(

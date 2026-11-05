@@ -8,6 +8,7 @@ from nicegui import ui
 
 from ynab_unlinked import keychain
 from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config import switch_budget as switch_budget_in
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import budget_tiles, button, dialog_box, loading, show_state
 from ynab_unlinked.web.state import state
@@ -156,11 +157,7 @@ async def switch_budget(dialog: ui.dialog, budget_id: str, name: str) -> None:
         return
 
     with shell.edit_config(f"Budget switched to {budget.name}") as config:
-        config.budget = budget
-        config.loaders = {}
-        config.accounts = []
-        config.debt_mappings = []
-        config.last_reconciliation_date = None
+        switch_budget_in(config, budget)
     dialog.close()
     state().sync_in_background()
     ui.navigate.reload()

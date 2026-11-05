@@ -96,7 +96,25 @@ def test_config_set_budget_stores_the_budget_picked_by_the_user(
     assert stored_budget["id"] == str(NEW_BUDGET_ID)
     assert stored_budget["date_format"] == "YYYY-MM-DD"
     assert stored_budget["currency_format"]["iso_code"] == "USD"
-    # The rest of the config must survive a budget change
+    # What belonged to the old budget is cleared, like the app's switch does
+    stored = json.loads(config_files.read())
+    assert stored["loaders"] == {}
+    assert stored["api_key"] == "my-api-key"
+    assert "are cleared" in result.output
+
+
+def test_config_set_budget_keeps_the_mappings_when_the_same_budget_is_picked(
+    yul: CliRunner, config_files: ConfigFiles, mocker: MockerFixture
+):
+    current = LatestConfig.load().budget
+    client = mocker.patch("ynab_unlinked.utils.Client")
+    client.return_value.budgets.return_value = [PlanSummary(id=UUID(current.id), name="My Budget")]
+    client.return_value.budget.return_value = PlanDetailFactory(id=UUID(current.id))
+
+    result = yul("config set budget", input="1\n", env=WIDE_TERMINAL)
+
+    assert result.exit_code == 0, result.output
     assert json.loads(config_files.read())["loaders"]["sabadell"]["account_id"] == (
         "sabadell-account"
     )
+    assert "are cleared" not in result.output

@@ -4,7 +4,7 @@ from typing import Annotated, assert_never
 import typer
 
 from ynab_unlinked import keychain
-from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config import LatestConfig, switch_budget, update_config
 from ynab_unlinked.display import bullet_list, confirm, console, info, success, warning
 from ynab_unlinked.local_data import delete_local_data, local_data_paths
 from ynab_unlinked.privacy import privacy_notice
@@ -34,12 +34,17 @@ def set_command(
             privacy_notice()
             api_key = prompt_for_api_key()
             config.api_key = api_key
-            config.save()
+            update_config(lambda saved: setattr(saved, "api_key", api_key))
             success("🎉 The API key has been updated")
         case ValidKeys.BUDGET:
             budget = prompt_for_budget(config.api_key)
-            config.budget = budget
-            config.save()
+            if budget.id != config.budget.id:
+                warning(
+                    "Bank accounts, account settings, debt mappings and the last "
+                    "reconciliation belong to the old budget, so they are cleared."
+                )
+            switch_budget(config, budget)
+            update_config(lambda saved: switch_budget(saved, budget))
             success("🎉 The budget has been updated")
         case never:
             assert_never(never)

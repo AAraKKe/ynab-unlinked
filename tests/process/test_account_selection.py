@@ -15,6 +15,7 @@ from tests.process.builders import (
     saved_config,
     write_config,
 )
+from ynab_unlinked.config import update_config
 from ynab_unlinked.process import get_or_prompt_account_id
 
 pytestmark = pytest.mark.version("V4")
@@ -54,6 +55,23 @@ def test_an_unknown_entity_is_offered_only_the_open_accounts(
     assert question.call_args.kwargs["choices"] == ["1", "2"]
     assert account_id == OTHER_ACCOUNT_ID
     assert saved_config(config_file).loaders["newbank"].account_id == OTHER_ACCOUNT_ID
+
+
+def test_the_chosen_account_is_saved_on_the_config_as_it_is_now(
+    config_file: Path, accounts_in_ynab, mocker: MockerFixture
+):
+    accounts_in_ynab(AccountFactory(id=OTHER_ACCOUNT_ID, name="Credit Card"))
+    loaded = saved_config(config_file)
+    # Saved by the app while the CLI waited for the answer
+    update_config(lambda saved: setattr(saved.loaders["test"], "enabled", False))
+    mocker.patch("ynab_unlinked.process.question", return_value="1")
+
+    get_or_prompt_account_id(loaded, "newbank", force_prompt=False)
+
+    on_disk = saved_config(config_file)
+    assert on_disk.loaders["newbank"].account_id == OTHER_ACCOUNT_ID
+    assert on_disk.loaders["test"].enabled is False
+    assert loaded.loaders["newbank"].account_id == OTHER_ACCOUNT_ID
 
 
 def test_a_forced_prompt_does_not_persist_the_chosen_account(

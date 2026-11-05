@@ -9,7 +9,18 @@ from pytest_mock import MockerFixture
 from tests.factories import PlanDetailFactory
 from tests.helpers import assets
 from tests.helpers.config import ConfigFiles
-from ynab_unlinked.config import Adjustments, ConfigV4, LoaderConfig, get_config
+from ynab_unlinked.buckets import Bucket
+from ynab_unlinked.config import (
+    Adjustments,
+    ConfigV4,
+    DebtMapping,
+    LoaderConfig,
+    TrackedAccount,
+    edit_config,
+    get_config,
+    switch_budget,
+    update_config,
+)
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.config.models import ConfigV2
 from ynab_unlinked.display import CliProgress
@@ -138,3 +149,78 @@ def test_a_migration_without_a_progress_prints_nothing(
     assert isinstance(get_config(), ConfigV4)
 
     assert capsys.readouterr().out == ""
+
+
+@pytest.mark.version("V4")
+def test_two_writers_keep_each_others_changes(config: str):
+    # The CLI loaded its copy before opening the reconcile TUI; the app saves meanwhile
+    cli_copy = ConfigV4.load()
+    update_config(lambda saved: setattr(saved.loaders["cobee"], "enabled", False))
+
+    cli_copy.last_reconciliation_date = dt.date(2025, 5, 10)
+    update_config(lambda saved: setattr(saved, "last_reconciliation_date", dt.date(2025, 5, 10)))
+
+    on_disk = ConfigV4.load()
+    assert on_disk.last_reconciliation_date == dt.date(2025, 5, 10)
+    assert on_disk.loaders["cobee"].enabled is False, "The CLI undid what the app saved"
+
+
+@pytest.mark.version("V4")
+def test_a_failing_edit_saves_nothing(config: str, config_files: ConfigFiles):
+    before = config_files.read()
+
+    with pytest.raises(RuntimeError), edit_config() as saved:
+        saved.api_key = "never-saved"
+        raise RuntimeError("the change failed")
+
+    assert config_files.read() == before
+
+
+@pytest.mark.version("missing")
+def test_editing_without_a_config_file_changes_the_fallback_or_fails(
+    config: str, config_files: ConfigFiles
+):
+    with pytest.raises(ConfigError, match="yul setup"):
+        update_config(lambda saved: None)
+    assert not config_files.v2.exists()
+
+    fallback = ConfigV4.model_validate_json(assets.read_text("config_V4/config.json"))
+    saved = update_config(lambda saved: setattr(saved, "api_key", "new-token"), fallback)
+
+    assert ConfigV4.load().api_key == saved.api_key == "new-token"
+    assert fallback.api_key == "my-api-key", "The fallback itself is not changed"
+
+
+def _with_budget_settings() -> ConfigV4:
+    config = ConfigV4.model_validate_json(assets.read_text("config_V4/config.json"))
+    config.last_reconciliation_date = dt.date(2025, 5, 10)
+    config.accounts = [
+        TrackedAccount(id="checking", name="Checking", type="checking", bucket=Bucket.CASH)
+    ]
+    config.debt_mappings = [DebtMapping(debt_account_id="card", mapped_to=["checking"])]
+    config.adjustments = Adjustments(memo="By hand")
+    return config
+
+
+def test_switching_budget_clears_what_belongs_to_the_old_budget():
+    config = _with_budget_settings()
+    other = config.budget.model_copy(update={"id": "another-budget", "name": "Other"})
+
+    switch_budget(config, other)
+
+    assert config.budget == other
+    assert (config.loaders, config.accounts, config.debt_mappings) == ({}, [], [])
+    assert config.last_reconciliation_date is None
+    assert config.api_key == "my-api-key"
+    assert config.adjustments.memo == "By hand"
+
+
+def test_choosing_the_same_budget_again_keeps_its_settings():
+    config = _with_budget_settings()
+    renamed = config.budget.model_copy(update={"name": "Renamed in YNAB"})
+
+    switch_budget(config, renamed)
+
+    assert config.budget.name == "Renamed in YNAB"
+    assert config.loaders and config.accounts and config.debt_mappings
+    assert config.last_reconciliation_date == dt.date(2025, 5, 10)

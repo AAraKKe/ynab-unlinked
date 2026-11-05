@@ -20,7 +20,7 @@ from pathlib import Path
 from nicegui import background_tasks, run
 from pydantic import ValidationError
 
-from ynab_unlinked.config import LatestConfig, get_config
+from ynab_unlinked.config import LatestConfig, edit_config, get_config
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.core.progress import NullProgress, Progress
 from ynab_unlinked.entities.registry import LoaderSpec, loaders
@@ -157,16 +157,13 @@ class AppState:
     def edit_config(self) -> Iterator[LatestConfig]:
         """`update_config` as a block: change the config it yields; saved when the block ends.
 
-        Nothing is saved when the block raises.
+        Built on `config.edit_config()`; nothing is saved when the block raises.
         """
-        if LatestConfig.exists():
-            config = LatestConfig.load()
-        elif (current := self.config or self.token_lost) is not None:
-            config = current.model_copy(deep=True)
-        else:
+        current = self.config or self.token_lost
+        if current is None and not LatestConfig.exists():
             raise NotConfiguredError()
-        yield config
-        config.save()
+        with edit_config(fallback=current) as config:
+            yield config
         self.reload()
 
     async def sync(self, progress: Progress = _NO_PROGRESS) -> SyncResult | None:

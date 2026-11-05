@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Final
 
 from pydantic import ValidationError
@@ -18,6 +20,7 @@ from .models import (
     DeltaConfigV2ToV3,
     DeltaConfigV3ToV4,
 )
+from .models.v2 import Budget
 from .paths import config_path
 from .types import Config
 
@@ -97,3 +100,48 @@ def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
         return loaded
 
     return migration_engine().migrate(loaded, LATEST_CONFIG_TYPE, progress=progress)
+
+
+@contextmanager
+def edit_config(fallback: LATEST_CONFIG_TYPE | None = None) -> Iterator[LATEST_CONFIG_TYPE]:
+    """Change the config on disk in a block: read again, change what the block yields, save.
+
+    The file is read again first, so what another process (the CLI or the app) saved since
+    this one loaded its copy is kept: each writer only changes what its block touches.
+    `fallback` is changed instead when there is no file yet. Nothing is saved when the block
+    raises. There is no lock: two saves in the same instant still race, the last one wins.
+    """
+    if LATEST_CONFIG_TYPE.exists():
+        config = LATEST_CONFIG_TYPE.load()
+    elif fallback is not None:
+        config = fallback.model_copy(deep=True)
+    else:
+        raise ConfigError("There is no config to change yet. Run `yul setup` first.")
+    yield config
+    config.save()
+
+
+def update_config(
+    change: Callable[[LATEST_CONFIG_TYPE], None], fallback: LATEST_CONFIG_TYPE | None = None
+) -> LATEST_CONFIG_TYPE:
+    """`edit_config` as a call: apply `change` to the config on disk; returns what was saved."""
+    with edit_config(fallback) as config:
+        change(config)
+    return config
+
+
+def switch_budget(config: LATEST_CONFIG_TYPE, budget: Budget) -> None:
+    """Point `config` at another budget, forgetting what belonged to the old one.
+
+    Bank accounts, tracked accounts, debt mappings and the last reconciliation are ids and
+    dates of the old budget, so they are cleared. The token and the adjustment settings are
+    not tied to a budget and stay. Choosing the budget already set changes nothing.
+    """
+    if config.budget.id == budget.id:
+        config.budget = budget
+        return
+    config.budget = budget
+    config.loaders = {}
+    config.accounts = []
+    config.debt_mappings = []
+    config.last_reconciliation_date = None

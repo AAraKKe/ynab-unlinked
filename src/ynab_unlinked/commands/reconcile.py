@@ -8,7 +8,7 @@ from ynab_unlinked import app, display
 from ynab_unlinked.activity import log_reconcile
 from ynab_unlinked.choices import Choice
 from ynab_unlinked.commands.apps.reconcile import Reconcile
-from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config import LatestConfig, update_config
 from ynab_unlinked.core.reconcile import next_reconciliation_date, reconciliation_overview
 from ynab_unlinked.core.reconcile import reconcile as reconcile_transactions
 from ynab_unlinked.display import CliProgress
@@ -129,10 +129,13 @@ def reconcile(
         display.info("Nothing to reconcile.\n👋 Bye!")
         return
 
-    config.last_reconciliation_date = next_reconciliation_date(
+    next_date = next_reconciliation_date(
         [t.var_date for t in selected_transactions], left_unreconciled
     )
-    config.save()
+    config.last_reconciliation_date = next_date
+    # The TUI may have been open for minutes: save on the file as it is now, so settings the
+    # app saved meanwhile are kept
+    update_config(lambda saved: setattr(saved, "last_reconciliation_date", next_date))
 
     log_reconcile(
         config,

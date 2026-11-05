@@ -1,5 +1,5 @@
 from .constants import LATEST_VERSION, MAX_CONFIG_VERSION
-from .core import get_config
+from .core import edit_config, get_config, switch_budget, update_config
 from .models import (
     Adjustments,
     ClearedStatus,
@@ -28,7 +28,10 @@ __all__ = [
     "LatestConfig",
     "LoaderConfig",
     "TrackedAccount",
+    "edit_config",
     "get_config",
+    "switch_budget",
+    "update_config",
     "LATEST_VERSION",
     "MAX_CONFIG_VERSION",
 ]

@@ -29,7 +29,9 @@ src/ynab_unlinked/
                      move it there and back, the file holds `@keychain` in its place.
   ynab_api/          Thin wrapper around the `ynab` SDK (`Client`). The only SDK caller.
   config/            Versioned config (`ConfigV1`..`ConfigV4`, use `LatestConfig`) with a
-                     migration engine.
+                     migration engine. Save through `update_config` / `edit_config` (read
+                     again, change, save), never `save()` on a copy loaded earlier; a budget
+                     change goes through `switch_budget`.
   web/               NiceGUI app behind `yul app`, only importable with the `web` extra.
   setup.py           First-run setup and loading the `YnabUnlinkedContext` for commands.
 tests/               Mirrors `src`. Fixtures in `tests/assets`, helpers in `tests/helpers`.

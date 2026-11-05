@@ -8,7 +8,12 @@ from nicegui import ui
 from nicegui.testing.user import User
 from pytest_mock import MockerFixture
 
-from tests.factories import AccountFactory, PlanSummaryFactory, TransactionDetailFactory
+from tests.factories import (
+    AccountFactory,
+    PlanDetailFactory,
+    PlanSummaryFactory,
+    TransactionDetailFactory,
+)
 from tests.helpers.config import ConfigFiles
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.buckets import Bucket
@@ -156,6 +161,65 @@ async def test_a_new_token_is_saved_only_if_it_sees_the_budget(
 
     await user.should_see(message, retries=20)
     assert LatestConfig.load().api_key == saved_token
+
+
+@pytest.fixture
+def budget_settings(tracked: LatestConfig) -> LatestConfig:
+    """Every setting a budget switch decides on. Request it before `user`."""
+    tracked.debt_mappings = [DebtMapping(debt_account_id=CARD_ID, mapped_to=[CHECKING_ID])]
+    tracked.last_reconciliation_date = dt.date(2025, 5, 10)
+    tracked.adjustments.memo = "Adjusted by hand"
+    tracked.save()
+    return tracked
+
+
+async def test_switching_budget_clears_what_belonged_to_the_old_one(
+    budget_settings: LatestConfig, user: User, ynab_api: YnabClientStub
+):
+    mapped = budget_settings
+    other = uuid.UUID(int=77)
+    budget_api = ynab_api.api("budget")
+    budget_api.get_plans.return_value.data.plans = [
+        PlanSummaryFactory(id=uuid.UUID(mapped.budget.id), name="My Budget"),
+        PlanSummaryFactory(id=other, name="Other Budget"),
+    ]
+    budget_api.get_plan_by_id.return_value.data.plan = PlanDetailFactory(
+        id=other, name="Other Budget"
+    )
+    await user.open("/settings")
+
+    user.find(marker="change-budget").click()
+    await user.should_see(marker=f"budget-{other}", retries=20)
+    user.find(marker=f"budget-{other}").click()
+    await user.should_see("Switch to Other Budget?", retries=20)
+    user.find(marker="confirm-action").click()
+
+    await user.should_see("Budget switched to Other Budget", retries=20)
+    saved = LatestConfig.load()
+    assert saved.budget.id == str(other)
+    assert (saved.loaders, saved.accounts, saved.debt_mappings) == ({}, [], [])
+    assert saved.last_reconciliation_date is None
+    assert saved.api_key == mapped.api_key
+    assert saved.adjustments == mapped.adjustments
+    budget_api.get_plan_by_id.assert_called_once_with(plan_id=str(other))
+
+
+async def test_picking_the_current_budget_changes_nothing(
+    mapped: LatestConfig, user: User, ynab_api: YnabClientStub
+):
+    current = uuid.UUID(mapped.budget.id)
+    ynab_api.api("budget").get_plans.return_value.data.plans = [
+        PlanSummaryFactory(id=current, name="My Budget")
+    ]
+    await user.open("/settings")
+
+    user.find(marker="change-budget").click()
+    await user.should_see(marker=f"budget-{current}", retries=20)
+    user.find(marker=f"budget-{current}").click()
+
+    await user.should_not_see("Switch to My Budget?", retries=20)
+    assert LatestConfig.load() == mapped
+    ynab_api.api("budget").get_plan_by_id.assert_not_called()
 
 
 async def test_the_data_tab_says_where_the_token_is_in_plain_words(

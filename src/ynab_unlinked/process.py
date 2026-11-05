@@ -5,7 +5,7 @@ from ynab import TransactionClearedStatus
 
 from ynab_unlinked import display
 from ynab_unlinked.activity import log_import
-from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config import LatestConfig, update_config
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.importing import build_import_plan, commit_import_plan, parse_transactions
 from ynab_unlinked.display import CliProgress, bullet_list, confirm, console, info, question
@@ -46,8 +46,9 @@ def get_or_prompt_account_id(
 
     account_id = str(account.id)
     if not force_prompt:
+        # Saved on the file as it is now, so settings the app saved meanwhile are kept
         config.set_entity_account(entity_name, account_id)
-        config.save()
+        update_config(lambda saved: saved.set_entity_account(entity_name, account_id))
 
     return account_id
 

@@ -408,6 +408,24 @@ class ConfigV4(BaseModel):
     def debt_mapping(self, debt_account_id) -> DebtMapping | None
 ```
 
+```python
+# config/core.py, exported from ynab_unlinked.config
+@contextmanager
+def edit_config(fallback: LatestConfig | None = None) -> Iterator[LatestConfig]
+def update_config(change: Callable[[LatestConfig], None], fallback=None) -> LatestConfig
+def switch_budget(config: LatestConfig, budget: Budget) -> None
+```
+
+- Every config save, in the CLI and in the app, goes through `edit_config` / `update_config`:
+  the file is read again, the change applied and the result saved, so each writer only
+  changes what it touches and what another process saved meanwhile is kept. With no file,
+  `fallback` is changed instead (the app passes its copy); without one it raises
+  `ConfigError`. Nothing is saved when the block raises. No file lock: two saves in the
+  same instant still race. Only `yul setup` writes a whole new config.
+- `switch_budget` is the one rule for a budget change (`yul config set budget` and
+  Settings › Connection): another budget clears `loaders`, `accounts`, `debt_mappings` and
+  `last_reconciliation_date`; the token and `adjustments` stay. The same budget again only
+  refreshes `budget` (name, formats).
 - `DeltaConfigV3ToV4`: `entities` -> `loaders` (options empty), everything else default.
   Rollback drops the new fields. Registered in `core.migration_engine()`.
 - `LATEST_VERSION`, `MAX_CONFIG_VERSION`, `VERSION_MAPPING`, `LatestConfig` updated.
@@ -743,8 +761,8 @@ list[LoaderSpec]`, `last_sync`, `sync_error`, `load_error`, `configured`, `synci
 reopens the store: after the local data was deleted) / `reload()` (after saving the config:
 keeps the store and, for the same budget, `last_sync`; the banks are discovered once per
 process), `update_config(change: Callable[[LatestConfig], None]) -> LatestConfig` (every
-config save in the app: reads the file again, applies `change`, saves and reloads, so what
-the CLI saved meanwhile is kept; never save `state().config` or a copy of it;
+config save in the app: `config.update_config` with the app's copy as the fallback, then a
+reload, so what the CLI saved meanwhile is kept; never save `state().config` or a copy of it;
 `edit_config()` is the same as a `with` block yielding the config to change, saved at the
 end of the block, and views use `shell.edit_config(message=None)`, which toasts `message`
 after the save; reading and saving can wait on the disk and the keychain, so Settings › Banks
