@@ -19,11 +19,13 @@ from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.core.detect import resolve_options
+from ynab_unlinked.core.importing import ImportPlan, ImportResult
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
 from ynab_unlinked.models import assign_import_ids
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.state import AppState, state
+from ynab_unlinked.web.views.import_.data import import_log
 from ynab_unlinked.web.wording import IMPORT_FAILED
 
 pytestmark = pytest.mark.version("V4")
@@ -412,3 +414,19 @@ async def test_a_failed_commit_leaves_the_flow_open_to_new_drops(
     await drop(user, SABADELL)
     await user.should_see("3 new / 3", marker="count-1", retries=30)
     assert all("Wait for the import" not in str(call.args[0]) for call in notify.call_args_list)
+
+
+@pytest.mark.parametrize(
+    ("created", "message"),
+    [
+        pytest.param(1, "Imported 1 transaction to 💳 Oro from movements.txt", id="one"),
+        pytest.param(2, "Imported 2 transactions to 💳 Oro from movements.txt", id="two"),
+    ],
+)
+def test_the_log_line_of_an_import_counts_in_words(created: int, message: str):
+    plan = ImportPlan(entity_name="sabadell", account_id=ORO, input_file=SABADELL, rows=())
+    result = ImportResult(created=created, duplicate_import_ids=())
+
+    logged, _ = import_log("sabadell", "movements.txt", "💳 Oro", plan, result)
+
+    assert logged == message

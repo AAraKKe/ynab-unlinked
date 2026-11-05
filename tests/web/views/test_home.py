@@ -14,7 +14,7 @@ from ynab import TransactionClearedStatus
 from tests.helpers.store import upsert
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.buckets import Bucket
-from ynab_unlinked.config import DebtMapping, LatestConfig, TrackedAccount
+from ynab_unlinked.config import Adjustments, DebtMapping, LatestConfig, TrackedAccount
 from ynab_unlinked.store import Activity, Store, StoredAccount, StoredTransaction
 from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views import home
@@ -561,3 +561,62 @@ def test_activity_message_markup(kind: str, message: str, details: dict, expecte
     entry = Activity(at=now(), kind=kind, message=message, details=details)
 
     assert home.message_markup(entry) == expected
+
+
+def by_hand(id: str, days: int, *, payee: str = "Shop", memo: str | None = None):
+    return dataclasses.replace(transaction(id, "broker", days_ago(days), 0, payee=payee), memo=memo)
+
+
+@pytest.mark.parametrize(
+    ("transactions", "logged", "expected"),
+    [
+        pytest.param([], None, None, id="nothing-yet"),
+        pytest.param([by_hand("d", 2)], None, 2, id="no-adjustment-the-newest-transaction"),
+        pytest.param(
+            [by_hand("a", 40, payee="Saldo"), by_hand("d", 2)], None, 40, id="by-the-payee"
+        ),
+        pytest.param(
+            [by_hand("a", 40, memo="Set by hand"), by_hand("d", 2)], None, 40, id="by-the-memo"
+        ),
+        # Made before the payee and the memo changed: only the log still knows it
+        pytest.param(
+            [by_hand("a", 40, payee="Old payee"), by_hand("d", 2)], 40, 40, id="logged-by-yul"
+        ),
+    ],
+)
+def test_a_balance_set_by_hand_dates_from_its_newest_adjustment(
+    transactions: list[StoredTransaction], logged: int | None, expected: int | None
+):
+    settings = Adjustments(payee="Saldo", memo="Set by hand")
+
+    last = home.last_set_by_hand(
+        transactions, settings, None if logged is None else days_ago(logged)
+    )
+
+    assert last == (None if expected is None else days_ago(expected))
+
+
+async def test_an_adjustment_made_before_the_settings_changed_still_dates_the_balance(
+    store: Store, budget: LatestConfig
+):
+    # The broker was set by hand 40 days ago and only had a dividend since
+    upsert(
+        store,
+        budget.budget.id,
+        transactions=[
+            transaction("b2", "broker", days_ago(40), 0, payee="Balance Adjustment"),
+            transaction("b3", "broker", days_ago(1), 10, payee="Dividend"),
+        ],
+    )
+    store.log(
+        budget.budget.id,
+        "adjustment",
+        "Balance of Broker set to 3,000.00€ (+0.00€)",
+        {"account_id": "broker", "account_name": "Broker", "old": 0, "new": 0, "amount": 0},
+        at=now() - dt.timedelta(days=40),
+    )
+    budget.adjustments = Adjustments(payee="Saldo", memo="Set by hand")
+
+    data = home.load_home(store, budget, [], dt.date.today())
+
+    assert data.stale == ["Broker"]

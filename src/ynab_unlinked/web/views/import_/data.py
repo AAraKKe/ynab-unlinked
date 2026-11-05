@@ -196,7 +196,7 @@ def import_log(
         "duplicates": len(result.duplicate_import_ids),
         "skipped": plan.already_imported_count,
     }
-    message = f"Imported {result.created} transactions to {account_name} from {file}"
+    message = f"Imported {plural(result.created, 'transaction')} to {account_name} from {file}"
     return message, details
 
 

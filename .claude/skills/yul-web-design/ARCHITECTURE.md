@@ -706,7 +706,7 @@ web/
     through its imports: web.accounts, web.buckets, web.paths, web.wording are NiceGUI-free)
     and unit testable; the other modules draw. __init__ re-exports the names tests use.
     home/              /            hero, import (drop zone, last imports), needs you, activity (3.4.2)
-      data.py          LoaderDue, HomeData, load_home, relative_time, last_imports_line,
+      data.py          LoaderDue, HomeData, load_home, last_set_by_hand, relative_time, last_imports_line,
                        message_markup, Attention, attention_items
       view.py          the page (hero with count_up, spark_options, activity, banner)
     import_/           /import      Files -> Review -> Done on core.detect and core.importing
@@ -883,7 +883,7 @@ that number in the message and shows `file` in mono.
 
 | kind | message | details |
 |---|---|---|
-| `import` | `Imported {created} transactions to {account_name} from {file}` | `loader` (config key), `account_id`, `account_name`, `file`, `created`, `duplicates`, `skipped` |
+| `import` | `Imported {plural(created, "transaction")} to {account_name} from {file}` | `loader` (config key), `account_id`, `account_name`, `file`, `created`, `duplicates`, `skipped` |
 | `reconcile` | `Reconciled {count} transactions in {n} accounts` | `count`, `accounts: [{id, name, count}]` |
 | `adjustment` | `Balance of {account_name} set to {new} ({signed amount})` | `account_id`, `account_name`, `old`, `new`, `amount` (milliunits) |
 | `sync` | `Synced · {changes} changes from YNAB`, plus ` · {ghosts} stale removed` when ghosts > 0 | `changes`, `full`, `ghosts` (only when > 0) |
@@ -896,8 +896,10 @@ and `reconcile` (after `yul reconcile` locks) with the same shapes through
 next sync brings the transactions.
 Use singular nouns for 1 ("1 change"). `AppState._sync` logs `sync` only when the sync was
 full, brought changes or removed ghosts (one runs at every start). Home reads: the newest
-`reconcile` (hero change since) and the newest `import` per `details["loader"]` (the last
-imports line, 3.4.2). It ignores `config` entries. Home has no setup card: every open
+`reconcile` (hero change since), the newest `import` per `details["loader"]` (the last
+imports line, 3.4.2) and the newest `adjustment` per `details["account_id"]` (when a balance
+kept by hand was last set, with the transactions carrying the payee or the memo of the
+adjustment settings: `last_set_by_hand`, so a settings change does not hide older ones). It ignores `config` entries. Home has no setup card: every open
 account counts from the start (3.4.1).
 
 ### 3.4.1 Which accounts count
