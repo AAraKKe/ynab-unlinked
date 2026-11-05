@@ -257,9 +257,7 @@ class AppState:
         self.stale = False
         try:
             # In the worker: the first use opens the store, which must not block the loop
-            result = await run.io_bound(
-                lambda: self.store.sync(client, config.budget.id, progress)
-            )
+            result = await run.io_bound(lambda: self.store.sync(client, config.budget.id, progress))
         except Exception as error:
             # A stalled YNAB gives up after `REQUEST_TIMEOUT`, in the user's words
             self.sync_error = YNAB_TIMED_OUT if timed_out(error) else str(error)

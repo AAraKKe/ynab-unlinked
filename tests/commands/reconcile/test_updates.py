@@ -267,7 +267,10 @@ def _uncleared_left_and_one_locked(ynab: YnabClientStub) -> None:
         ynab,
         [
             TransactionDetailFactory(
-                id="waiting", account_id=CHECKING_ID, var_date=dt.date(2025, 5, 2), cleared=UNCLEARED
+                id="waiting",
+                account_id=CHECKING_ID,
+                var_date=dt.date(2025, 5, 2),
+                cleared=UNCLEARED,
             ),
             TransactionDetailFactory(
                 id="latest", account_id=CHECKING_ID, var_date=dt.date(2025, 5, 20)

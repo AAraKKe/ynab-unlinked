@@ -170,9 +170,7 @@ async def test_a_resync_that_ynab_never_answers_gives_up_and_lets_a_reset_run(
 async def test_a_reset_that_fails_to_delete_still_loads_what_is_left(
     app_state: AppState, store_file: Path, mocker: MockerFixture
 ):
-    mocker.patch(
-        "ynab_unlinked.web.state.delete_local_data", side_effect=PermissionError("in use")
-    )
+    mocker.patch("ynab_unlinked.web.state.delete_local_data", side_effect=PermissionError("in use"))
 
     with pytest.raises(PermissionError):
         await app_state.reset([store_file])

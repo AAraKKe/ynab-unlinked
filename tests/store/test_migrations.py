@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from ynab_unlinked.core.progress import NullProgress
-
 from ynab_unlinked.store import Store, StoreError
 from ynab_unlinked.store.migrations import (
     MIGRATIONS,

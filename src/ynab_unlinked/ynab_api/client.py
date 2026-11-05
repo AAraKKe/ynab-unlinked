@@ -20,6 +20,7 @@ from ynab import (
     TransactionDetail,
     TransactionsApi,
 )
+from ynab.rest import RESTResponse
 
 from ynab_unlinked.models import PendingImport, milliunits
 
@@ -55,8 +56,9 @@ class _TimedApiClient(ApiClient):
         body: Any = None,
         post_params: Any = None,
         _request_timeout: Any = None,
-    ) -> Any:
-        return super().call_api(
+    ) -> RESTResponse:
+        # The SDK leaves the parameters of `call_api` untyped
+        return super().call_api(  # pyright: ignore[reportUnknownMemberType]
             method,
             url,
             header_params,
