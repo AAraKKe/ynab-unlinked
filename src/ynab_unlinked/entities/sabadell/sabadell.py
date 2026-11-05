@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ynab_unlinked.entities import Match
 
@@ -28,7 +28,7 @@ class SabadellParser:
     def __init__(self, year: int):
         self.year = year
 
-    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
+    def parse(self, input_file: Path, context: YnabUnlinkedContext[Any]) -> list[Transaction]:
         from ynab_unlinked.entities import InputType
         from ynab_unlinked.entities._sniff import extract_type
 
@@ -73,7 +73,7 @@ class SabadellParser:
         from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import xls
 
-        transactions = []
+        transactions: list[Transaction] = []
 
         # Real transactions appear after the header row
         for entry in xls(input_file, read_after_row_like=XLS_HEADER, allow_partial_match=True):

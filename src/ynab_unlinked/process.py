@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import typer
 from ynab import TransactionClearedStatus
@@ -56,7 +57,7 @@ def get_or_prompt_account_id(
 def process_transactions(
     entity: Entity,
     input_file: Path,
-    context: YnabUnlinkedContext,
+    context: YnabUnlinkedContext[Any],
 ) -> None:
     """
     Process the transactions from the input file and import them into YNAB.

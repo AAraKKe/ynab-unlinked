@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ynab_unlinked.entities import Entity, InputType, Match
 
@@ -18,7 +18,7 @@ PDF_DATE = re.compile(r"^\d{2}/\d{2}/\d{4}")
 
 
 class BBVA(Entity):
-    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
+    def parse(self, input_file: Path, context: YnabUnlinkedContext[Any]) -> list[Transaction]:
         import datetime as dt
 
         from ynab_unlinked.entities._sniff import extract_type
@@ -35,7 +35,7 @@ class BBVA(Entity):
                 generator = pdf(input_file, allow_empty_columns=False, expected_number_of_columns=3)
                 field_reader = self.__extract_fields_from_pdf_row
 
-        transactions = []
+        transactions: list[Transaction] = []
 
         for row in generator:
             date, payee, amount = field_reader(cast(list[str], row))

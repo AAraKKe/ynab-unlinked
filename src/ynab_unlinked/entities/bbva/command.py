@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -19,7 +19,7 @@ def command(
     from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.process import process_transactions
 
-    ctx: YnabUnlinkedContext = context.obj
+    ctx: YnabUnlinkedContext[Any] = context.obj
 
     process_transactions(
         BBVA(),

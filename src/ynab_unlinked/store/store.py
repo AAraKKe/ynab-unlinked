@@ -4,7 +4,7 @@ import datetime as dt
 import json
 import os
 import sqlite3
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Generator, Iterable, Mapping, Sequence
 from contextlib import closing, contextmanager, suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -16,6 +16,7 @@ from ynab import Account, ApiException, TransactionClearedStatus, TransactionDet
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 from ynab_unlinked.store import migrations
 from ynab_unlinked.ynab_api import FULL_SYNC_SINCE, Client
+from ynab_unlinked.ynab_api.errors import api_status
 
 # What YNAB answers when the server knowledge of a delta request is no longer valid. The only
 # way out is a full fetch.
@@ -124,7 +125,7 @@ class Store:
             self._migrate(conn)
 
     @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
+    def _connect(self) -> Generator[sqlite3.Connection]:
         with closing(sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_SECONDS)) as conn:
             conn.row_factory = sqlite3.Row
             with conn:
@@ -160,7 +161,7 @@ class Store:
         try:
             result, received = self._sync(client, budget_id, knowledge, progress)
         except ApiException as error:
-            if knowledge is None or error.status != STALE_KNOWLEDGE_STATUS:
+            if knowledge is None or api_status(error) != STALE_KNOWLEDGE_STATUS:
                 raise
             progress.warn("YNAB could not send only the changes, fetching everything again")
             with self._connect() as conn:

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import NamedTuple, Protocol
+from typing import Any, NamedTuple, Protocol
 
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.models import Transaction
@@ -15,7 +15,7 @@ class Match(NamedTuple):
 
 
 class Entity(Protocol):
-    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
+    def parse(self, input_file: Path, context: YnabUnlinkedContext[Any]) -> list[Transaction]:
         """
         Parse an input file into a list of Transaction objects.
 

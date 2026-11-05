@@ -23,6 +23,8 @@ from ynab import (
 
 from ynab_unlinked.models import PendingImport, milliunits
 
+from .errors import api_status
+
 NOT_FOUND_STATUS = 404
 
 PAYEE_NAME_LIMIT = 200
@@ -241,7 +243,7 @@ class Client:
         try:
             api.get_transaction_by_id(plan_id=budget_id, transaction_id=transaction_id)
         except ApiException as error:
-            if error.status == NOT_FOUND_STATUS:
+            if api_status(error) == NOT_FOUND_STATUS:
                 return False
             raise
         return True

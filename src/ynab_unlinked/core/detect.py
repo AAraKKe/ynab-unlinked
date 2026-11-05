@@ -12,7 +12,7 @@ import datetime as dt
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec, loaders
 from ynab_unlinked.exceptions import ParsingError
@@ -72,14 +72,14 @@ class Detection:
         return self.best is None and len(self._parsed) > 1
 
 
-def detect_loaders(files: Sequence[Path], context: YnabUnlinkedContext) -> list[Detection]:
+def detect_loaders(files: Sequence[Path], context: YnabUnlinkedContext[Any]) -> list[Detection]:
     """One `Detection` per file, in the order given. Unsupported files get no candidates."""
     specs = loaders()
     return [_detect(input_file, specs, context) for input_file in files]
 
 
 def _detect(
-    input_file: Path, specs: Sequence[LoaderSpec], context: YnabUnlinkedContext
+    input_file: Path, specs: Sequence[LoaderSpec], context: YnabUnlinkedContext[Any]
 ) -> Detection:
     candidates: list[Candidate] = []
     for spec in specs:
@@ -110,7 +110,7 @@ def _sniff(spec: LoaderSpec, input_file: Path) -> Match:
 
 
 def _trial(
-    spec: LoaderSpec, match: Match, input_file: Path, context: YnabUnlinkedContext
+    spec: LoaderSpec, match: Match, input_file: Path, context: YnabUnlinkedContext[Any]
 ) -> Candidate:
     options: dict[str, str] = {}
     try:

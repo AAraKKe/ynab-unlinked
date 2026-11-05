@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from itertools import islice
 from pathlib import Path
+from typing import Any
 
 from ynab import TransactionClearedStatus
 
@@ -49,7 +50,7 @@ class ImportResult:
 
 
 def parse_transactions(
-    entity: Entity, input_file: Path, context: YnabUnlinkedContext
+    entity: Entity, input_file: Path, context: YnabUnlinkedContext[Any]
 ) -> list[Transaction]:
     """Read the export with the entity's parser. A `ParsingError` reaches the caller."""
     return entity.parse(input_file, context)

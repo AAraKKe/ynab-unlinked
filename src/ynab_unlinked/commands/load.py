@@ -4,7 +4,7 @@ import dataclasses
 import importlib
 import pkgutil
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
@@ -117,7 +117,7 @@ def auto(
     from ynab_unlinked.utils import display_import_table, display_transaction_table
     from ynab_unlinked.ynab_api.client import Client
 
-    ctx: YnabUnlinkedContext = context.obj
+    ctx: YnabUnlinkedContext[Any] = context.obj
 
     with display.process("Finding the bank of each file..."):
         detections = detect_loaders(files, ctx)
@@ -249,7 +249,9 @@ def auto(
     )
 
 
-def _parse(input_file: Path, candidate: Candidate, ctx: YnabUnlinkedContext) -> list[Transaction]:
+def _parse(
+    input_file: Path, candidate: Candidate, ctx: YnabUnlinkedContext[Any]
+) -> list[Transaction]:
     from ynab_unlinked.core.importing import parse_transactions
     from ynab_unlinked.exceptions import ParsingError
 
@@ -262,7 +264,7 @@ def _parse(input_file: Path, candidate: Candidate, ctx: YnabUnlinkedContext) -> 
         raise typer.Exit(1) from e
 
 
-def _account_name(account_id: str, ctx: YnabUnlinkedContext) -> str:
+def _account_name(account_id: str, ctx: YnabUnlinkedContext[Any]) -> str:
     account = ctx.config.account(account_id)
     return account_id if account is None else account.name
 
@@ -271,7 +273,7 @@ def _plural(count: int) -> str:
     return "" if count == 1 else "s"
 
 
-def _detection_table(detections: list[Detection], ctx: YnabUnlinkedContext) -> Table:
+def _detection_table(detections: list[Detection], ctx: YnabUnlinkedContext[Any]) -> Table:
     from rich import box
     from rich.table import Column, Table
 
@@ -301,7 +303,7 @@ def _detection_table(detections: list[Detection], ctx: YnabUnlinkedContext) -> T
     return table
 
 
-def _account(candidate: Candidate, ctx: YnabUnlinkedContext) -> str:
+def _account(candidate: Candidate, ctx: YnabUnlinkedContext[Any]) -> str:
     if ctx.choose_account:
         return "asked on import"
     if (entity := ctx.config.entity(candidate.loader.name)) is None:

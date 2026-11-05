@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -37,7 +37,7 @@ def command(
 
     from .sabadell import SabadellParser
 
-    ctx: YnabUnlinkedContext = context.obj
+    ctx: YnabUnlinkedContext[Any] = context.obj
 
     year = dt.date.today().year if year is None else year
 

@@ -4,7 +4,7 @@ import datetime as dt
 import re
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING
 
 from ynab_unlinked.entities import Match
 
@@ -97,8 +97,6 @@ def identifers_by_language(language: Language) -> Identifiers:
                 cancelled="Anulada",
                 accumulation="Acumulado em cartão",
             )
-        case never:
-            assert_never(never)
 
 
 class Cobee:
@@ -111,7 +109,7 @@ class Cobee:
         from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import parse_amount
 
-        text = html_text.extract_text(input_file.read_text())  # type: ignore
+        text = html_text.extract_text(input_file.read_text())
 
         start = False
         previous_line = ""
@@ -153,7 +151,7 @@ class Cobee:
                 # If it was the amount line, the previous line is the payee.
                 payee = previous_line
 
-                if date is None or payee is None:
+                if date is None:
                     raise ValueError(
                         f"The input file is not valid. The amount {amount} has been found without a date or payee."
                     )
@@ -197,7 +195,7 @@ class Cobee:
             return mismatch
 
         raw = head(input_file, SNIFF_BYTES).decode("utf-8", errors="replace")
-        text: str = html_text.extract_text(raw)  # type: ignore
+        text: str = html_text.extract_text(raw)
 
         headings = {
             language: position
