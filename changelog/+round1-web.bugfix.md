@@ -1,0 +1,1 @@
+The web app sets a balance from what YNAB has right now, refuses requests from other local pages and hosts, keeps the activity log and every transaction when resyncing, shows changes written during a sync, and no longer re-checks pending YNAB matches on every sync or fails a sync when that check cannot reach YNAB.
