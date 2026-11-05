@@ -12,11 +12,12 @@ from ynab import ApiException, TransactionClearedStatus
 
 from tests.factories import PendingImportFactory
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked.cli.cli_errors import ynab_error_message
 from ynab_unlinked.web.wording import YNAB_TIMED_OUT
 from ynab_unlinked.web.wording import ynab_error_message as web_error_message
 from ynab_unlinked.ynab_api import client as client_module
 from ynab_unlinked.ynab_api.client import Client
-from ynab_unlinked.ynab_api.errors import YNAB_ERRORS, timed_out, ynab_error_message
+from ynab_unlinked.ynab_api.errors import YNAB_ERRORS, timed_out
 
 BUDGET_ID = "00000000-0000-0000-0000-000000000001"
 ACCOUNT_ID = "00000000-0000-0000-0000-00000000000a"

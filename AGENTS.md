@@ -16,7 +16,8 @@ src/ynab_unlinked/
     setup.py         First-run setup and loading the `YnabUnlinkedContext` for commands.
     context_object.py  `YnabUnlinkedContext`, the options every command shares.
     cli_errors.py    The `yul` command group: a YNAB or network error from any command is
-                     one line (`ynab_api/errors.py`) and exit code 1, not a traceback.
+                     one line (worded on `ynab_api/errors.classify`) and exit code 1, not a
+                     traceback.
     display.py       Rich console output, prompts and the `CliProgress` spinner.
     utils.py         The token and budget prompts and the transaction tables.
     choices.py       `Choice`, the selectable rows of `yul reconcile`.

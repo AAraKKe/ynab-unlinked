@@ -26,6 +26,10 @@ SCOPE_BUFFER_DAYS = 7
 
 SINCE = "since"
 ALL_TIME = "all"
+LOCK_TIMED_OUT = (
+    "YNAB did not answer in time and may have locked them anyway. Checking with YNAB now."
+)
+"""A lock that timed out: YNAB may have applied it before the answer was lost."""
 UNCLEARED_SKIPPED = "Uncleared rows are skipped. Turn on “include uncleared” to lock them too."
 
 
@@ -184,6 +188,7 @@ def pending_title(accounts: int, transactions: int, any_account: bool) -> str:
 
 __all__ = [
     "ALL_TIME",
+    "LOCK_TIMED_OUT",
     "SCOPE_BUFFER_DAYS",
     "SINCE",
     "SYNC_MAX_AGE",

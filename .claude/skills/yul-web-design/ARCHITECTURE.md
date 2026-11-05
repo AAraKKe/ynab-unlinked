@@ -37,7 +37,9 @@ src/ynab_unlinked/
   web/                   NiceGUI app, only importable when the `web` extra is installed (3)
   ynab_api/client.py     the only place that talks to the SDK; every request has
                          REQUEST_TIMEOUT (10 s to connect, 60 s per read) unless it names one
-  ynab_api/errors.py     YNAB_ERRORS, api_status, timed_out(error), the CLI's one line message
+  ynab_api/errors.py     YNAB_ERRORS, api_status, timed_out(error) and classify(error) ->
+                         Classified(Failure: STATUS | TIMED_OUT | UNREACHABLE | OTHER, status,
+                         reason): the one classifier, worded by cli_errors and web.wording
 ```
 
 Rules:
@@ -654,8 +656,9 @@ web/
                        NET_WORTH_ORDER, SETTINGS_ORDER, SERIES_BUCKETS
   wording.py           pure (no NiceGUI): plural (re-exported from ynab_unlinked.text),
                        short_date, human_size, budget_caption,
-                       ynab_error_message (a timeout reads YNAB_TIMED_OUT, also the sync
-                       chip's error), copy_error_message, copy_line, COPY_*, IMPORT_FAILED
+                       ynab_error_message on classify (a timeout reads YNAB_TIMED_OUT, also
+                       the sync chip's error; only YNAB_ERRORS blame YNAB, anything else is
+                       UNEXPECTED), copy_error_message, copy_line, COPY_*, IMPORT_FAILED
   ynab.py              fetch_budgets(token), load_budget(client, id) -> Budget,
                        stored_accounts(sdk accounts), fallback_accounts(config)
   paths.py             every page's path (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,
@@ -1118,7 +1121,9 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   uncleared" off does not hold it back; `yul reconcile` follows the same rule) is saved through `shell.save_config()`, so a failed save
   (toasted by it) leaves the log and the sync done; `busy` is reset in a `finally`.
   The store itself is not written by the view. Errors go through
-  `wording.ynab_error_message` and leave config, log and rows untouched.
+  `wording.ynab_error_message` ("Nothing was locked. …") and leave config, log and rows
+  untouched. A timeout is different: YNAB may have applied the lock before the answer was
+  lost, so it toasts `LOCK_TIMED_OUT` and calls `invalidate()` to sync and check.
 - Wording: header "4 accounts · 17 transactions not reconciled", card
   button "Lock n transactions" (DESIGN), footer "Lock n transactions in m accounts" with
   "Deselect all" (or "Select all" when nothing is selected) and "Lock all"; done footer

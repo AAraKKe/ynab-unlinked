@@ -12,7 +12,7 @@ import re
 from ynab import ApiException, PlanSummary
 
 from ynab_unlinked.text import plural
-from ynab_unlinked.ynab_api.errors import api_reason, api_status, timed_out
+from ynab_unlinked.ynab_api.errors import Failure, classify
 
 COPY_TITLE = "Copying your budget from YNAB"
 COPY_NOTE = "The first time can take a minute."
@@ -20,6 +20,8 @@ COPY_FAILED = "Could not copy your budget from YNAB. Check your connection and t
 SAVE_FAILED = "Your settings could not be saved on this computer. Try again."
 IMPORT_FAILED = "The import stopped before it finished. Check the account in YNAB, then try again."
 YNAB_TIMED_OUT = "YNAB did not answer in time. Check your connection and try again."
+YNAB_UNREACHABLE = "Could not reach YNAB. Check your connection and try again."
+UNEXPECTED = "Something went wrong. Try again."
 
 _NUMBER = re.compile(r"\d{4,}")
 
@@ -40,18 +42,25 @@ def human_size(size: int) -> str:
     raise AssertionError("unreachable")
 
 
-def ynab_error_message(error: Exception) -> str:
-    """What to tell the user when a call to YNAB fails."""
-    if timed_out(error):
-        return YNAB_TIMED_OUT
-    if isinstance(error, ApiException):
-        status = api_status(error)
-        if status == 401:
+def ynab_error_message(error: BaseException) -> str:
+    """What to tell the user when a call to YNAB fails (`ynab_api.errors.classify`).
+
+    Only a failure of YNAB or the network blames YNAB; anything else is "something went wrong".
+    """
+    classified = classify(error)
+    match classified.failure:
+        case Failure.TIMED_OUT:
+            return YNAB_TIMED_OUT
+        case Failure.STATUS if classified.status == 401:
             return "YNAB rejected this token. Check that you copied all of it."
-        if status == 429:
+        case Failure.STATUS if classified.status == 429:
             return "YNAB is rate limiting this token. Try again in a few minutes."
-        return f"YNAB answered {status}: {api_reason(error)}"
-    return f"Could not reach YNAB: {error}"
+        case Failure.STATUS:
+            return f"YNAB answered {classified.status}: {classified.reason}"
+        case Failure.UNREACHABLE:
+            return YNAB_UNREACHABLE
+        case Failure.OTHER:
+            return UNEXPECTED
 
 
 def copy_error_message(error: Exception) -> str:
@@ -84,7 +93,9 @@ __all__ = [
     "COPY_TITLE",
     "IMPORT_FAILED",
     "SAVE_FAILED",
+    "UNEXPECTED",
     "YNAB_TIMED_OUT",
+    "YNAB_UNREACHABLE",
     "budget_caption",
     "copy_error_message",
     "copy_line",

@@ -34,6 +34,7 @@ from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.reconcile import footer
 from ynab_unlinked.web.views.reconcile.data import (
     ALL_TIME,
+    LOCK_TIMED_OUT,
     SINCE,
     SYNC_MAX_AGE,
     UNCLEARED_SKIPPED,
@@ -48,6 +49,7 @@ from ynab_unlinked.web.views.reconcile.data import (
 )
 from ynab_unlinked.web.views.reconcile.groups import AccountGroup, Row
 from ynab_unlinked.web.wording import plural, short_date, ynab_error_message
+from ynab_unlinked.ynab_api.errors import Failure, classify
 
 
 class ReconcileView:
@@ -438,7 +440,12 @@ class ReconcileView:
             await run.io_bound(reconcile, client, config.budget.id, rows_to_lock)
         except Exception as error:
             self.busy = False
-            shell.notify(f"Nothing was locked. {ynab_error_message(error)}", "error")
+            if classify(error).failure is Failure.TIMED_OUT:
+                # The answer was lost, not necessarily the lock: sync to see what YNAB has
+                shell.notify(LOCK_TIMED_OUT, "warn")
+                state().invalidate()
+            else:
+                shell.notify(f"Nothing was locked. {ynab_error_message(error)}", "error")
             self.refresh()
             return
 

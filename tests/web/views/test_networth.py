@@ -476,7 +476,7 @@ async def test_a_ynab_error_keeps_the_balance_and_logs_nothing(
     user.find(marker=f"accept-{INDEXA}").click()
 
     await user.should_see(
-        "The balance of 📈 INDEXA was not set. Could not reach YNAB: offline", retries=20
+        "The balance of 📈 INDEXA was not set. Something went wrong. Try again.", retries=20
     )
     assert editor_value(user, INDEXA) == "47,000"
     assert seeded.activity(BUDGET_ID) == []

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from nicegui.testing.user import User
 from pytest_mock import MockerFixture
+from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 from ynab import (
     Account,
     AccountsResponse,
@@ -24,6 +25,7 @@ from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store, StoredTransaction
 from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views.reconcile import gap_candidates
+from ynab_unlinked.web.views.reconcile.data import LOCK_TIMED_OUT
 from ynab_unlinked.web.wording import SAVE_FAILED
 
 pytestmark = pytest.mark.version("V4")
@@ -336,6 +338,27 @@ async def test_a_failed_lock_keeps_everything_as_it_was(
     await user.should_see("Lock 3 transactions in 2 accounts")
     assert LatestConfig.load().last_reconciliation_date is None
     assert Store(store_file).activity(state().require()[0].budget.id, kind="reconcile") == []
+
+
+async def test_a_lock_that_timed_out_says_ynab_may_have_applied_it_and_syncs_to_check(
+    user: User, seed: Seed, ynab_api: YnabClientStub, mocker: MockerFixture
+):
+    seed()
+    ynab_api.api("transactions").update_transactions.side_effect = MaxRetryError(
+        pool=None,  # type: ignore[arg-type]
+        url="/transactions",
+        reason=ReadTimeoutError(None, "/transactions", "Read timed out."),  # type: ignore[arg-type]
+    )
+    await open_reconcile(user)
+    invalidate = mocker.spy(AppState, "invalidate")
+
+    user.find(marker="lock-all").click()
+    await user.should_see(marker="confirm-action", retries=20)
+    user.find(marker="confirm-action").click()
+
+    await user.should_see(LOCK_TIMED_OUT, retries=20)
+    await user.should_not_see("Nothing was locked")
+    invalidate.assert_called()
 
 
 async def test_a_failed_settings_save_after_the_lock_still_logs_syncs_and_frees_the_view(
