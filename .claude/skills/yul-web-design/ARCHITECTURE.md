@@ -815,10 +815,13 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   and opening another row closes the first. ✓ is the confirmation (no `shell.confirm`):
   the text is parsed with `parse_amount_to_milliunits` and the budget's separators
   ("Not an amount" under the input otherwise, `balance-hint-{account_id}`); the same
-  balance toasts "No change"; else `build_adjustments` against the raw stored balance,
-  `create_adjustments` through `run.io_bound`, one `store.log(kind="adjustment")`,
-  `state().invalidate()`, re-render, toast "{name} set to {new} ({signed difference})".
-  A YNAB error is toasted and the editor stays open with what was typed.
+  balance as shown toasts "No change"; else one `run.io_bound` job reads the live balance
+  (`client.account(budget_id, account_id).balance`, the store may lag behind YNAB),
+  `build_adjustments` against it and `create_adjustments` (nothing when YNAB already has
+  the wanted balance: "No change", invalidate). Then one `store.log(kind="adjustment")`
+  through `run.io_bound` with the adjustment actually made, `state().invalidate()`,
+  re-render, toast "{name} set to {new} ({signed difference})". A YNAB error is toasted
+  through `ynab_error_message` and the editor stays open with what was typed.
 - The account drawer is a `ui.dialog` with `position=right full-height` (a `ui.drawer`
   cannot live inside `ui.sub_pages`).
 - Tests seed the store through `Store.sync` with the `ynab_api` stub answering

@@ -11,6 +11,8 @@ from nicegui import ui
 from nicegui.testing.user import User
 from pytest_mock import MockerFixture
 from ynab import (
+    AccountResponse,
+    AccountResponseData,
     AccountsResponse,
     AccountsResponseData,
     TransactionClearedStatus,
@@ -111,6 +113,23 @@ def serve(ynab_api: YnabClientStub, rows: list[tuple[str, int, int, str]]) -> No
             server_knowledge=1,
         )
     )
+    serve_live(ynab_api, balances)
+
+
+def serve_live(ynab_api: YnabClientStub, balances: dict[str, int]) -> None:
+    """Make YNAB answer GET /accounts/{id} with these balances."""
+
+    def account_by_id(plan_id: str, account_id: uuid.UUID) -> AccountResponse:
+        account = str(account_id)
+        return AccountResponse(
+            data=AccountResponseData(
+                account=AccountFactory(
+                    id=account_id, name=NAMES[account], type=TYPES[account], balance=balances[account]
+                )
+            )
+        )
+
+    ynab_api.api("accounts").get_account_by_id.side_effect = account_by_id
 
 
 @pytest.fixture
@@ -454,9 +473,48 @@ async def test_a_ynab_error_keeps_the_balance_and_logs_nothing(
     await edit(user, INDEXA, "47,000")
     user.find(marker=f"accept-{INDEXA}").click()
 
-    await user.should_see("YNAB did not set the balance of 📈 INDEXA: offline", retries=20)
+    await user.should_see(
+        "The balance of 📈 INDEXA was not set. Could not reach YNAB: offline", retries=20
+    )
     assert editor_value(user, INDEXA) == "47,000"
     assert seeded.activity(BUDGET_ID) == []
+
+
+async def test_the_adjustment_starts_from_the_balance_ynab_has_now(
+    seeded: Store, no_sync: MagicMock, ynab_api: YnabClientStub, user: User, mocker: MockerFixture
+):
+    create = mocker.patch("ynab_unlinked.web.views.networth.create_adjustments", return_value=1)
+    await open_networth(user)
+    # A transaction entered on the phone after the last sync: YNAB has 100.00€ more
+    serve_live(ynab_api, {INDEXA: 46_400_000})
+
+    await edit(user, INDEXA, "47,000")
+    user.find(marker=f"accept-{INDEXA}").click()
+
+    await user.should_see("📈 INDEXA set to 47,000.00€ (+600.00€)", retries=20)
+    assert create.call_args.args[2] == [
+        Adjustment(account_id=INDEXA, old_balance=46_400_000, new_balance=47_000_000)
+    ]
+    [entry] = seeded.activity(BUDGET_ID)
+    assert entry.details["old"] == 46_400_000
+    assert entry.details["amount"] == 600_000
+
+
+async def test_nothing_is_written_when_ynab_already_has_the_balance(
+    seeded: Store, no_sync: MagicMock, ynab_api: YnabClientStub, user: User, mocker: MockerFixture
+):
+    create = mocker.patch("ynab_unlinked.web.views.networth.create_adjustments")
+    await open_networth(user)
+    serve_live(ynab_api, {INDEXA: 47_000_000})
+
+    await edit(user, INDEXA, "47,000")
+    user.find(marker=f"accept-{INDEXA}").click()
+
+    await user.should_see("No change", retries=20)
+    await user.should_not_see(marker=f"balance-input-{INDEXA}")
+    create.assert_not_called()
+    assert seeded.activity(BUDGET_ID) == []
+    no_sync.assert_called()
 
 
 @pytest.mark.parametrize("how", ["cross", "escape"])

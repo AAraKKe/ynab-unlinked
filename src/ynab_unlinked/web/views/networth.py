@@ -23,6 +23,7 @@ from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import LatestConfig, TrackedAccount
 from ynab_unlinked.core.balances import (
     AccountBalance,
+    Adjustment,
     DebtNetting,
     NetWorth,
     build_adjustments,
@@ -53,6 +54,7 @@ from ynab_unlinked.web.components.history_chart import (
 )
 from ynab_unlinked.web.components.networth_parts import count_up, install_css, share_bar
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.views.onboarding import ynab_error_message
 
 RANGES = ("1M", "3M", "6M", "YTD", "1Y", "All")
 DEFAULT_RANGE = "6M"
@@ -806,34 +808,58 @@ class NetWorthView:
         account = next(a for a in snapshot.tracked if a.id == account_id)
         name = snapshot.name(account)
         settings = config.adjustments
-        adjustments = build_adjustments({account_id: current}, {account_id: wanted})
+        budget_id = config.budget.id
+
+        def write() -> list[Adjustment]:
+            # The budget copy may lag behind YNAB (the phone app, `yul load`), so the
+            # adjustment starts from the balance YNAB has right now
+            live = client.account(budget_id, account_id).balance
+            adjustments = build_adjustments({account_id: live}, {account_id: wanted})
+            if adjustments:
+                create_adjustments(
+                    client,
+                    budget_id,
+                    adjustments,
+                    settings.memo,
+                    settings.payee,
+                    TransactionClearedStatus(settings.cleared.value),
+                    dt.date.today(),
+                )
+            return adjustments
+
         self.busy = True
         try:
-            await run.io_bound(
-                create_adjustments,
-                client,
-                config.budget.id,
-                adjustments,
-                settings.memo,
-                settings.payee,
-                TransactionClearedStatus(settings.cleared.value),
-                dt.date.today(),
-            )
+            adjustments = await run.io_bound(write)
         except Exception as error:
             with self.root:
-                shell.notify(f"YNAB did not set the balance of {name}: {error}", "error")
+                shell.notify(
+                    f"The balance of {name} was not set. {ynab_error_message(error)}", "error"
+                )
             return
         finally:
             self.busy = False
+        if adjustments is None:
+            return
+
+        self.editing = None
+        self.draft = self.hint = ""
+        if not adjustments:
+            # YNAB already had that balance: only the budget copy was behind
+            state().invalidate()
+            await self.refresh()
+            with self.root:
+                shell.notify("No change", "info")
+            return
 
         adjustment = adjustments[0]
         new = formatter.format_amount_milli(adjustment.new_balance)
         difference = signed(formatter, adjustment.amount)
-        state().store.log(
-            config.budget.id,
-            kind="adjustment",
-            message=f"Balance of {name} set to {new} ({difference})",
-            details={
+        await run.io_bound(
+            state().store.log,
+            budget_id,
+            "adjustment",
+            f"Balance of {name} set to {new} ({difference})",
+            {
                 "account_id": adjustment.account_id,
                 "account_name": name,
                 "old": adjustment.old_balance,
@@ -841,8 +867,6 @@ class NetWorthView:
                 "amount": adjustment.amount,
             },
         )
-        self.editing = None
-        self.draft = self.hint = ""
         state().invalidate()
         await self.refresh()
         with self.root:
