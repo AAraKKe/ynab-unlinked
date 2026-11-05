@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import re
 from dataclasses import replace
 from typing import TYPE_CHECKING
@@ -7,7 +8,6 @@ from typing import TYPE_CHECKING
 from ynab_unlinked.entities import Match
 
 if TYPE_CHECKING:
-    import datetime as dt
     from pathlib import Path
 
     from ynab_unlinked.context_object import YnabUnlinkedContext
@@ -18,6 +18,9 @@ if TYPE_CHECKING:
 ANCHOR_LINE = "Límite de crédito".encode("cp1252").decode("cp1252")
 XLS_DEBIT_LINE = "MOVIMIENTOS DE DEBITO"
 XLS_HEADER = ["FECHA", "CONCEPTO", "LOCALIDAD"]
+FUTURE_SLACK = dt.timedelta(days=3)
+"""How far past today a row may be dated before it is taken for one of last year. A few days
+so that a card payment the bank already dates tomorrow (time zones) keeps its year."""
 TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|([-]?\d+.*EUR)(\([\d*]\))?$")
 
 
@@ -64,7 +67,7 @@ class SabadellParser:
                     )
                 )
 
-        return self._adjust_year_transition(transactions)
+        return self._no_future_dates(self._adjust_year_transition(transactions))
 
     def __parse_xls(self, input_file: Path) -> list[Transaction]:
         from ynab_unlinked.models import Transaction
@@ -101,7 +104,7 @@ class SabadellParser:
                 )
             )
 
-        return self._adjust_year_transition(transactions)
+        return self._no_future_dates(self._adjust_year_transition(transactions))
 
     def _adjust_year_transition(self, transactions: list[Transaction]) -> list[Transaction]:
         """
@@ -122,9 +125,19 @@ class SabadellParser:
             for t in transactions
         ]
 
-    def __parse_date(self, raw: str) -> dt.date:
-        import datetime as dt
+    def _no_future_dates(self, transactions: list[Transaction]) -> list[Transaction]:
+        """Move rows dated after today back one year.
 
+        A December only statement exported in January is dated in the new year when the
+        year is the current one, which YNAB refuses as future dates (and a forced year
+        would give other import ids than the right one).
+        """
+        latest = dt.date.today() + FUTURE_SLACK
+        return [
+            replace(t, date=_previous_year(t.date)) if t.date > latest else t for t in transactions
+        ]
+
+    def __parse_date(self, raw: str) -> dt.date:
         current_year = self.year
         return dt.datetime.strptime(f"{raw}/{current_year}", "%d/%m/%Y").date()
 
@@ -168,3 +181,11 @@ class SabadellParser:
         if any(XLS_DEBIT_LINE in row for row in rows):
             return Match(0.6, "Sabadell debit movements section found")
         return Match(0.0, "Sabadell movements header not found")
+
+
+def _previous_year(date: dt.date) -> dt.date:
+    try:
+        return date.replace(year=date.year - 1)
+    except ValueError:
+        # 29 February, which the year before does not have: it cannot be last year's row
+        return date

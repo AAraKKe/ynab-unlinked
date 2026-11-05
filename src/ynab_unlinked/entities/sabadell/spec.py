@@ -7,7 +7,7 @@ from .sabadell import SabadellParser
 
 
 def build(options: Mapping[str, str]) -> SabadellParser:
-    # Sabadell writes no year, the parser still moves December back when January is present
+    # Sabadell writes no year, the parser moves back the rows the year would put in the future
     return SabadellParser(year=int(concrete(options, "year")))
 
 

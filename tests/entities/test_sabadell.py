@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from freezegun import freeze_time
 
 from tests.helpers import assets
 from tests.helpers.statements import sabadell_statement
@@ -126,6 +127,28 @@ def test_a_statement_that_stays_in_one_month_keeps_the_year_it_was_given(stateme
     input_file = statement(["02/01|JAN TRANSACTION|CITY|10,00EUR"])
 
     assert [t.date for t in parse(input_file, year=2025)] == [dt.date(2025, 1, 2)]
+
+
+@pytest.mark.parametrize(
+    ("line", "year", "expected"),
+    [
+        pytest.param(
+            "30/12|DEC|CITY|20,00EUR", 2026, dt.date(2025, 12, 30), id="december-in-the-new-year"
+        ),
+        pytest.param(
+            "05/01|SOON|CITY|20,00EUR", 2026, dt.date(2026, 1, 5), id="a-couple-of-days-ahead"
+        ),
+        pytest.param("03/01|TODAY|CITY|20,00EUR", 2026, dt.date(2026, 1, 3), id="today"),
+        pytest.param(
+            "30/12|DEC|CITY|20,00EUR", 2025, dt.date(2025, 12, 30), id="the-right-year-given"
+        ),
+    ],
+)
+def test_a_row_the_year_puts_in_the_future_moves_back_a_year(
+    statement, line: str, year: int, expected: dt.date
+):
+    with freeze_time("2026-01-03"):
+        assert [t.date for t in parse(statement([line]), year=year)] == [expected]
 
 
 def test_an_xls_statement_becomes_transactions():

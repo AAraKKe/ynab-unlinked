@@ -140,8 +140,8 @@ def _resolve_auto(option: LoaderOption, hints: Mapping[str, str]) -> str:
         return hint
 
     if option.key == "year":
-        # A statement without year is dated in the current one, the Sabadell parser moves
-        # December back itself when the statement spans the new year
+        # A statement without year is dated in the current one. The Sabadell parser moves
+        # back every row this would put after today: a December statement read in January.
         return str(dt.date.today().year)
 
     if choices:

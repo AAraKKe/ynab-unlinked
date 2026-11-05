@@ -2,6 +2,7 @@ import datetime as dt
 from pathlib import Path
 
 import pytest
+from freezegun import freeze_time
 
 from tests.helpers import assets
 from tests.helpers.statements import cobee_export, sabadell_statement
@@ -79,6 +80,27 @@ def test_a_sabadell_statement_is_dated_in_the_current_year(
     assert best.options == {"year": "2025"}
     # The parser still moves December back when the statement spans the new year
     assert [t.date for t in best.transactions or ()] == [dt.date(2025, 1, 2), dt.date(2024, 12, 31)]
+
+
+def test_a_december_statement_read_in_january_is_dated_last_year(
+    tmp_path: Path, context_obj: YnabUnlinkedContext
+):
+    # YNAB refuses future dates: a December statement exported on 3 January cannot be dated
+    # December of the year that just started
+    input_file = tmp_path / "sabadell.txt"
+    input_file.write_text(
+        sabadell_statement(["30/12|DEC|CITY|20,00EUR", "02/12|DEC|CITY|10,00EUR"]),
+        encoding="cp1252",
+    )
+
+    with freeze_time("2026-01-03"):
+        best = detect(input_file, context_obj).best
+
+    assert best is not None
+    assert [t.date for t in best.transactions or ()] == [
+        dt.date(2025, 12, 30),
+        dt.date(2025, 12, 2),
+    ]
 
 
 @pytest.mark.parametrize(
