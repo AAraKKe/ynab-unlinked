@@ -9,6 +9,7 @@ from tests.helpers import assets
 from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked.config import get_config
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities.bbva.bbva import BBVA
 from ynab_unlinked.exceptions import ParsingError
@@ -110,24 +111,33 @@ def test_a_file_bbva_cannot_read_is_reported(
     assert "xlsx" in error.value.message
 
 
-def test_the_load_command_asks_for_an_account_and_shows_the_transactions(
-    yul: CliRunner, account_prompt
-):
+def test_the_load_command_asks_for_an_open_account(yul: CliRunner, account_prompt, ynab_api):
+    ynab_api.api("transactions").get_transactions_by_account.return_value.data.transactions = []
+
     result = yul(
-        "load",
-        "--show",
-        "bbva",
-        str(assets.path(PDF_STATEMENT)),
-        input="1\n",
-        env={"COLUMNS": "200"},
+        "load", "bbva", str(assets.path(PDF_STATEMENT)), input="1\nn\n", env={"COLUMNS": "200"}
     )
 
     assert result.exit_code == 0, result.output
     # Closed accounts are not offered, so the only choice is the open one
     assert "Old Card" not in result.output
     assert "Account selected: BBVA Credit Card" in result.output
+    assert "Netflix.com" in result.output
+
+
+def test_the_load_command_shows_the_transactions_without_asking_for_an_account(
+    yul: CliRunner, account_prompt
+):
+    # It used to ask and save the account first, so a --show mapped the bank for good
+    result = yul("load", "--show", "bbva", str(assets.path(PDF_STATEMENT)), env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0, result.output
+    assert "Lets select the account" not in result.output
     assert "11/07/2025" in result.output
     assert "Netflix.com" in result.output
+    saved = get_config()
+    assert saved is not None
+    assert saved.entity("BBVA Credit Card") is None
 
 
 def test_the_load_command_reports_a_statement_it_cannot_parse(yul: CliRunner, account_prompt):

@@ -74,9 +74,6 @@ def process_transactions(
     """
 
     config = context.config
-    account_id = get_or_prompt_account_id(
-        config, entity.name(), force_prompt=context.choose_account, interactive=not context.yes
-    )
 
     try:
         parsed_input = parse_transactions(entity, input_file, context)
@@ -85,9 +82,14 @@ def process_transactions(
         display.console().print(f"  Message: {escape(e.message)}")
         raise typer.Exit(1) from e
 
+    # Showing reads nothing from YNAB: no account is asked for, or saved
     if context.show:
         display_transaction_table(parsed_input, context.formatter)
         return
+
+    account_id = get_or_prompt_account_id(
+        config, entity.name(), force_prompt=context.choose_account, interactive=not context.yes
+    )
 
     if not parsed_input:
         info("🎉 All done! Nothing to do.")

@@ -116,6 +116,6 @@ def test_choosing_an_account_for_an_unknown_entity_does_not_crash(
     mocker.patch("ynab_unlinked.process.question", return_value="1")
     load_entity(TODAY, [TransactionFactory(date=THREE_DAYS_AGO)])
 
-    result = yul("load --acount --show test")
+    result = yul("load --acount test", input="y\n")
 
     assert result.exit_code == 0, result.output
