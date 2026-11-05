@@ -25,6 +25,9 @@ from ynab_unlinked.models import PendingImport, milliunits
 
 NOT_FOUND_STATUS = 404
 
+PAYEE_NAME_LIMIT = 200
+"""The longest payee name YNAB accepts. A longer one would fail the whole file's import."""
+
 FULL_SYNC_SINCE = dt.date(1900, 1, 1)
 """The `since_date` that asks for every transaction. YNAB's get_transactions defaults to about
 one year ago when none is given."""
@@ -133,7 +136,7 @@ class Client:
             NewTransaction(
                 account_id=account_uuid,
                 date=pending.transaction.date,
-                payee_name=pending.transaction.payee,
+                payee_name=pending.transaction.payee[:PAYEE_NAME_LIMIT],
                 cleared=cleared,
                 amount=milliunits(pending.transaction.amount),
                 approved=False,

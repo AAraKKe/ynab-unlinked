@@ -183,6 +183,20 @@ def test_create_transactions_sends_the_import_id_the_account_and_the_bank_payee(
     assert created.approved is False
 
 
+def test_create_transactions_cuts_a_payee_to_the_length_ynab_accepts(
+    client: Client, ynab_api: YnabClientStub
+):
+    long_payee = "TRANSFERENCIA " + "X" * 300
+
+    client.create_transactions(
+        budget_id=BUDGET_ID,
+        account_id=ACCOUNT_ID,
+        transactions=[PendingImportFactory(payee=long_payee), PendingImportFactory(payee="BAR")],
+    )
+
+    assert [t.payee_name for t in created_by(ynab_api)] == [long_payee[:200], "BAR"]
+
+
 @pytest.mark.parametrize(
     "cleared",
     [
