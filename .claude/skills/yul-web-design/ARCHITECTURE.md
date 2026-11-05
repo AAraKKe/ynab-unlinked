@@ -575,9 +575,10 @@ web/
                        ynab_error_message, copy_error_message, copy_line, COPY_*
   ynab.py              fetch_budgets(token), load_budget(client, id) -> Budget,
                        stored_accounts(sdk accounts), fallback_accounts(config)
-  shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay;
-                       the view paths (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,
-                       SETTINGS_PATH, ONBOARDING_PATH)
+  paths.py             every page's path (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,
+                       SETTINGS_PATH, ONBOARDING_PATH), NiceGUI-free for the data modules
+  shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay,
+                       edit_config(); re-exports the paths (views use shell.<NAME>_PATH)
   theme.py             palette constants, dark/light switch, install() of static/yul.css
   security.py          per run token, TokenGuard middleware, free_port(), entry_url()
   static/              yul.css: the only stylesheet (tokens, base, shared classes, one section
@@ -603,10 +604,33 @@ web/
   views/
     __init__.py        register(): imports every view module
     onboarding.py      /onboarding, outside the shell (token, budget, banks, done)
-    home.py            /            hero, import (drop zone, last imports), needs you, activity (3.4.2)
-    import_.py         /import      Files -> Review -> Done on core.detect and core.importing
-    reconcile.py       /reconcile   per account cleared vs bank balance, lock (see 3.5)
-    networth.py        /networth    history chart, buckets, accounts, balance updates, drawer (see 3.6)
+    Every view with data to shape is a package: data.py is pure (no NiceGUI, not even
+    through its imports: web.accounts, web.buckets, web.paths, web.wording are NiceGUI-free)
+    and unit testable; the other modules draw. __init__ re-exports the names tests use.
+    home/              /            hero, import (drop zone, last imports), needs you, activity (3.4.2)
+      data.py          LoaderDue, HomeData, load_home, relative_time, last_imports_line,
+                       message_markup, Attention, attention_items
+      view.py          the page (hero with count_up, spark_options, activity, banner)
+    import_/           /import      Files -> Review -> Done on core.detect and core.importing
+      data.py          Status, ImportFile, problem_text, option_choices, preferred_options,
+                       parse_file, chosen_accounts, done_summary, import_log
+      view.py          ImportFlow (lifecycle, detection, the three steps, commit) and the view
+      rows.py          draw_row(flow, item): a file row of step Files and its body
+      tables.py        badge, plan_table, transactions_table
+      cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
+    reconcile/         /reconcile   per account cleared vs bank balance, lock (see 3.5)
+      data.py          scope_start, gap_candidates, transaction_detail, ReconcileData (read,
+                       open_transactions, has_anything), parse_bank_balance, lock_confirmation,
+                       lock_log
+      view.py          Row, AccountGroup, ReconcileView and the view
+      footer.py        selection / done / locking footers
+    networth/          /networth    history chart, buckets, accounts, balance updates, drawer (see 3.6)
+      data.py          RANGES, MAX_PICKED, range_start, last_set, by_hand_pill, assign_slots,
+                       Snapshot, load_snapshot, table_order, default_picked, parse_balance,
+                       set_balance (the one write: live balance, build and create the adjustment)
+      view.py          NetWorthView (hero, ranges, chips, buckets, drawer loading) and the view
+      table.py         AccountsTable: the accounts card and its inline balance editor
+      drawer.py        account_drawer(...) -> its chart
     settings/          /settings    one module per tab, each with render(page: Settings):
       __init__.py      Settings (tab row, panel, rerender()), TABS, RENDERERS, tab_from_slug, the view
       common.py        current_config(), kv(key), open_accounts() (open budget accounts, the
@@ -721,7 +745,7 @@ store stale and starts a background sync; during a sync it asks for one more rou
 running one ends) and `fresh(max_age) -> bool` (synced within `max_age`, not stale, not
 syncing: what Reconcile checks before showing the store),
 `await budget_accounts() -> list[StoredAccount]` (store once synced, YNAB before).
-`default_bucket(account_type: str) -> Bucket`.
+(`default_bucket(account_type: str) -> Bucket` lives in `web/accounts.py`.)
 
 Theme (`web/theme.py`): `SERIES` / `SERIES_LIGHT` (6 colours: DESIGN's three, the
 `#eda100`, a violet and a pink; `--series-1..6` in CSS), `ACCENT` (gradient start and end), `GOOD`, `WARN`, `BAD` (+ `_LIGHT`),
@@ -767,7 +791,7 @@ account counts from the start (3.4.1).
 
 ```python
 def default_account(account: StoredAccount) -> TrackedAccount
-    # bucket = state.default_bucket(type), track_balance = (bucket is Bucket.ASSETS)
+    # bucket = default_bucket(type), track_balance = (bucket is Bucket.ASSETS)
 def account_settings(config, account: StoredAccount) -> TrackedAccount
     # the config entry for the account, else default_account(account)
 def effective_accounts(config, stored: Iterable[StoredAccount]) -> list[TrackedAccount]
@@ -904,7 +928,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   `run.io_bound` so the UI stays responsive.
 - Uploaded files go to a `TemporaryDirectory` owned by the page; removed on commit or
   discard.
-- Import (`views/import_.py`) keeps one `ImportFlow` per tab. Its temporary directory goes
+- Import (`views/import_/`) keeps one `ImportFlow` per tab. Its temporary directory goes
   when the commit ends, on "Import more", when the last file is removed, when the view is
   opened again, or when the client is deleted. Each file is detected on its own
   (`detect_loaders([path])` through `io_bound`). A non `auto` option saved for the loader in
@@ -961,7 +985,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   store are tested by filling it through `Store.sync` with the `ynab_api` stub and
   setting `state().last_sync` (see `seed` in `tests/web/views/test_reconcile.py`).
 
-### 3.5 Reconcile as built (`views/reconcile.py`)
+### 3.5 Reconcile as built (`views/reconcile/`)
 
 - Reads the store only: `Store.unreconciled` joined with `Store.accounts`, open accounts,
   cards in the store's name order, rows newest first. Before rendering it awaits

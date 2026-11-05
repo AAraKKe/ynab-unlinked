@@ -1,21 +1,20 @@
 """Reconcile: compare each account's cleared balance with the bank and lock what it confirmed.
 
 Everything on screen comes from the local store, synced first when it is older than ten
-minutes. The only write to YNAB is `core.reconcile.reconcile`, behind one confirmation.
+minutes. The only write to YNAB is `core.reconcile.reconcile`, behind one confirmation. What
+is shown and written is worked out in `data`; this module keeps the selection and draws it.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from nicegui import run, ui
-from ynab import TransactionClearedStatus, TransactionDetail
+from ynab import TransactionClearedStatus
 
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.core.balances import parse_amount_to_milliunits
 from ynab_unlinked.core.reconcile import next_reconciliation_date, reconcile
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import StoredAccount, StoredTransaction
@@ -28,73 +27,24 @@ from ynab_unlinked.web.components import (
     loading,
     pill,
     set_class,
-    spinner,
 )
 from ynab_unlinked.web.components.controls import pill_group, switch
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.views.reconcile import footer
+from ynab_unlinked.web.views.reconcile.data import (
+    ALL_TIME,
+    SINCE,
+    SYNC_MAX_AGE,
+    UNCLEARED_SKIPPED,
+    ReconcileData,
+    gap_candidates,
+    lock_confirmation,
+    lock_log,
+    parse_bank_balance,
+    scope_start,
+    transaction_detail,
+)
 from ynab_unlinked.web.wording import plural, short_date, ynab_error_message
-
-SYNC_MAX_AGE = dt.timedelta(minutes=10)
-SCOPE_BUFFER_DAYS = 7
-"""How far before the last reconciliation the "since" scope starts, as `yul reconcile -b`."""
-
-SINCE = "since"
-ALL_TIME = "all"
-UNCLEARED_SKIPPED = "Uncleared rows are skipped. Turn on “include uncleared” to lock them too."
-
-
-def scope_start(last_reconciliation: dt.date | None) -> dt.date | None:
-    """Where the "since" scope starts, or None when yul never reconciled this budget."""
-    if last_reconciliation is None:
-        return None
-    return last_reconciliation - dt.timedelta(days=SCOPE_BUFFER_DAYS)
-
-
-def gap_candidates(transactions: Sequence[StoredTransaction], difference: int) -> set[str]:
-    """Ids of the transactions that would explain `difference` (bank minus cleared balance).
-
-    An uncleared transaction the bank already took moves the cleared balance by its amount; a
-    cleared one the bank has not seen yet accounts for minus its amount. Single transactions
-    first; only when none matches, every pair whose effects add up to the difference.
-    """
-    if difference == 0:
-        return set()
-    effects = [
-        (t.id, t.amount if t.cleared is TransactionClearedStatus.UNCLEARED else -t.amount)
-        for t in transactions
-    ]
-    if singles := {id_ for id_, effect in effects if effect == difference}:
-        return singles
-
-    pairs: set[str] = set()
-    seen: dict[int, list[str]] = {}
-    for id_, effect in effects:
-        for other in seen.get(difference - effect, []):
-            pairs.update((id_, other))
-        seen.setdefault(effect, []).append(id_)
-    return pairs
-
-
-def transaction_detail(transaction: StoredTransaction, account_name: str) -> TransactionDetail:
-    """The SDK object `core.reconcile` patches, rebuilt from the stored row.
-
-    `Client.update_transactions` only sends the id, the account and the cleared status; the
-    rest fills the fields the SDK model requires.
-    """
-    return TransactionDetail(
-        id=transaction.id,
-        date=transaction.date,
-        amount=transaction.amount,
-        cleared=transaction.cleared,
-        approved=transaction.approved,
-        account_id=uuid.UUID(transaction.account_id),
-        account_name=account_name,
-        deleted=False,
-        payee_name=transaction.payee_name,
-        memo=transaction.memo,
-        import_id=transaction.import_id,
-        subtransactions=[],
-    )
 
 
 @dataclass(eq=False)
@@ -139,12 +89,6 @@ class AccountGroup:
         return [row for row in self.rows if not row.locked]
 
 
-@dataclass
-class _Data:
-    accounts: list[StoredAccount] = field(default_factory=list[StoredAccount])
-    unreconciled: list[StoredTransaction] = field(default_factory=list[StoredTransaction])
-
-
 class ReconcileView:
     def __init__(self, config: LatestConfig, formatter: Formatter) -> None:
         self.budget_id = config.budget.id
@@ -154,7 +98,7 @@ class ReconcileView:
         self.scope = SINCE if self.since is not None else ALL_TIME
         self.include_uncleared = False
         self.busy = False
-        self.data = _Data()
+        self.data = ReconcileData()
         self.groups: list[AccountGroup] = []
         self.locked_ids: set[str] = set()
         self.last_locked = 0
@@ -170,14 +114,9 @@ class ReconcileView:
         return self.formatter.format_amount_milli(milliunits)
 
     async def load(self) -> None:
-        if (data := await run.io_bound(self._read_store)) is not None:
+        data = await run.io_bound(ReconcileData.read, state().store, self.budget_id)
+        if data is not None:
             self.data = data
-
-    def _read_store(self) -> _Data:
-        store = state().store
-        return _Data(
-            accounts=store.accounts(self.budget_id), unreconciled=store.unreconciled(self.budget_id)
-        )
 
     async def ensure_fresh(self) -> bool:
         """Sync the store when it is older than ten minutes or something was written to YNAB
@@ -194,24 +133,7 @@ class ReconcileView:
     def open_transactions(self) -> list[tuple[StoredAccount, list[StoredTransaction]]]:
         """Unreconciled transactions of open accounts in the current scope, newest first."""
         since = self.since if self.scope == SINCE else None
-        per_account: dict[str, list[StoredTransaction]] = {}
-        for transaction in reversed(self.data.unreconciled):
-            if transaction.id in self.locked_ids:
-                continue
-            if since is not None and transaction.date < since:
-                continue
-            per_account.setdefault(transaction.account_id, []).append(transaction)
-        return [
-            (account, per_account[account.id])
-            for account in self.data.accounts
-            if not account.closed and account.id in per_account
-        ]
-
-    def has_anything(self) -> bool:
-        open_ids = {account.id for account in self.data.accounts if not account.closed}
-        return any(
-            t.account_id in open_ids and t.id not in self.locked_ids for t in self.data.unreconciled
-        )
+        return self.data.open_transactions(since, self.locked_ids)
 
     # ---- page ----------------------------------------------------------------------------
 
@@ -239,7 +161,7 @@ class ReconcileView:
         assert self.root is not None
         self.root.clear()
         with self.root:
-            if not self.has_anything():
+            if not self.data.has_anything(self.locked_ids):
                 self.all_reconciled()
                 return
             self.header()
@@ -384,19 +306,10 @@ class ReconcileView:
         assert group.match is not None
         self.highlight(group, set())
         group.match.clear()
-        typed: int | None = None
-        if text.strip():
-            try:
-                typed = parse_amount_to_milliunits(
-                    text,
-                    decimal_separator=self.currency.decimal_separator,
-                    group_separator=self.currency.group_separator,
-                )
-            except ValueError:
-                typed = None
-            if typed is None:
-                with group.match:
-                    ui.label("Not an amount").classes("yul-faint")
+        typed = parse_bank_balance(text, self.currency)
+        if typed is None and text.strip():
+            with group.match:
+                ui.label("Not an amount").classes("yul-faint")
         if typed is None:
             group.matches = None
             group.difference = 0
@@ -537,49 +450,15 @@ class ReconcileView:
         self.footer.clear()
         with self.footer:
             if self.last_locked:
-                self.done_footer(count)
+                footer.done(self.last_locked, count, on_lock_more=lambda: self.lock(self.groups))
                 return
-            with ui.element("div").classes("yul-grow yul-foot-stat"):
-                ui.label(
-                    f"Lock {plural(count, 'transaction')} in {plural(accounts, 'account')}"
-                ).classes("main").mark("rec-summary")
-                if skipped:
-                    ui.label("uncleared stay untouched").classes("yul-muted")
-            if count:
-                button("Deselect all", kind="ghost", on_click=lambda: self.set_all(False)).mark(
-                    "deselect-all"
-                )
-            else:
-                button("Select all", kind="ghost", on_click=lambda: self.set_all(True)).mark(
-                    "select-all"
-                )
-            lock_all = button("Lock all", kind="primary", on_click=lambda: self.lock(self.groups))
-            lock_all.mark("lock-all")
-            lock_all.set_enabled(count > 0)
-
-    def done_footer(self, remaining: int) -> None:
-        check()
-        with ui.element("div").classes("yul-grow yul-foot-stat"):
-            ui.label(f"{plural(self.last_locked, 'transaction')} locked").classes("main").mark(
-                "rec-done"
+            footer.selection(
+                count,
+                accounts,
+                skipped=skipped,
+                on_select_all=self.set_all,
+                on_lock_all=lambda: self.lock(self.groups),
             )
-            ui.label("logged in activity").classes("yul-muted")
-        if remaining:
-            button(f"Lock {remaining} more", on_click=lambda: self.lock(self.groups)).mark(
-                "lock-more"
-            )
-        button(
-            "See net worth", kind="primary", on_click=lambda: ui.navigate.to(shell.NETWORTH_PATH)
-        ).mark("see-networth")
-
-    def progress_footer(self, count: int) -> None:
-        assert self.footer is not None
-        self.footer.clear()
-        with self.footer:
-            spinner()
-            ui.label(f"Locking {plural(count, 'transaction')} in YNAB…").classes("yul-grow")
-            with ui.element("div").classes("yul-prog active"):
-                ui.element("i")
 
     # ---- lock ----------------------------------------------------------------------------
 
@@ -590,22 +469,16 @@ class ReconcileView:
         if not batches:
             return
         count = sum(len(rows) for _, rows in batches)
-        lines = [
-            f"{group.account.name} · {plural(len(rows), 'transaction')}" for group, rows in batches
-        ]
-        if uncleared := sum(row.uncleared for _, rows in batches for row in rows):
-            lines.append(f"{uncleared} of them {'is' if uncleared == 1 else 'are'} still uncleared")
-        confirmed = await shell.confirm(
-            f"Lock {plural(count, 'transaction')} in {plural(len(batches), 'account')}?",
-            [*lines, "They are marked reconciled in YNAB."],
-            f"Lock {count}",
-        )
-        if not confirmed:
+        locked = [(group.account, [row.transaction for row in rows]) for group, rows in batches]
+        if not await shell.confirm(*lock_confirmation(locked)):
             return
 
         self.busy = True
         self.refresh()
-        self.progress_footer(count)
+        if self.footer is not None:
+            self.footer.clear()
+            with self.footer:
+                footer.locking(count)
         details = [
             transaction_detail(row.transaction, group.account.name)
             for group, rows in batches
@@ -633,20 +506,8 @@ class ReconcileView:
         if next_date is not None:
             with shell.edit_config() as saved:
                 saved.last_reconciliation_date = next_date
-        state().store.log(
-            config.budget.id,
-            kind="reconcile",
-            message=(
-                f"Reconciled {plural(count, 'transaction')} in {plural(len(batches), 'account')}"
-            ),
-            details={
-                "count": count,
-                "accounts": [
-                    {"id": group.account.id, "name": group.account.name, "count": len(rows)}
-                    for group, rows in batches
-                ],
-            },
-        )
+        message, log_details = lock_log(locked)
+        state().store.log(config.budget.id, kind="reconcile", message=message, details=log_details)
         state().invalidate()
 
         for _, rows in batches:

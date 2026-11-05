@@ -42,6 +42,14 @@ from ynab_unlinked.web.components import (
     set_class,
     spinner,
 )
+
+# Every page's path, re-exported: views navigate with `shell.<NAME>_PATH`
+from ynab_unlinked.web.paths import HOME_PATH as HOME_PATH
+from ynab_unlinked.web.paths import IMPORT_PATH as IMPORT_PATH
+from ynab_unlinked.web.paths import NETWORTH_PATH as NETWORTH_PATH
+from ynab_unlinked.web.paths import ONBOARDING_PATH as ONBOARDING_PATH
+from ynab_unlinked.web.paths import RECONCILE_PATH as RECONCILE_PATH
+from ynab_unlinked.web.paths import SETTINGS_PATH as SETTINGS_PATH
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.wording import plural, ynab_error_message
 
@@ -50,12 +58,6 @@ UploadedFile = FileUpload
 
 ToastKind = Literal["ok", "info", "warn", "error"]
 
-HOME_PATH = "/"
-IMPORT_PATH = "/import"
-RECONCILE_PATH = "/reconcile"
-NETWORTH_PATH = "/networth"
-SETTINGS_PATH = "/settings"
-ONBOARDING_PATH = "/onboarding"
 
 _SIDEBAR_KEY = "yul.sidebar"
 _RAIL = "rail"

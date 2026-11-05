@@ -3,20 +3,31 @@
 Every open account of the budget counts, in the bucket of its type, unless the config leaves
 it out (`TrackedAccount.counted`). A config entry only records what differs from the
 defaults: the bucket, the balance set by hand, or being left out.
+
+No NiceGUI here: the views' pure data modules count accounts through it.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 
-from ynab_unlinked.buckets import Bucket
+from ynab import AccountType
+
+from ynab_unlinked.buckets import Bucket, bucket_for
 from ynab_unlinked.config import LatestConfig, TrackedAccount
 from ynab_unlinked.core.balances import DebtNetting
 from ynab_unlinked.store import StoredAccount
-from ynab_unlinked.web.state import default_bucket
 
 STALE_AFTER_DAYS = 30
 """A balance set by hand is stale once it is older than this: Home's card, Net worth's pill."""
+
+
+def default_bucket(account_type: str) -> Bucket:
+    """The net worth bucket of a YNAB account type given as its string value."""
+    try:
+        return bucket_for(AccountType(account_type))
+    except ValueError:
+        return Bucket.ASSETS
 
 
 def default_account(account: StoredAccount) -> TrackedAccount:

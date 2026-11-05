@@ -472,7 +472,7 @@ async def test_the_top_bar_import_button_opens_the_import_view(store: Store, use
 async def test_home_waits_for_the_first_sync_and_then_shows_the_budget(
     budget: LatestConfig, user: User, mocker: MockerFixture, store_file: Path
 ):
-    mocker.patch.object(home, "SYNC_POLL_SECONDS", 0.05)
+    mocker.patch.object(home.view, "SYNC_POLL_SECONDS", 0.05)
     syncing = mocker.patch.object(AppState, "syncing", new_callable=PropertyMock)
     syncing.return_value = True
 

@@ -374,7 +374,9 @@ async def test_the_pencil_opens_one_editor_prefilled_with_the_balance_in_ynab(
 async def test_accepting_creates_one_adjustment_and_logs_it(
     seeded: Store, no_sync: MagicMock, user: User, mocker: MockerFixture
 ):
-    create = mocker.patch("ynab_unlinked.web.views.networth.create_adjustments", return_value=1)
+    create = mocker.patch(
+        "ynab_unlinked.web.views.networth.data.create_adjustments", return_value=1
+    )
     await open_networth(user)
 
     await edit(user, INDEXA, "46,322.46")
@@ -420,7 +422,9 @@ async def test_accepting_creates_one_adjustment_and_logs_it(
 async def test_any_tracked_account_can_be_set_not_only_by_hand_ones(
     seeded: Store, no_sync, user: User, mocker: MockerFixture
 ):
-    create = mocker.patch("ynab_unlinked.web.views.networth.create_adjustments", return_value=1)
+    create = mocker.patch(
+        "ynab_unlinked.web.views.networth.data.create_adjustments", return_value=1
+    )
     await open_networth(user)
 
     await edit(user, CARD, "-250")
@@ -435,7 +439,7 @@ async def test_any_tracked_account_can_be_set_not_only_by_hand_ones(
 async def test_the_same_balance_creates_nothing(
     seeded: Store, no_sync, user: User, mocker: MockerFixture
 ):
-    create = mocker.patch("ynab_unlinked.web.views.networth.create_adjustments")
+    create = mocker.patch("ynab_unlinked.web.views.networth.data.create_adjustments")
     await open_networth(user)
 
     await edit(user, INDEXA, "46300")
@@ -450,7 +454,7 @@ async def test_the_same_balance_creates_nothing(
 async def test_text_that_is_not_an_amount_keeps_the_editor_open(
     seeded: Store, no_sync, user: User, mocker: MockerFixture
 ):
-    create = mocker.patch("ynab_unlinked.web.views.networth.create_adjustments")
+    create = mocker.patch("ynab_unlinked.web.views.networth.data.create_adjustments")
     await open_networth(user)
 
     await edit(user, INDEXA, "lots")
@@ -469,7 +473,8 @@ async def test_a_ynab_error_keeps_the_balance_and_logs_nothing(
     seeded: Store, no_sync, user: User, mocker: MockerFixture
 ):
     mocker.patch(
-        "ynab_unlinked.web.views.networth.create_adjustments", side_effect=RuntimeError("offline")
+        "ynab_unlinked.web.views.networth.data.create_adjustments",
+        side_effect=RuntimeError("offline"),
     )
     await open_networth(user)
 
@@ -486,7 +491,9 @@ async def test_a_ynab_error_keeps_the_balance_and_logs_nothing(
 async def test_the_adjustment_starts_from_the_balance_ynab_has_now(
     seeded: Store, no_sync: MagicMock, ynab_api: YnabClientStub, user: User, mocker: MockerFixture
 ):
-    create = mocker.patch("ynab_unlinked.web.views.networth.create_adjustments", return_value=1)
+    create = mocker.patch(
+        "ynab_unlinked.web.views.networth.data.create_adjustments", return_value=1
+    )
     await open_networth(user)
     # A transaction entered on the phone after the last sync: YNAB has 100.00€ more
     serve_live(ynab_api, {INDEXA: 46_400_000})
@@ -506,7 +513,7 @@ async def test_the_adjustment_starts_from_the_balance_ynab_has_now(
 async def test_nothing_is_written_when_ynab_already_has_the_balance(
     seeded: Store, no_sync: MagicMock, ynab_api: YnabClientStub, user: User, mocker: MockerFixture
 ):
-    create = mocker.patch("ynab_unlinked.web.views.networth.create_adjustments")
+    create = mocker.patch("ynab_unlinked.web.views.networth.data.create_adjustments")
     await open_networth(user)
     serve_live(ynab_api, {INDEXA: 47_000_000})
 
@@ -524,7 +531,7 @@ async def test_nothing_is_written_when_ynab_already_has_the_balance(
 async def test_cancelling_the_editor_creates_nothing(
     seeded: Store, no_sync, user: User, mocker: MockerFixture, how: str
 ):
-    create = mocker.patch("ynab_unlinked.web.views.networth.create_adjustments")
+    create = mocker.patch("ynab_unlinked.web.views.networth.data.create_adjustments")
     await open_networth(user)
     await edit(user, INDEXA, "47,000")
 
@@ -595,7 +602,7 @@ async def test_at_the_limit_unpicked_chips_say_why_they_cannot_be_added(
     seeded: Store, no_sync, user: User, monkeypatch: pytest.MonkeyPatch
 ):
     # The fixture has five accounts; a limit of four is reached by the default pick
-    monkeypatch.setattr(networth, "MAX_PICKED", 4)
+    monkeypatch.setattr(networth.data, "MAX_PICKED", 4)
     await open_networth(user)
     grouping = user.find(marker="grouping").elements.pop()
     assert isinstance(grouping, ui.select)

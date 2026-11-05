@@ -17,9 +17,7 @@ from contextlib import contextmanager
 
 from nicegui import background_tasks, run
 from pydantic import ValidationError
-from ynab import AccountType
 
-from ynab_unlinked.buckets import Bucket, bucket_for
 from ynab_unlinked.config import LatestConfig, get_config
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.core.progress import NullProgress, Progress
@@ -265,14 +263,6 @@ class AppState:
             return stored
 
         return stored_accounts(await run.io_bound(client.accounts, config.budget.id) or [])
-
-
-def default_bucket(account_type: str) -> Bucket:
-    """The net worth bucket of a YNAB account type given as its string value."""
-    try:
-        return bucket_for(AccountType(account_type))
-    except ValueError:
-        return Bucket.ASSETS
 
 
 _STATE: AppState | None = None
