@@ -6,6 +6,7 @@ from pytest_mock import MockerFixture
 from ynab import TransactionClearedStatus
 
 from tests.factories import TransactionFactory
+from tests.helpers.store import upsert
 from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
 from tests.process.builders import ACCOUNT_ID, BUDGET_ID, THREE_DAYS_AGO, TODAY, YESTERDAY
@@ -194,7 +195,8 @@ def test_an_import_is_noted_in_the_activity_log_the_app_reads(
     store_file: Path,
 ):
     store = Store(store_file)
-    store.upsert(
+    upsert(
+        store,
         BUDGET_ID,
         accounts=[
             StoredAccount(ACCOUNT_ID, "💶 Checking", "checking", False, True, 0, 0, 0),

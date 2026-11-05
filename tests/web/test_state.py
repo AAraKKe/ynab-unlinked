@@ -1,4 +1,5 @@
 import asyncio
+import datetime as dt
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -8,14 +9,12 @@ from pytest_mock import MockerFixture
 from ynab import TransactionsResponse, TransactionsResponseData
 
 from tests.factories import TransactionDetailFactory
+from tests.helpers.config import ConfigFiles
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store
-from ynab_unlinked.web.state import AppState
-from ynab_unlinked.ynab_api import Client
-import datetime as dt
-from tests.helpers.config import ConfigFiles
 from ynab_unlinked.web.state import AppState, NotConfiguredError
+from ynab_unlinked.ynab_api import Client
 
 pytestmark = pytest.mark.version("V4")
 
