@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ynab_unlinked.config.migrations import Version
 from ynab_unlinked.config.paths import config_path
 
-from .shared import EntityConfigV3
+from .shared import EntityConfigV3, write_private
 from .v2 import Budget
 
 
@@ -30,8 +30,7 @@ class ConfigV3(BaseModel):
         return config_path(ConfigV3.version().version)
 
     def save(self):
-        self.path().parent.mkdir(parents=True, exist_ok=True)
-        self.path().write_text(self.model_dump_json(indent=4))
+        write_private(self.path(), self.model_dump_json(indent=4))
 
     @staticmethod
     def load() -> ConfigV3:

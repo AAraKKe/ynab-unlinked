@@ -96,6 +96,24 @@ def test_a_new_config_is_readable_by_the_user_only(config: str, config_files: Co
     assert LatestConfig.load() == loaded
 
 
+@pytest.mark.parametrize("version", ["V1", "V2", "V3"])
+def test_older_versions_are_saved_readable_by_the_user_only(
+    config_files: ConfigFiles, version: str
+):
+    # Migrations save every intermediate version, and each one holds the token in plain text
+    config_class = VERSION_MAPPING[version]
+    config_files.write_asset(version)
+    loaded = config_class.load()
+    config_files.path(version).unlink()
+    config_files.path(version).parent.rmdir()
+
+    loaded.save()
+
+    path = config_files.path(version)
+    assert (_mode(path), _mode(path.parent)) == (0o600, 0o700)
+    assert config_class.load() == loaded
+
+
 @pytest.mark.version("V4")
 def test_saving_makes_an_existing_world_readable_config_private(
     config: str, config_files: ConfigFiles
@@ -114,7 +132,7 @@ def test_a_failed_save_leaves_the_old_file_whole(
     before = config_files.read("V4")
     loaded = LatestConfig.load()
     loaded.set_entity_account("sabadell", "another-account")
-    mocker.patch("ynab_unlinked.config.models.v4.os.replace", side_effect=OSError("disk full"))
+    mocker.patch("ynab_unlinked.config.models.shared.os.replace", side_effect=OSError("disk full"))
 
     with pytest.raises(OSError, match="disk full"):
         loaded.save()

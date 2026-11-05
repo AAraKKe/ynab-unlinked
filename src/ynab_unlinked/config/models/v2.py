@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ynab_unlinked.config.migrations import Version
 from ynab_unlinked.config.paths import config_path
 
-from .shared import EntityConfig
+from .shared import EntityConfig, write_private
 
 
 class CurrencyFormat(BaseModel):
@@ -47,8 +47,7 @@ class ConfigV2(BaseModel):
         return config_path(ConfigV2.version().version)
 
     def save(self):
-        self.path().parent.mkdir(parents=True, exist_ok=True)
-        self.path().write_text(self.model_dump_json(indent=4))
+        write_private(self.path(), self.model_dump_json(indent=4))
 
     @staticmethod
     def load() -> ConfigV2:

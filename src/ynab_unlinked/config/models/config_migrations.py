@@ -73,8 +73,7 @@ class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
             payee_rules=destination.payee_rules,
         )
 
-        # Ensure we store it on the expected place of v1
-        ConfigV1.path().parent.mkdir(parents=True, exist_ok=True)
+        # save() creates the V1 folder, which lives apart from the others
         config_v1.save()
         # And now delete the other config
         ConfigV2.path().unlink()

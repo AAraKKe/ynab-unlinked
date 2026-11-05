@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-import os
-import tempfile
 from enum import StrEnum
 from pathlib import Path
 
@@ -14,6 +12,7 @@ from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config.migrations import Version
 from ynab_unlinked.config.paths import config_path
 
+from .shared import write_private
 from .v2 import Budget
 
 logger = logging.getLogger(__name__)
@@ -53,22 +52,6 @@ class Adjustments(BaseModel):
     memo: str = "Balance adjustment by yul"
     payee: str = "Balance Adjustment"
     cleared: ClearedStatus = ClearedStatus.CLEARED
-
-
-def _write_private(path: Path, text: str) -> None:
-    """Write through a user only temp file in the same directory, then swap it in."""
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    # mkstemp creates the file with mode 0o600
-    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as file:
-            file.write(text)
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temp, path)
-    except BaseException:
-        Path(temp).unlink(missing_ok=True)
-        raise
 
 
 class ConfigV4(BaseModel):
@@ -113,7 +96,7 @@ class ConfigV4(BaseModel):
                 on_disk = self.model_copy(update={"api_key": keychain.REFERENCE})
         elif not self.api_key and self._keychain_unread:
             on_disk = self.model_copy(update={"api_key": keychain.REFERENCE})
-        _write_private(self.path(), on_disk.model_dump_json(indent=4))
+        write_private(self.path(), on_disk.model_dump_json(indent=4))
 
     @staticmethod
     def load() -> ConfigV4:
