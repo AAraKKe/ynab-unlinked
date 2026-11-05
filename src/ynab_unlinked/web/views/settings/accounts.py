@@ -103,25 +103,31 @@ class AccountCards:
         if row.counted == on:
             return
         row.counted = on
-        await self.save("Counted in net worth" if on else "Left out of net worth")
+        if not await self.save("Counted in net worth" if on else "Left out of net worth"):
+            row.counted = not on
         self.draw_card(account_id, card)
 
     async def set_bucket(self, account_id: str, bucket: Bucket) -> None:
         row = self.rows[account_id]
         if row.bucket is bucket:
             return
-        row.bucket = bucket
-        await self.save()
+        before, row.bucket = row.bucket, bucket
+        if not await self.save():
+            row.bucket = before
         self.draw()
 
     async def set_by_hand(self, account_id: str, card: ui.element) -> None:
         row = self.rows[account_id]
         row.track_balance = not row.track_balance
-        await self.save()
+        if not await self.save():
+            row.track_balance = not row.track_balance
         self.draw_card(account_id, card)
 
-    async def save(self, message: str = "Accounts saved") -> None:
-        """Write the rows that differ from their defaults, keeping every other entry."""
+    async def save(self, message: str = "Accounts saved") -> bool:
+        """Write the rows that differ from their defaults, keeping every other entry.
+
+        Returns whether it was saved: the caller puts the row back as it was when not.
+        """
         rows = [
             row.model_copy()
             for account_id, row in self.rows.items()
@@ -132,7 +138,7 @@ class AccountCards:
             kept = [account for account in config.accounts if account.id not in self.rows]
             config.accounts = kept + rows
 
-        await shell.save_config(keep_others, message)
+        return await shell.save_config(keep_others, message)
 
 
 async def render(page: Settings) -> None:

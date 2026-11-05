@@ -181,7 +181,8 @@ class Wizard:
                 config.api_key = token
 
             # The same budget: the saved config only needs its token back
-            await shell.save_config(set_token)
+            if not await shell.save_config(set_token):
+                return False
             with client:
                 ui.navigate.to(shell.HOME_PATH)
             return True

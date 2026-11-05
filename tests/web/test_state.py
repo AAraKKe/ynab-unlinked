@@ -147,6 +147,21 @@ async def test_a_resync_that_ynab_never_answers_gives_up_and_lets_a_reset_run(
     await asyncio.wait_for(app_state.reset([store_file]), 5)
 
 
+async def test_a_reset_that_fails_to_delete_still_loads_what_is_left(
+    app_state: AppState, store_file: Path, mocker: MockerFixture
+):
+    mocker.patch(
+        "ynab_unlinked.web.state.delete_local_data", side_effect=PermissionError("in use")
+    )
+
+    with pytest.raises(PermissionError):
+        await app_state.reset([store_file])
+
+    # The config is still on disk: the app reads it again instead of staying empty
+    assert app_state.configured
+    assert app_state.client is not None
+
+
 async def test_a_sync_during_a_resync_joins_it(app_state: AppState, ynab_api: YnabClientStub):
     ynab = Ynab(ynab_api, full=["t1", "t2"], delta=[])
 

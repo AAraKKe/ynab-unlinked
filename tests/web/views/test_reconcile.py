@@ -22,8 +22,9 @@ from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store, StoredTransaction
-from ynab_unlinked.web.state import state
+from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views.reconcile import gap_candidates
+from ynab_unlinked.web.wording import SAVE_FAILED
 
 pytestmark = pytest.mark.version("V4")
 
@@ -310,6 +311,28 @@ async def test_a_failed_lock_keeps_everything_as_it_was(
     await user.should_see("Lock 3 transactions in 2 accounts")
     assert LatestConfig.load().last_reconciliation_date is None
     assert Store(store_file).activity(state().require()[0].budget.id, kind="reconcile") == []
+
+
+async def test_a_failed_settings_save_after_the_lock_still_logs_syncs_and_frees_the_view(
+    user: User, seed: Seed, ynab_api: YnabClientStub, store_file: Path, mocker: MockerFixture
+):
+    seed()
+    await open_reconcile(user)
+    invalidate = mocker.spy(AppState, "invalidate")
+    mocker.patch.object(LatestConfig, "save", side_effect=OSError("No space left on device"))
+
+    user.find(marker="lock-all").click()
+    await user.should_see(marker="confirm-action", retries=20)
+    user.find(marker="confirm-action").click()
+
+    # YNAB already changed: the view says so, logs it and syncs, and can be used again
+    await user.should_see(SAVE_FAILED, retries=20)
+    await user.should_see("3 transactions locked", retries=20)
+    invalidate.assert_called()
+    activity = Store(store_file).activity(state().require()[0].budget.id, kind="reconcile")
+    assert [a.message for a in activity] == ["Reconciled 3 transactions in 2 accounts"]
+    await user.should_see(marker="see-networth")
+    await user.should_not_see("Locking 3 transactions in YNAB…")
 
 
 async def test_the_since_scope_starts_a_week_before_the_last_reconciliation(

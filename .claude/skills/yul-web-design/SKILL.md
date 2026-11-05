@@ -73,7 +73,7 @@ in the same change. Never update a document to describe something you did not bu
   `var(--text-2)`, `color-mix(...)`), never literal colours except in the tokens table.
 - `shell`: `@shell.view`, `shell.notify`, `shell.confirm`, `shell.set_header`,
   `await shell.save_config(change, "Saved")` (every config save, off the event loop, then
-  the toast),
+  the toast; returns False after toasting a failed save),
   `shell.pending_uploads` / `shell.on_drop`, `shell.refresh_view`, and every view path
   (`shell.HOME_PATH`, `RECONCILE_PATH`, `NETWORTH_PATH`, `SETTINGS_PATH`, ...).
 - `state()`: config, client, store, `require_formatter()` (the one way to the formatter),

@@ -24,6 +24,7 @@ from ynab_unlinked.keychain import mask_token
 from ynab_unlinked.store import Store
 from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views.settings import tab_from_slug
+from ynab_unlinked.web.wording import SAVE_FAILED
 
 pytestmark = pytest.mark.version("V4")
 
@@ -649,3 +650,29 @@ async def test_a_card_switch_waits_for_its_save_before_it_can_be_flipped_again(
     slow_save.set()
     await user.should_see(toast, retries=20)
     await eventually(lambda: all(switch.enabled for switch in user.find(marker=marker).elements))
+
+
+@pytest.mark.parametrize(
+    ("tab", "marker"),
+    [("banks", "bank-toggle-sabadell"), ("accounts", f"account-{CHECKING_ID}")],
+)
+async def test_a_switch_whose_save_fails_says_so_and_flips_back(
+    mapped: LatestConfig,
+    user: User,
+    budget_accounts: YnabClientStub,
+    mocker: MockerFixture,
+    tab: str,
+    marker: str,
+):
+    await _open_tab(user, tab)
+    await user.should_see(marker=marker, retries=20)
+    before = LatestConfig.load()
+    mocker.patch.object(LatestConfig, "save", side_effect=OSError("Read-only file system"))
+    toggle = user.find(marker=marker).elements.pop()
+    assert isinstance(toggle, ui.switch)
+
+    toggle.set_value(False)
+
+    await user.should_see(SAVE_FAILED, retries=20)
+    await eventually(lambda: all(switch.value for switch in user.find(marker=marker).elements))
+    assert LatestConfig.load() == before

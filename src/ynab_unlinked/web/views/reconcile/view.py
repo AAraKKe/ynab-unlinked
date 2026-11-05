@@ -504,25 +504,29 @@ class ReconcileView:
                 if row.transaction.id not in locking
             ],
         )
-        if next_date is not None:
+        # YNAB changed: show it, log it and sync before anything that can still fail
+        try:
+            for _, rows in batches:
+                for row in rows:
+                    row.locked = True
+                    row.selected = False
+                    self.locked_ids.add(row.transaction.id)
+                    self.paint_row(row)
+            self.last_locked = count
+            state().invalidate()
+            message, log_details = lock_log(locked)
+            await run.io_bound(
+                state().store.log, config.budget.id, "reconcile", message, log_details
+            )
+            if next_date is not None:
 
-            def set_last_reconciliation(saved: LatestConfig) -> None:
-                saved.last_reconciliation_date = next_date
+                def set_last_reconciliation(saved: LatestConfig) -> None:
+                    saved.last_reconciliation_date = next_date
 
-            await shell.save_config(set_last_reconciliation)
-        message, log_details = lock_log(locked)
-        await run.io_bound(state().store.log, config.budget.id, "reconcile", message, log_details)
-        state().invalidate()
-
-        for _, rows in batches:
-            for row in rows:
-                row.locked = True
-                row.selected = False
-                self.locked_ids.add(row.transaction.id)
-                self.paint_row(row)
-        self.busy = False
-        self.last_locked = count
-        self.refresh()
+                await shell.save_config(set_last_reconciliation)
+        finally:
+            self.busy = False
+            self.refresh()
         shell.notify(f"{plural(count, 'transaction')} locked in YNAB")
 
 

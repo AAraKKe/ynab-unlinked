@@ -199,8 +199,8 @@ async def bank_dialog(spec: LoaderSpec, card: ui.element, accounts: dict[str, st
                 enabled=current.enabled if current else True,
             )
 
-        await shell.save_config(save, f"{spec.title} saved")
-        dialog.submit(True)
+        if await shell.save_config(save, f"{spec.title} saved"):
+            dialog.submit(True)
 
     await run_dialog(dialog)
     if not card.is_deleted:

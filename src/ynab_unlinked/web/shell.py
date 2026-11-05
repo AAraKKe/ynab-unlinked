@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime as dt
 import inspect
+import logging
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -52,7 +53,9 @@ from ynab_unlinked.web.paths import RECONCILE_PATH as RECONCILE_PATH
 from ynab_unlinked.web.paths import SETTINGS_PATH as SETTINGS_PATH
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.storage import tab_storage, user_storage
-from ynab_unlinked.web.wording import plural, ynab_error_message
+from ynab_unlinked.web.wording import SAVE_FAILED, plural, ynab_error_message
+
+logger = logging.getLogger(__name__)
 
 UploadedFile = FileUpload
 """A file the browser sent. `await f.read()`, `await f.save(path)`, `f.name`, `f.size()`."""
@@ -215,17 +218,26 @@ def notify(message: str, kind: ToastKind = "ok") -> None:
     )
 
 
-async def save_config(change: Callable[[LatestConfig], None], message: str | None = None) -> None:
+async def save_config(change: Callable[[LatestConfig], None], message: str | None = None) -> bool:
     """Apply `change` to the config on disk off the event loop, then toast `message`.
 
     `state().update_config(change)` through `run.io_bound`: reading and saving the file can
     wait on the disk and the keychain, and must not freeze every open page. The file is read
     again first, so what the CLI saved meanwhile is kept, and the app state is reloaded after
     the save. No toast without a `message`.
+
+    Returns whether it was saved. A save that fails (the disk, its permissions, the keychain)
+    is logged and toasted as an error here, so callers only decide what to do next.
     """
-    await run.io_bound(state().update_config, change)
+    try:
+        await run.io_bound(state().update_config, change)
+    except Exception:
+        logger.exception("The settings could not be saved")
+        notify(SAVE_FAILED, "error")
+        return False
     if message:
         notify(message)
+    return True
 
 
 async def confirm(

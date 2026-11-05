@@ -189,9 +189,12 @@ class AppState:
         await self._sync_ended()
         self.config = None
         self.client = None
-        await run.io_bound(delete_local_data, paths)
-        # The budget copy is gone too: load() opens a new one when needed
-        self.load()
+        try:
+            await run.io_bound(delete_local_data, paths)
+        finally:
+            # The budget copy is gone too: load() opens a new one when needed. Also after a
+            # failed delete, so the app reads again whatever is left instead of nothing
+            self.load()
 
     async def _sync_ended(self) -> None:
         while self._sync_task is not None and not self._sync_task.done():

@@ -777,14 +777,16 @@ process), `update_config(change: Callable[[LatestConfig], None]) -> LatestConfig
 config save in the app: `config.update_config` with the app's copy as the fallback, then a
 reload, so what the CLI saved meanwhile is kept; never save `state().config` or a copy of it;
 it blocks on the disk and the keychain, so views never call it on the event loop: they
-`await shell.save_config(change, message=None)`, which runs it through `run.io_bound` and
-then toasts `message` when given),
+`await shell.save_config(change, message=None) -> bool`, which runs it through `run.io_bound`
+and then toasts `message` when given; a save that raises is logged, toasted as
+`wording.SAVE_FAILED` and returns False, so callers keep their dialog open or put back what
+they drew),
 `await sync(progress=NullProgress())` (shared by concurrent callers, runs through
 `run.io_bound`), `await resync(progress=NullProgress())` (waits for a running sync, then
 `store.clear(budget)` and a full sync as the shared sync task; the activity log stays),
 `await reset(paths)` (Settings "Reset all data": waits for a running sync, forgets the
 config so no new one starts, `delete_local_data(paths)` through `run.io_bound`, then
-`load()`), `sync_in_background()`, `stale` / `invalidate()` (call after every write to YNAB: marks the
+`load()` in a `finally`, also when deleting failed), `sync_in_background()`, `stale` / `invalidate()` (call after every write to YNAB: marks the
 store stale and starts a background sync; during a sync it asks for one more round when the
 running one ends) and `fresh(max_age) -> bool` (synced within `max_age`, not stale, not
 syncing: what Reconcile checks before showing the store),
@@ -1046,11 +1048,12 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   when no single row does.
 - Lock (per account or all): `shell.confirm`, then `core.reconcile.reconcile` through
   `run.io_bound` with `TransactionDetail`s rebuilt from the stored rows
-  (`transaction_detail()`), then `last_reconciliation_date = next_reconciliation_date(locked
-  dates, dates of the rows still pending in the current scope)`
-  saved through `shell.save_config()`, `store.log("reconcile", "Reconciled n transactions in m
-  accounts", {"count", "accounts": [{"id", "name", "count"}]})` through `run.io_bound`,
-  `sync_in_background()`.
+  (`transaction_detail()`). Once YNAB answered, the rows are drawn locked, `invalidate()`
+  runs, `store.log("reconcile", "Reconciled n transactions in m accounts", {"count",
+  "accounts": [{"id", "name", "count"}]})` through `run.io_bound`, and only then
+  `last_reconciliation_date = next_reconciliation_date(locked dates, dates of the rows still
+  pending in the current scope)` is saved through `shell.save_config()`, so a failed save
+  (toasted by it) leaves the log and the sync done; `busy` is reset in a `finally`.
   The store itself is not written by the view. Errors go through
   `wording.ynab_error_message` and leave config, log and rows untouched.
 - Wording: header "4 accounts · 17 transactions not reconciled", card
