@@ -5,7 +5,7 @@ import logging
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from ynab_unlinked import keychain
 from ynab_unlinked.buckets import Bucket
@@ -66,6 +66,10 @@ class ConfigV4(BaseModel):
 
     model_config = ConfigDict(validate_by_alias=True, serialize_by_alias=True)
 
+    _keychain_unread: bool = PrivateAttr(default=False)
+    """The file points to the keychain but the token could not be read from it. A save with
+    no new token writes the reference back, so the file still finds the token later."""
+
     @staticmethod
     def version() -> Version:
         return Version("Config", "V4")
@@ -88,6 +92,8 @@ class ConfigV4(BaseModel):
                 logger.warning("The token stays in the config file, the keychain failed: %s", error)
             else:
                 on_disk = self.model_copy(update={"api_key": keychain.REFERENCE})
+        elif not self.api_key and self._keychain_unread:
+            on_disk = self.model_copy(update={"api_key": keychain.REFERENCE})
         self.path().parent.mkdir(parents=True, exist_ok=True)
         self.path().write_text(on_disk.model_dump_json(indent=4))
 
@@ -105,6 +111,7 @@ class ConfigV4(BaseModel):
             except keychain.KeychainError as error:
                 logger.warning("The token could not be read from the keychain: %s", error)
                 config.api_key = ""
+            config._keychain_unread = not config.api_key
         elif config.api_key and keychain.available():
             config.save()
         return config

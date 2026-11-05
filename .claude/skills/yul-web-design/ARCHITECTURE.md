@@ -350,6 +350,8 @@ class LoaderConfig(BaseModel):
 # first load. Without a keychain the file keeps it in plain text. `api_key == ""` after
 # load means the keychain lost it: the CLI says to run `yul config set api_key`, the web
 # app keeps the config in `state().token_lost` and onboarding asks for the token only.
+# A save while the token is unread writes `REFERENCE` back, never an empty token.
+# `keychain.read()` returns None when `YUL_NO_KEYCHAIN` is set.
 
 class TrackedAccount(BaseModel):
     id: str

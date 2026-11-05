@@ -81,7 +81,9 @@ def store(token: str) -> None:
 
 
 def read() -> str | None:
-    """The stored token, None when there is none."""
+    """The stored token, None when there is none or `YUL_NO_KEYCHAIN` is set."""
+    if os.environ.get(NO_KEYCHAIN_ENV):
+        return None
     import keyring
 
     try:
