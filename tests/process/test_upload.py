@@ -8,8 +8,9 @@ from ynab import TransactionClearedStatus
 from tests.factories import TransactionFactory
 from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
-from tests.process.builders import ACCOUNT_ID, THREE_DAYS_AGO, TODAY, YESTERDAY
+from tests.process.builders import ACCOUNT_ID, BUDGET_ID, THREE_DAYS_AGO, TODAY, YESTERDAY
 from ynab_unlinked.exceptions import ParsingError
+from ynab_unlinked.store import Store, StoredAccount
 
 pytestmark = pytest.mark.version("V4")
 
@@ -183,3 +184,61 @@ def test_an_empty_export_never_reaches_ynab(
     assert result.exit_code == 0, result.output
     assert "Nothing to do" in result.output
     ynab.api("transactions").get_transactions_by_account.assert_not_called()
+
+
+def test_an_import_is_noted_in_the_activity_log_the_app_reads(
+    config_file: Path,
+    yul: CliRunner,
+    load_entity: LoadEntityCallback,
+    rejected_as_duplicates,
+    store_file: Path,
+):
+    store = Store(store_file)
+    store.upsert(
+        BUDGET_ID,
+        accounts=[
+            StoredAccount(ACCOUNT_ID, "💶 Checking", "checking", False, True, 0, 0, 0),
+        ],
+    )
+    load_entity(
+        TODAY,
+        [
+            TransactionFactory(date=THREE_DAYS_AGO, **COFFEE),
+            TransactionFactory(date=YESTERDAY, **BAKERY),
+        ],
+    )
+    rejected_as_duplicates([f"YNAB:-5000:{YESTERDAY:%Y-%m-%d}:1"])
+
+    result = yul("load test", input="y\n")
+
+    assert result.exit_code == 0, result.output
+    [entry] = store.activity(BUDGET_ID)
+    assert (entry.kind, entry.message) == ("import", "Imported 1 transaction to 💶 Checking from ")
+    assert entry.details == {
+        "loader": "test",
+        "account_id": ACCOUNT_ID,
+        "account_name": "💶 Checking",
+        "file": "",
+        "created": 1,
+        "duplicates": 1,
+        "skipped": 0,
+    }
+
+
+def test_a_store_that_cannot_be_opened_does_not_fail_the_import(
+    config_file: Path,
+    yul: CliRunner,
+    load_entity: LoadEntityCallback,
+    created_transactions,
+    store_file: Path,
+):
+    store_file.parent.mkdir(parents=True)
+    store_file.write_text("this is not a database")
+    load_entity(TODAY, [TransactionFactory(date=THREE_DAYS_AGO, **COFFEE)])
+
+    result = yul("load test", input="y\n")
+
+    assert result.exit_code == 0, result.output
+    assert len(created_transactions()) == 1
+    assert "could not note it in its activity log" in result.output
+    assert "1 transaction imported" in result.output

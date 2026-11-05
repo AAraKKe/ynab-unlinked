@@ -4,6 +4,7 @@ import typer
 from ynab import TransactionClearedStatus
 
 from ynab_unlinked import display
+from ynab_unlinked.activity import log_import
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.importing import build_import_plan, commit_import_plan, parse_transactions
@@ -133,6 +134,16 @@ def process_transactions(
             f"YNAB rejected {len(result.duplicate_import_ids)} of them as already imported:"
         )
         console().print(bullet_list(result.duplicate_import_ids))
+
+    log_import(
+        config,
+        loader=entity.name(),
+        account_id=account_id,
+        file=input_file.name,
+        created=result.created,
+        duplicates=len(result.duplicate_import_ids),
+        skipped=plan.already_imported_count,
+    )
 
     created = result.created
     display.success(f"🎉 All done! {created} transaction{'' if created == 1 else 's'} imported.")

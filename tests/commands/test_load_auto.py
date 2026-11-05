@@ -9,9 +9,10 @@ from tests.helpers.config import ConfigFiles
 from tests.helpers.statements import cobee_export
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
-from tests.process.builders import ACCOUNT_ID, OTHER_ACCOUNT_ID, write_config
+from tests.process.builders import ACCOUNT_ID, BUDGET_ID, OTHER_ACCOUNT_ID, write_config
 from ynab_unlinked import display
 from ynab_unlinked.core.importing import ImportPlan
+from ynab_unlinked.store import Store
 
 pytestmark = pytest.mark.version("V4")
 
@@ -247,3 +248,19 @@ def test_transactions_ynab_rejects_are_reported_across_files(
     # One rejected per file: 5 sent, 3 created
     assert "YNAB rejected 2 of them as already imported" in result.output
     assert "All done! 3 transactions imported." in result.output
+
+
+def test_each_imported_file_is_noted_in_the_activity_log(
+    yul: CliRunner, accounts, ynab: YnabClientStub, store_file: Path
+):
+    result = yul("load", "--yes", "auto", SABADELL, COBEE, env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    entries = Store(store_file).activity(BUDGET_ID, kind="import")
+    assert sorted(
+        (e.details["loader"], e.details["account_id"], e.details["file"], e.details["created"])
+        for e in entries
+    ) == [
+        ("cobee", OTHER_ACCOUNT_ID, Path(COBEE).name, 2),
+        ("sabadell", ACCOUNT_ID, Path(SABADELL).name, 3),
+    ]

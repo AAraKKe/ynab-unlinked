@@ -702,6 +702,10 @@ that number in the message and shows `file` in mono.
 | `config` | free text | free |
 
 Amounts in messages are formatted with `state().formatter`; in details they are milliunits.
+The CLI writes `import` (after each committed file of `yul load <bank>` and `yul load auto`)
+and `reconcile` (after `yul reconcile` locks) with the same shapes through
+`ynab_unlinked.activity`, at `store_path()`; a store it cannot open only warns. The app's
+next sync brings the transactions.
 Use singular nouns for 1 ("1 change"). `AppState._sync` logs `sync` only when the sync was
 full, brought changes or removed ghosts (one runs at every start). Home reads: the newest
 `reconcile` (hero change since) and the newest `import` per `details["loader"]` (the last

@@ -5,6 +5,7 @@ from typer import Context, Option
 from ynab import Account, TransactionClearedStatus, TransactionDetail
 
 from ynab_unlinked import app, display
+from ynab_unlinked.activity import log_reconcile
 from ynab_unlinked.choices import Choice
 from ynab_unlinked.commands.apps.reconcile import Reconcile
 from ynab_unlinked.config import LatestConfig
@@ -132,5 +133,14 @@ def reconcile(
         [t.var_date for t in selected_transactions], left_unreconciled
     )
     config.save()
+
+    log_reconcile(
+        config,
+        [
+            (str(group.account.id), group.account.name, locked)
+            for group in overview
+            if (locked := sum(t.id in selected_ids for t in group.transactions))
+        ],
+    )
 
     display.success("🎉 Reconciliation done!")

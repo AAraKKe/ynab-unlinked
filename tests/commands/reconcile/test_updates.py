@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 
 import pytest
 
@@ -8,6 +9,7 @@ from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.store import Store
 
 from .harness import (
     CHECKING_ID,
@@ -145,6 +147,53 @@ def test_reconcile_keeps_the_checkpoint_before_what_was_left_unreconciled(
     assert result.exit_code == 0, result.output
     assert [update.id for update in updates_sent(ynab)] == ["latest"]
     assert LatestConfig.load().last_reconciliation_date == dt.date(2025, 5, 2)
+
+
+def test_reconcile_is_noted_in_the_activity_log_the_app_reads(
+    yul: CliRunner,
+    ynab: YnabClientStub,
+    stored_config: LatestConfig,
+    tui: TuiStub,
+    store_file: Path,
+):
+    given_ynab_data(
+        ynab,
+        [
+            TransactionDetailFactory(id="c1", account_id=CHECKING_ID),
+            TransactionDetailFactory(id="c2", account_id=CHECKING_ID),
+            TransactionDetailFactory(id="s1", account_id=SAVINGS_ID, cleared=UNCLEARED),
+        ],
+        [CHECKING, SAVINGS],
+    )
+
+    result = yul("reconcile")
+
+    assert result.exit_code == 0, result.output
+    [entry] = Store(store_file).activity(stored_config.budget.id)
+    assert (entry.kind, entry.message) == ("reconcile", "Reconciled 2 transactions in 1 account")
+    assert entry.details == {
+        "count": 2,
+        "accounts": [{"id": str(CHECKING_ID), "name": "Checking", "count": 2}],
+    }
+
+
+def test_reconcile_with_a_broken_store_still_succeeds(
+    yul: CliRunner,
+    ynab: YnabClientStub,
+    stored_config: LatestConfig,
+    tui: TuiStub,
+    store_file: Path,
+):
+    store_file.parent.mkdir(parents=True)
+    store_file.write_text("this is not a database")
+    given_ynab_data(ynab, [TransactionDetailFactory(id="c1", account_id=CHECKING_ID)], [CHECKING])
+
+    result = yul("reconcile")
+
+    assert result.exit_code == 0, result.output
+    assert [update.id for update in updates_sent(ynab)] == ["c1"]
+    assert "could not note it in its activity log" in result.output
+    assert "Reconciliation done!" in result.output
 
 
 @pytest.mark.parametrize(

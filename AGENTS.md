@@ -18,6 +18,7 @@ src/ynab_unlinked/
                      their `LoaderSpec`s; `_sniff.py` has helpers for `sniff()`.
   parsers/           Shared file readers (xls, pdf) used by entities.
   process.py         Pipeline run by every `load <entity>` command.
+  activity.py        Activity log entries the CLI writes to the store (`import`, `reconcile`).
   models.py          `Transaction` and import id assignment.
   buckets.py         Net worth `Bucket` and the default bucket of a YNAB account type.
   store/             SQLite copy of the budget's accounts and transactions, synced by

@@ -106,6 +106,7 @@ def auto(
     """
     from ynab import TransactionClearedStatus
 
+    from ynab_unlinked.activity import log_import
     from ynab_unlinked.core.detect import detect_loaders
     from ynab_unlinked.core.importing import build_import_plan, commit_import_plan
     from ynab_unlinked.process import get_or_prompt_account_id
@@ -209,11 +210,22 @@ def auto(
     )
     created: dict[str, int] = {}
     duplicates: list[str] = []
-    for plan in to_import:
+    for plan, (_, candidate) in zip(plans, chosen, strict=True):
+        if not plan.new_rows:
+            continue
         with display.CliProgress() as progress:
             result = commit_import_plan(
                 client, budget_id=budget_id, plan=plan, cleared=cleared, progress=progress
             )
+        log_import(
+            ctx.config,
+            loader=candidate.loader.name,
+            account_id=plan.account_id,
+            file=plan.input_file.name,
+            created=result.created,
+            duplicates=len(result.duplicate_import_ids),
+            skipped=plan.already_imported_count,
+        )
         created[plan.account_id] = created.get(plan.account_id, 0) + result.created
         duplicates.extend(result.duplicate_import_ids)
 

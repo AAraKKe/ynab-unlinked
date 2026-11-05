@@ -140,6 +140,7 @@ def store_file(tmp_path: Path, mocker: MockerFixture) -> Path:
         "ynab_unlinked.privacy",
         "ynab_unlinked.local_data",
         "ynab_unlinked.web.state",
+        "ynab_unlinked.activity",
     ):
         mocker.patch(f"{module}.store_path", return_value=path)
     return path
