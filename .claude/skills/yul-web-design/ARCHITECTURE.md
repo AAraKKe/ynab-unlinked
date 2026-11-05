@@ -491,7 +491,11 @@ manual or scheduled one of the same account, the manual one survives with the `i
 without a delta tombstone. After every sync `Store._repair_ghosts` looks for two or more non
 deleted rows sharing `(account_id, import_id)`, checks each id with
 `client.transaction_exists` and flags the missing ones `deleted = 1`. A group where every
-row exists (a match not approved yet) stays. No duplicate groups, no requests.
+row exists (a match not approved yet) stays. No duplicate groups, no requests. Only groups
+holding a row this sync received are checked (every group on a full sync): the merge always
+changes the surviving row, so a pending match costs requests once, not on every sync. An
+`ApiException`, urllib3 `HTTPError` or `OSError` during the check is a `progress.warn`, 0
+ghosts, and the sync still succeeds.
 
 Every method opens its own connection, so one `Store` can be shared across threads
 (`run.io_bound`). Timestamps (`synced_at`, `at`) are UTC ISO strings. `Store.sync` does not

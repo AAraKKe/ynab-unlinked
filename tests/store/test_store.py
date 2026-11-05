@@ -269,6 +269,86 @@ def test_sync_keeps_a_match_ynab_has_not_merged_yet(
     assert ids(store.unreconciled(BUDGET_ID)) == ["imported", "manual"]
 
 
+def test_a_pending_match_is_only_checked_by_the_sync_that_brings_it(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    pending = [
+        TransactionDetailFactory(id="imported", import_id=MERGED_IMPORT_ID),
+        TransactionDetailFactory(id="manual", import_id=MERGED_IMPORT_ID),
+    ]
+    serve(
+        ynab_api,
+        (pending, 10),
+        # Later deltas bring other rows, or the manual one after the user approved the match
+        ([TransactionDetailFactory(id="other")], 15),
+        ([], 16),
+        ([TransactionDetailFactory(id="manual", import_id=MERGED_IMPORT_ID)], 20),
+    )
+    endpoint = answer_exists(ynab_api, missing=set())
+
+    store.sync(client, BUDGET_ID)
+    assert endpoint.call_count == 2
+    store.sync(client, BUDGET_ID)
+    store.sync(client, BUDGET_ID)
+    assert endpoint.call_count == 2
+
+    endpoint.side_effect = None
+    answer_exists(ynab_api, missing={"imported"})
+    result = store.sync(client, BUDGET_ID)
+
+    assert result.ghosts_removed == 1
+    assert ids(store.unreconciled(BUDGET_ID)) == ["manual", "other"]
+
+
+def test_a_full_sync_checks_every_duplicate_group(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    serve(
+        ynab_api,
+        (
+            [
+                TransactionDetailFactory(id="imported", import_id=MERGED_IMPORT_ID),
+                TransactionDetailFactory(id="manual", import_id=MERGED_IMPORT_ID),
+            ],
+            10,
+        ),
+    )
+    answer_exists(ynab_api, missing={"imported"})
+
+    result = store.sync(client, BUDGET_ID)
+
+    assert (result.full, result.ghosts_removed) == (True, 1)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [ApiException(status=429, reason="Too Many Requests"), ConnectionRefusedError("offline")],
+    ids=["rate-limited", "offline"],
+)
+def test_a_failed_ghost_check_warns_and_keeps_the_sync(
+    store: Store, client: Client, ynab_api: YnabClientStub, error: Exception
+):
+    serve(
+        ynab_api,
+        (
+            [
+                TransactionDetailFactory(id="imported", import_id=MERGED_IMPORT_ID),
+                TransactionDetailFactory(id="manual", import_id=MERGED_IMPORT_ID),
+            ],
+            10,
+        ),
+    )
+    ynab_api.api("transactions").get_transaction_by_id.side_effect = error
+    progress = MagicMock(spec=Progress)
+
+    result = store.sync(client, BUDGET_ID, progress)
+
+    assert (result.server_knowledge, result.ghosts_removed) == (10, 0)
+    assert ids(store.unreconciled(BUDGET_ID)) == ["imported", "manual"]
+    assert store.last_sync(BUDGET_ID) is not None
+    progress.warn.assert_called_once()
+
+
 def test_stale_knowledge_drops_the_budget_and_fetches_everything_again(
     store: Store, client: Client, ynab_api: YnabClientStub
 ):

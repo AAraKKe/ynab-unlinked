@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from urllib3.exceptions import HTTPError
 from ynab import Account, ApiException, TransactionClearedStatus, TransactionDetail
 
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
@@ -148,17 +149,25 @@ class Store:
         """
         knowledge = self._server_knowledge(budget_id)
         try:
-            result = self._sync(client, budget_id, knowledge, progress)
+            result, received = self._sync(client, budget_id, knowledge, progress)
         except ApiException as error:
             if knowledge is None or error.status != STALE_KNOWLEDGE_STATUS:
                 raise
             progress.warn("YNAB could not send only the changes, fetching everything again")
             with self._connect() as conn:
                 self._forget(conn, budget_id)
-            result = self._sync(client, budget_id, None, progress)
-        return replace(result, ghosts_removed=self._repair_ghosts(client, budget_id, progress))
+            result, received = self._sync(client, budget_id, None, progress)
+        # On a full sync every row was just received, so every group counts
+        ghosts = self._repair_ghosts(client, budget_id, None if result.full else received, progress)
+        return replace(result, ghosts_removed=ghosts)
 
-    def _repair_ghosts(self, client: Client, budget_id: str, progress: Progress) -> int:
+    def _repair_ghosts(
+        self,
+        client: Client,
+        budget_id: str,
+        received: set[str] | None,
+        progress: Progress,
+    ) -> int:
         """Flag deleted the rows YNAB merged away without telling the delta. Returns how many.
 
         YNAB matches an imported transaction (one with an `import_id`, from yul or from a
@@ -174,10 +183,17 @@ class Store:
         those groups is checked against YNAB and the missing ones become tombstones, like a
         delete from YNAB. A group where every row exists (a match not approved yet) is left
         alone. Without duplicate groups no request is made, so a normal sync costs nothing.
+
+        The merge always changes the surviving row, so only groups holding a row of
+        `received` (the ids this sync brought, None for every row on a full sync) are checked:
+        a match waiting for approval costs requests only on the sync that brings it, not on
+        every sync after. The check is best effort: when YNAB refuses or cannot be reached
+        it is skipped with a warning (the sync itself already committed) and the next sync
+        that touches the group tries again.
         """
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT t.id FROM transactions t JOIN ("
+                "SELECT t.id, t.account_id, t.import_id FROM transactions t JOIN ("
                 "  SELECT account_id, import_id FROM transactions"
                 "  WHERE budget_id = ? AND deleted = 0 AND import_id IS NOT NULL"
                 "  GROUP BY account_id, import_id HAVING COUNT(*) > 1"
@@ -185,11 +201,28 @@ class Store:
                 "WHERE t.budget_id = ? AND t.deleted = 0 ORDER BY t.id",
                 (budget_id, budget_id),
             ).fetchall()
-        if not rows:
+        groups: dict[tuple[str, str], list[str]] = {}
+        for row in rows:
+            groups.setdefault((row["account_id"], row["import_id"]), []).append(row["id"])
+        candidates = [
+            transaction_id
+            for group in groups.values()
+            if received is None or not received.isdisjoint(group)
+            for transaction_id in group
+        ]
+        if not candidates:
             return 0
 
         progress.start("Checking transactions YNAB may have merged")
-        ghosts = [row["id"] for row in rows if not client.transaction_exists(budget_id, row["id"])]
+        try:
+            ghosts = [
+                transaction_id
+                for transaction_id in candidates
+                if not client.transaction_exists(budget_id, transaction_id)
+            ]
+        except (ApiException, HTTPError, OSError) as error:
+            progress.warn(f"Could not check the transactions YNAB may have merged: {error}")
+            return 0
         with self._connect() as conn:
             conn.executemany(
                 "UPDATE transactions SET deleted = 1 WHERE budget_id = ? AND id = ?",
@@ -204,7 +237,8 @@ class Store:
         budget_id: str,
         knowledge: int | None,
         progress: Progress,
-    ) -> SyncResult:
+    ) -> tuple[SyncResult, set[str]]:
+        """Fetch and save one batch. Returns the result and the ids of the rows received."""
         if knowledge is None:
             progress.start("Fetching all transactions from YNAB")
             transactions, new_knowledge = client.transactions_with_knowledge(
@@ -230,12 +264,13 @@ class Store:
             )
         progress.done()
 
-        return SyncResult(
+        result = SyncResult(
             full=knowledge is None,
             transactions_changed=len(transactions),
             accounts=len(accounts),
             server_knowledge=new_knowledge,
         )
+        return result, {t.id for t in transactions}
 
     def _server_knowledge(self, budget_id: str) -> int | None:
         with self._connect() as conn:
