@@ -13,8 +13,8 @@ import os
 from typing import Any
 
 SERVICE_ENV = "YUL_KEYCHAIN_SERVICE"
-"""Names the keychain item instead of `ynab-unlinked`: for a scratch run (`HOME=/tmp/... yul
-app`) that should go through the real keychain without touching the item of the real config."""
+"""Names the keychain item instead of `ynab-unlinked`: for a scratch run (`YUL_HOME=/tmp/...
+yul app`) that should go through the real keychain without touching the item of the real config."""
 SERVICE = os.environ.get(SERVICE_ENV) or "ynab-unlinked"
 """The keychain item: what the user sees in Keychain Access or the Credential Manager."""
 ACCOUNT = "YNAB Personal Access Token"
@@ -48,7 +48,7 @@ def _backend() -> Any:
 
 NO_KEYCHAIN_ENV = "YUL_NO_KEYCHAIN"
 """Set to any value to keep the token in the config file: for scratch runs against a test
-config (`HOME=/tmp/... yul app`), which would otherwise overwrite the real keychain item."""
+config (`YUL_HOME=/tmp/... yul app`), which would otherwise overwrite the real keychain item."""
 
 
 def available() -> bool:
