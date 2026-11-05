@@ -298,6 +298,9 @@ class Store:
         progress: Progress,
     ) -> tuple[SyncResult, set[str]]:
         """Fetch and save one batch. Returns the result and the ids of the rows received."""
+        # The copy is as new as the fetch, not the write: a CLI write logged in between must
+        # count as newer than the sync, so `fresh()` in the app syncs again
+        fetched_at = _timestamp()
         if knowledge is None:
             progress.start("Fetching all transactions from YNAB")
             transactions, new_knowledge = client.transactions_with_knowledge(
@@ -319,7 +322,7 @@ class Store:
             conn.execute(
                 "INSERT OR REPLACE INTO sync_state (budget_id, server_knowledge, synced_at) "
                 "VALUES (?, ?, ?)",
-                (budget_id, new_knowledge, _timestamp()),
+                (budget_id, new_knowledge, fetched_at),
             )
         progress.done()
 

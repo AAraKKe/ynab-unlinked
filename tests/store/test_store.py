@@ -679,6 +679,25 @@ def test_last_sync_is_the_time_of_the_latest_sync_in_utc(
     assert store.last_sync(OTHER_BUDGET_ID) is None
 
 
+def test_a_write_logged_while_the_sync_fetches_counts_as_newer_than_the_sync(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    def cli_imports_meanwhile(*args: object, **kwargs: object) -> TransactionsResponse:
+        # `yul load` in a terminal while the app waits for YNAB
+        store.log(BUDGET_ID, "import", "Imported 1 transaction")
+        return TransactionsResponse(
+            data=TransactionsResponseData(transactions=[], server_knowledge=1)
+        )
+
+    serve(ynab_api)
+    ynab_api.api("transactions").get_transactions.side_effect = cli_imports_meanwhile
+
+    store.sync(client, BUDGET_ID)
+
+    synced, written = store.last_sync(BUDGET_ID), store.last_activity(BUDGET_ID)
+    assert synced is not None and written is not None and synced < written
+
+
 def test_clearing_a_budget_leaves_the_others_and_forces_a_full_sync(
     store: Store, client: Client, ynab_api: YnabClientStub
 ):

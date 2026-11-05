@@ -525,7 +525,8 @@ class Store:
                      cleared: Iterable[TransactionClearedStatus] | None = None) -> list[StoredTransaction]
         # never returns deleted rows; since/until inclusive; oldest first (date, id)
     def unreconciled(self, budget_id: str) -> list[StoredTransaction]   # cleared + uncleared
-    def last_sync(self, budget_id: str) -> dt.datetime | None           # aware, UTC
+    def last_sync(self, budget_id: str) -> dt.datetime | None           # aware, UTC; when the
+        # sync started fetching, so a write logged during the fetch counts as newer
     def clear(self, budget_id: str | None = None, *, activity: bool = False) -> None
         # forgets the copy (rows, accounts, knowledge); the activity log only with activity=True
     def log(self, budget_id: str, kind: str, message: str,
