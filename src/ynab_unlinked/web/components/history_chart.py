@@ -239,7 +239,6 @@ def set_options(chart: ui.echart, options: dict[str, Any]) -> None:
 __all__ = [
     "CHART_HEIGHT",
     "ChartSeries",
-    "compact_js",
     "history_chart",
     "history_options",
     "money_js",

@@ -36,6 +36,8 @@ from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store, StoredAccount, StoredTransaction
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell, theme
+from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
+from ynab_unlinked.web.buckets import NET_WORTH_ORDER, SERIES_BUCKETS, STYLES
 from ynab_unlinked.web.components import (
     PillKind,
     Segment,
@@ -55,7 +57,7 @@ from ynab_unlinked.web.components.history_chart import (
     set_options,
 )
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.views.onboarding import ynab_error_message
+from ynab_unlinked.web.wording import plural, short_date, ynab_error_message
 
 RANGES = ("1M", "3M", "6M", "YTD", "1Y", "All")
 DEFAULT_RANGE = "6M"
@@ -63,19 +65,7 @@ GROUPINGS = {"total": "Total", "type": "By type", "account": "By account"}
 MAX_PICKED = 6
 DEFAULT_PICKED = 4
 """How many accounts "by account" shows before the user picks: the largest after netting."""
-STALE_AFTER_DAYS = 30
 DRAWER_TRANSACTIONS = 20
-
-# Bucket, group title, CSS colour. Series colours by entity: the three positive buckets own
-# series 1..3 everywhere in the view; debt has no series colour.
-GROUPS: tuple[tuple[Bucket, str, str | None], ...] = (
-    (Bucket.ASSETS, "Assets", "var(--series-1)"),
-    (Bucket.SAVINGS, "Savings", "var(--series-2)"),
-    (Bucket.CASH, "Cash · after debt", "var(--series-3)"),
-    (Bucket.DEBT, "Debt", None),
-)
-_TYPE_SERIES = ((Bucket.ASSETS, "Assets"), (Bucket.SAVINGS, "Savings"), (Bucket.CASH, "Cash"))
-_SERIES_SLOT = {Bucket.ASSETS: 0, Bucket.SAVINGS: 1, Bucket.CASH: 2}
 
 
 # ---- pure helpers --------------------------------------------------------------------------
@@ -142,10 +132,6 @@ def assign_slots(previous: dict[str, int], picked: Sequence[str]) -> dict[str, i
 def signed(formatter: Formatter, milliunits: int) -> str:
     text = formatter.format_amount_milli(milliunits)
     return f"+{text}" if milliunits > 0 else text
-
-
-def short_date(day: dt.date, today: dt.date) -> str:
-    return f"{day.day} {day:%b}" if day.year == today.year else f"{day.day} {day:%b %Y}"
 
 
 # ---- data ----------------------------------------------------------------------------------
@@ -219,7 +205,7 @@ def load_snapshot(store: Store, config: LatestConfig, today: dt.date) -> Snapsho
 def table_order(snapshot: Snapshot) -> list[TrackedAccount]:
     """The counted accounts as the Accounts table lists them: by bucket, largest first."""
     ordered: list[TrackedAccount] = []
-    for bucket, _, _ in GROUPS:
+    for bucket in NET_WORTH_ORDER:
         accounts = [a for a in snapshot.tracked if a.bucket is bucket]
         if bucket is Bucket.DEBT:
             accounts.sort(key=lambda a: snapshot.raw(a.id))
@@ -275,9 +261,7 @@ class NetWorthView:
 
     @staticmethod
     def _formatter() -> Formatter:
-        formatter = state().formatter
-        assert formatter is not None
-        return formatter
+        return state().require_formatter()
 
     def _start(self) -> dt.date:
         assert self.snapshot is not None
@@ -362,7 +346,7 @@ class NetWorthView:
                         "Every account is left out of net worth. Count some in Settings.",
                         icon_name="networth",
                         action_label="Open Settings",
-                        on_action=lambda: ui.navigate.to("/settings?tab=accounts"),
+                        on_action=lambda: ui.navigate.to(f"{shell.SETTINGS_PATH}?tab=accounts"),
                     ).mark("no-tracked")
                 else:
                     self._hero(snapshot)
@@ -464,8 +448,12 @@ class NetWorthView:
         palette = self.palette
         if self.grouping == "type":
             return [
-                ChartSeries(name, self.history.get(bucket.value, []), palette.series[slot])
-                for slot, (bucket, name) in enumerate(_TYPE_SERIES)
+                ChartSeries(
+                    STYLES[bucket].title,
+                    self.history.get(bucket.value, []),
+                    palette.series[STYLES[bucket].slot or 0],
+                )
+                for bucket in SERIES_BUCKETS
             ]
         if self.grouping == "account":
             names = {a.id: self.snapshot.name(a) for a in self.snapshot.tracked}
@@ -591,37 +579,28 @@ class NetWorthView:
             for target in snapshot.mapped(account.id)
         }
         buckets = {a.id: a.bucket for a in snapshot.tracked}
-        kind = "cash " if all(buckets[t] is Bucket.CASH for t in targets) else ""
-        plural = "" if len(targets) == 1 else "s"
-        debt_hint = f"netted into {len(targets)} {kind}account{plural}" if targets else "not netted"
+        kind = "cash account" if all(buckets[t] is Bucket.CASH for t in targets) else "account"
+        debt_hint = f"netted into {plural(len(targets), kind)}" if targets else "not netted"
 
+        hints = {
+            Bucket.ASSETS: f"{share(Bucket.ASSETS)} of net worth",
+            Bucket.SAVINGS: share(Bucket.SAVINGS),
+            Bucket.CASH: f"{share(Bucket.CASH)} · after debt",
+            Bucket.DEBT: debt_hint,
+        }
         with ui.element("div").classes("yul-nw-tiles yul-stagger"):
-            stat_tile(
-                "Assets",
-                formatter.format_amount_milli(totals[Bucket.ASSETS]),
-                hint=f"{share(Bucket.ASSETS)} of net worth",
-                swatch="var(--series-1)",
-            ).mark("tile-assets")
-            stat_tile(
-                "Savings",
-                formatter.format_amount_milli(totals[Bucket.SAVINGS]),
-                hint=share(Bucket.SAVINGS),
-                swatch="var(--series-2)",
-            ).mark("tile-savings")
-            stat_tile(
-                "Cash",
-                formatter.format_amount_milli(totals[Bucket.CASH]),
-                hint=f"{share(Bucket.CASH)} · after debt",
-                swatch="var(--series-3)",
-            ).mark("tile-cash")
-            stat_tile(
-                "Debt", formatter.format_amount_milli(totals[Bucket.DEBT]), hint=debt_hint
-            ).mark("tile-debt")
+            for bucket in NET_WORTH_ORDER:
+                style = STYLES[bucket]
+                stat_tile(
+                    style.title,
+                    formatter.format_amount_milli(totals[bucket]),
+                    hint=hints[bucket],
+                    swatch=style.series,
+                ).mark(f"tile-{bucket.value}")
         segmented_bar(
             [
-                Segment("Assets", totals[Bucket.ASSETS], "var(--series-1)"),
-                Segment("Savings", totals[Bucket.SAVINGS], "var(--series-2)"),
-                Segment("Cash", totals[Bucket.CASH], "var(--series-3)"),
+                Segment(STYLES[bucket].title, totals[bucket], STYLES[bucket].color)
+                for bucket in SERIES_BUCKETS
             ]
         ).mark("composition")
 
@@ -644,23 +623,24 @@ class NetWorthView:
                     "yul-faint"
                 ).style("font-size:12px")
 
-            for bucket, title, color in GROUPS:
+            for bucket in NET_WORTH_ORDER:
                 accounts = [a for a in ordered if a.bucket is bucket]
                 if not accounts:
                     continue
+                style = STYLES[bucket]
                 with ui.element("div").classes("yul-section").mark(f"group-{bucket.value}"):
-                    if color:
-                        ui.element("span").classes("yul-swatch").style(f"background:{color}")
-                    ui.label(title)
+                    if style.series:
+                        ui.element("span").classes("yul-swatch").style(f"background:{style.series}")
+                    ui.label(style.group_title)
                 with ui.element("div").classes("yul-stagger"):
                     for account in accounts:
-                        self._account_row(snapshot, account, color, shares, widest)
+                        self._account_row(snapshot, account, style.color, shares, widest)
 
     def _account_row(
         self,
         snapshot: Snapshot,
         account: TrackedAccount,
-        color: str | None,
+        color: str,
         shares: dict[str, float],
         widest: float,
     ) -> None:
@@ -699,7 +679,7 @@ class NetWorthView:
                         ui.label(netted).classes("yul-nw-pct yul-faint").style("margin-left:auto")
                     else:
                         fraction = shares[account.id]
-                        share_bar(fraction / widest if widest > 0 else 0, color or "var(--text-3)")
+                        share_bar(fraction / widest if widest > 0 else 0, color)
                         ui.label(f"{fraction * 100:.1f}%").classes("yul-nw-pct yul-faint yul-num")
                 edit = button(
                     icon_name="pencil",
@@ -896,7 +876,7 @@ class NetWorthView:
         points, transactions = loaded
         transactions = transactions[-DRAWER_TRANSACTIONS:][::-1]
         name = snapshot.name(account)
-        slot = _SERIES_SLOT.get(account.bucket)
+        slot = STYLES[account.bucket].slot
         color = self.palette.accent[0] if slot is None else self.palette.series[slot]
         series = [ChartSeries(name, points, color)]
 
@@ -947,7 +927,7 @@ class NetWorthView:
 
 
 @shell.view(
-    "/networth",
+    shell.NETWORTH_PATH,
     key="networth",
     title="Net worth",
     subtitle="All your accounts in one figure",

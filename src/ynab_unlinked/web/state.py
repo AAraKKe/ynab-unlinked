@@ -25,6 +25,8 @@ from ynab_unlinked.core.progress import NullProgress, Progress
 from ynab_unlinked.entities.registry import LoaderSpec, loaders
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store, StoredAccount, StoreError, SyncResult, store_path
+from ynab_unlinked.web.wording import plural
+from ynab_unlinked.web.ynab import stored_accounts
 from ynab_unlinked.ynab_api import Client
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,12 @@ class AppState:
         if self.config is None or self.client is None:
             raise NotConfiguredError()
         return self.config, self.client
+
+    def require_formatter(self) -> Formatter:
+        """The budget's formatter, for code that only runs once yul is configured."""
+        if self.formatter is None:
+            raise NotConfiguredError()
+        return self.formatter
 
     def load(self) -> None:
         """Read the config from disk and rebuild everything that depends on it.
@@ -219,7 +227,7 @@ class AppState:
         ):
             changes = result.transactions_changed
             ghosts = result.ghosts_removed
-            message = f"Synced · {changes} change{'' if changes == 1 else 's'} from YNAB"
+            message = f"Synced · {plural(changes, 'change')} from YNAB"
             details: dict[str, int | bool] = {"changes": changes, "full": result.full}
             if ghosts:
                 message += f" · {ghosts} stale removed"
@@ -246,24 +254,7 @@ class AppState:
         if stored := await run.io_bound(self.store.accounts, config.budget.id):
             return stored
 
-        accounts = await run.io_bound(client.accounts, config.budget.id) or []
-        return sorted(
-            (
-                StoredAccount(
-                    id=str(account.id),
-                    name=account.name,
-                    type=account.type.value,
-                    closed=account.closed,
-                    on_budget=account.on_budget,
-                    balance=account.balance,
-                    cleared_balance=account.cleared_balance,
-                    uncleared_balance=account.uncleared_balance,
-                )
-                for account in accounts
-                if not account.deleted
-            ),
-            key=lambda account: account.name,
-        )
+        return stored_accounts(await run.io_bound(client.accounts, config.budget.id) or [])
 
 
 def default_bucket(account_type: str) -> Bucket:

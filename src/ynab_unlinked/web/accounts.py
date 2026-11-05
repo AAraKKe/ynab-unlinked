@@ -15,6 +15,9 @@ from ynab_unlinked.core.balances import DebtNetting
 from ynab_unlinked.store import StoredAccount
 from ynab_unlinked.web.state import default_bucket
 
+STALE_AFTER_DAYS = 30
+"""A balance set by hand is stale once it is older than this: Home's card, Net worth's pill."""
+
 
 def default_account(account: StoredAccount) -> TrackedAccount:
     """How an account counts when the config says nothing about it.

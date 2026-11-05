@@ -6,7 +6,6 @@ A full screen page outside the shell: a centered glass card with the step rail o
 from __future__ import annotations
 
 import asyncio
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
@@ -14,78 +13,33 @@ from typing import Literal
 from fastapi.responses import RedirectResponse
 from nicegui import Client as NiceClient
 from nicegui import context, run, ui
-from ynab import ApiException, PlanSummary
+from ynab import PlanSummary
 
 from ynab_unlinked import keychain
-from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.config.models.v2 import Budget
 from ynab_unlinked.entities.registry import LoaderSpec
-from ynab_unlinked.utils import budget_from_plan
-from ynab_unlinked.web import theme
+from ynab_unlinked.web import shell, theme
 from ynab_unlinked.web.components import bank_logo, button, check, pill, spinner
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.wording import (
+    COPY_FAILED,
+    COPY_NOTE,
+    COPY_TITLE,
+    budget_caption,
+    copy_error_message,
+    copy_line,
+    plural,
+    ynab_error_message,
+)
+from ynab_unlinked.web.ynab import fetch_budgets, load_budget
 from ynab_unlinked.ynab_api import Client
 
 STEPS = ("Token", "Budget", "Banks", "Done")
 TOKEN, BUDGET, LOADERS, DONE = range(len(STEPS))
 
-COPY_TITLE = "Copying your budget from YNAB"
-COPY_NOTE = "The first time can take a minute."
-COPY_FAILED = "Could not copy your budget from YNAB. Check your connection and try again."
-
-# Settings › Accounts titles its sections with these
-BUCKET_TITLES = {
-    Bucket.CASH: "Cash",
-    Bucket.SAVINGS: "Savings",
-    Bucket.ASSETS: "Assets",
-    Bucket.DEBT: "Debt",
-}
-
 CopyState = Literal["running", "done", "failed"]
-
-
-def ynab_error_message(error: Exception) -> str:
-    """What to tell the user when a call to YNAB fails."""
-    if isinstance(error, ApiException):
-        if error.status == 401:
-            return "YNAB rejected this token. Check that you copied all of it."
-        if error.status == 429:
-            return "YNAB is rate limiting this token. Try again in a few minutes."
-        return f"YNAB answered {error.status}: {error.reason}"
-    return f"Could not reach YNAB: {error}"
-
-
-def copy_error_message(error: Exception) -> str:
-    """What to tell the user when the first copy of the budget fails."""
-    if isinstance(error, ApiException):
-        return ynab_error_message(error)
-    return COPY_FAILED
-
-
-_NUMBER = re.compile(r"\d{4,}")
-
-
-def copy_line(message: str) -> str:
-    """A progress message of the copy in the user's words, with grouped figures."""
-    message = message.replace("Saving to the local store", "Saving the copy on this computer")
-    return _NUMBER.sub(lambda match: f"{int(match.group()):,}", message)
-
-
-async def fetch_budgets(token: str) -> list[PlanSummary]:
-    """The budgets a token can see, with their accounts. Raises what the SDK raises."""
-    return await run.io_bound(Client(token).budgets, include_accounts=True) or []
-
-
-def budget_caption(budget: PlanSummary) -> str:
-    parts: list[str] = []
-    if budget.currency_format is not None:
-        parts.append(budget.currency_format.iso_code)
-    if budget.accounts is not None:
-        open_accounts = [a for a in budget.accounts if not a.closed and not a.deleted]
-        parts.append(f"{len(open_accounts)} account{'s' if len(open_accounts) != 1 else ''}")
-    return " · ".join(parts)
 
 
 @dataclass(frozen=True)
@@ -220,12 +174,11 @@ class Wizard:
 
             state().update_config(change)
             with client:
-                ui.navigate.to("/")
+                ui.navigate.to(shell.HOME_PATH)
             return True
         if len(budgets) == 1:
             self.budget_id = str(budgets[0].id)
-        count = len(budgets)
-        self.say(f"Token works · {count} budget{'s' if count != 1 else ''} found")
+        self.say(f"Token works · {plural(len(budgets), 'budget')} found")
         return True
 
     async def load_budget(self) -> None:
@@ -238,11 +191,8 @@ class Wizard:
         self.fill_loaders()
         self.update_footer()
         try:
-            plan = await run.io_bound(client.budget, budget_id)
+            budget = await load_budget(client, budget_id)
             accounts = await run.io_bound(client.accounts, budget_id) or []
-            if plan is None:
-                raise ValueError(f"Could not find budget with ID {budget_id}")
-            budget = budget_from_plan(plan)
         except Exception as error:
             self.message, self.message_is_error = ynab_error_message(error), True
         else:
@@ -427,8 +377,7 @@ class Wizard:
 
     def render_budget(self) -> None:
         ui.label("Pick a budget").classes("yul-h2")
-        count = len(self.budgets)
-        ui.label(f"{count} budget{'s' if count != 1 else ''} for this token.").classes("yul-lede")
+        ui.label(f"{plural(len(self.budgets), 'budget')} for this token.").classes("yul-lede")
         with ui.element("div").classes("yul-optgrid yul-stagger"):
             for budget in self.budgets:
                 budget_id = str(budget.id)
@@ -544,7 +493,9 @@ class Wizard:
             return line
 
     def open_button(self) -> None:
-        button("Open yul", kind="primary", on_click=lambda: ui.navigate.to("/")).mark("open-yul")
+        button("Open yul", kind="primary", on_click=lambda: ui.navigate.to(shell.HOME_PATH)).mark(
+            "open-yul"
+        )
 
     def render_footer(self) -> None:
         with ui.element("div").classes("yul-wiz-foot"):
@@ -570,7 +521,7 @@ class Wizard:
 def page() -> RedirectResponse | None:
     """`/onboarding`: shown until a config exists, then it sends the browser home."""
     if state().configured:
-        return RedirectResponse("/")
+        return RedirectResponse(shell.HOME_PATH)
     theme.page_setup()
     Wizard().render()
     return None

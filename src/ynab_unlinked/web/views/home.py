@@ -22,17 +22,15 @@ from ynab_unlinked.entities.registry import LoaderSpec
 from ynab_unlinked.store import Activity, Store
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell, theme
+from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
 from ynab_unlinked.web.components import PillKind, count_up, glass_card, icon, pill, spinner
 from ynab_unlinked.web.components.dropzone import dropzone
 from ynab_unlinked.web.state import state
-
-NETWORTH_PATH = "/networth"
-RECONCILE_PATH = "/reconcile"
+from ynab_unlinked.web.wording import plural, short_date
 
 SPARK_DAYS = 90
 DELTA_FALLBACK_DAYS = 30
 """The hero change is since the last reconcile, or over this many days when there is none."""
-STALE_AFTER_DAYS = 30
 RELATIVE_DAYS = 14
 """The last imports line says "3 days ago" under this many days, then the day ("12 Oct")."""
 ACTIVITY_LIMIT = 10
@@ -152,12 +150,6 @@ def load_home(
 # ---- wording ------------------------------------------------------------------------------
 
 
-def short_date(day: dt.date, today: dt.date) -> str:
-    """ "29 Oct", with the year only when it is not this one."""
-    text = f"{day.day} {day:%b}"
-    return text if day.year == today.year else f"{text} {day.year}"
-
-
 def relative_time(at: dt.datetime, now: dt.datetime) -> str:
     """ "just now", "2 min", "3 h", then the day ("29 Oct")."""
     seconds = max(0, int((now - at).total_seconds()))
@@ -209,10 +201,6 @@ def message_markup(entry: Activity) -> str:
     return markup
 
 
-def _plural(count: int, word: str) -> str:
-    return f"{count} {word}{'' if count == 1 else 's'}"
-
-
 @dataclass(frozen=True)
 class Attention:
     key: str
@@ -235,10 +223,10 @@ def attention_items(data: HomeData) -> list[Attention]:
                 icon="lock",
                 pill="needs you",
                 pill_kind="warn",
-                figure=_plural(data.unreconciled, "transaction"),
-                line=f"to reconcile in {_plural(data.unreconciled_accounts, 'account')}",
+                figure=plural(data.unreconciled, "transaction"),
+                line=f"to reconcile in {plural(data.unreconciled_accounts, 'account')}",
                 action="Reconcile",
-                path=RECONCILE_PATH,
+                path=shell.RECONCILE_PATH,
             )
         )
     if data.stale:
@@ -248,10 +236,10 @@ def attention_items(data: HomeData) -> list[Attention]:
                 icon="networth",
                 pill="stale",
                 pill_kind="default",
-                figure=_plural(len(data.stale), "balance"),
+                figure=plural(len(data.stale), "balance"),
                 line=f"set by hand, older than {STALE_AFTER_DAYS} days: {', '.join(data.stale)}",
                 action="Update balances",
-                path=NETWORTH_PATH,
+                path=shell.NETWORTH_PATH,
             )
         )
     return items
@@ -263,13 +251,6 @@ def attention_items(data: HomeData) -> list[Attention]:
 def _today() -> str:
     today = dt.date.today()
     return f"{today:%A} {today.day} {today:%b}"
-
-
-def _format(amount: int) -> str:
-    formatter = state().formatter
-    if formatter is None:
-        return f"{amount / 1000:,.2f}"
-    return formatter.format_amount_milli(amount)
 
 
 def spark_options(points: Sequence[Point]) -> dict[str, Any]:
@@ -317,13 +298,15 @@ def _gradient(x2: int, y2: int, stops: list[tuple[float, str]]) -> dict[str, Any
 
 
 def _hero(data: HomeData, today: dt.date) -> None:
+    config, _ = state().require()
+    money = state().require_formatter().format_amount_milli
     with glass_card(hover=True).classes("yul-hero-card").mark("hero") as card:
         ui.label("Net worth").classes("yul-muted yul-small")
-        figure = ui.label(_format(data.net_worth)).classes("yul-hero yul-grad").mark("net-worth")
+        figure = ui.label(money(data.net_worth)).classes("yul-hero yul-grad").mark("net-worth")
         with ui.element("div").classes("yul-row"):
             if data.delta:
                 arrow = "▲" if data.delta > 0 else "▼"
-                ui.label(f"{arrow} {_format(abs(data.delta))}").classes(
+                ui.label(f"{arrow} {money(abs(data.delta))}").classes(
                     "yul-delta " + ("yul-good" if data.delta > 0 else "yul-bad")
                 ).mark("net-worth-delta")
             else:
@@ -335,9 +318,8 @@ def _hero(data: HomeData, today: dt.date) -> None:
             ui.echart(spark_options(data.spark)).classes("yul-spark").mark("sparkline")
     card.props["role"] = "link"
     card.props["tabindex"] = "0"
-    card.on("click", lambda: ui.navigate.to(NETWORTH_PATH))
-    card.on("keydown.enter", lambda: ui.navigate.to(NETWORTH_PATH))
-    config, _ = state().require()
+    card.on("click", lambda: ui.navigate.to(shell.NETWORTH_PATH))
+    card.on("keydown.enter", lambda: ui.navigate.to(shell.NETWORTH_PATH))
     count_up(figure, data.net_worth, config.budget.currency_format)
 
 
@@ -451,7 +433,7 @@ async def _render(body: ui.element) -> None:
             _activity(data.activity)
 
 
-@shell.view("/", key="home", title="Home", subtitle=_today, icon="home", order=10)
+@shell.view(shell.HOME_PATH, key="home", title="Home", subtitle=_today, icon="home", order=10)
 async def home() -> None:
     body = ui.element("div").classes("yul-home").mark("home")
     await _render(body)

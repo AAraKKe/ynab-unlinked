@@ -41,8 +41,7 @@ from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import bank_logo, button, check, glass_card, pill, spinner
 from ynab_unlinked.web.components.dropzone import dropzone
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.views.onboarding import ynab_error_message
-from ynab_unlinked.web.views.settings import human_size
+from ynab_unlinked.web.wording import human_size, plural, ynab_error_message
 
 STEPS = ("Files", "Review", "Done")
 FILE_COLORS = {
@@ -123,10 +122,6 @@ def option_choices(option: LoaderOption, current: str, today: dt.date) -> list[s
     return [current]
 
 
-def plural(count: int, word: str) -> str:
-    return f"{count} {word}{'' if count == 1 else 's'}"
-
-
 class ImportFlow:
     """One run of the Files -> Review -> Done flow in one browser tab."""
 
@@ -187,13 +182,12 @@ class ImportFlow:
     def context(self) -> YnabUnlinkedContext[Any]:
         current = state()
         config, _ = current.require()
-        formatter = current.formatter or Formatter(
-            date_format=config.budget.date_format, currency_format=config.budget.currency_format
+        return YnabUnlinkedContext(
+            config=config, formatter=current.require_formatter(), extras=None
         )
-        return YnabUnlinkedContext(config=config, formatter=formatter, extras=None)
 
     def formatter(self) -> Formatter:
-        return self.context().formatter
+        return state().require_formatter()
 
     @property
     def active(self) -> list[ImportFile]:
@@ -857,7 +851,7 @@ class ImportFlow:
                 button(
                     "Reconcile these accounts",
                     kind="primary",
-                    on_click=lambda: ui.navigate.to("/reconcile"),
+                    on_click=lambda: ui.navigate.to(shell.RECONCILE_PATH),
                 ).mark("reconcile")
                 button("Import more", on_click=self.reset).mark("import-more")
 

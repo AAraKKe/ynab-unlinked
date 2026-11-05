@@ -23,9 +23,8 @@ from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button, check, empty_state, glass_card, pill, spinner
 from ynab_unlinked.web.components.reconcile_controls import pill_group, switch
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.views.onboarding import ynab_error_message
+from ynab_unlinked.web.wording import plural, short_date, ynab_error_message
 
-NETWORTH_PATH = "/networth"
 SYNC_MAX_AGE = dt.timedelta(minutes=10)
 SCOPE_BUFFER_DAYS = 7
 """How far before the last reconciliation the "since" scope starts, as `yul reconcile -b`."""
@@ -65,17 +64,6 @@ def gap_candidates(transactions: Sequence[StoredTransaction], difference: int) -
             pairs.update((id_, other))
         seen.setdefault(effect, []).append(id_)
     return pairs
-
-
-def short_date(day: dt.date, today: dt.date) -> str:
-    """ "30 Oct", with the year when it is not the current one."""
-    if day.year == today.year:
-        return f"{day.day} {day:%b}"
-    return f"{day.day} {day:%b %Y}"
-
-
-def plural(count: int, word: str) -> str:
-    return f"{count} {word}{'' if count == 1 else 's'}"
 
 
 def transaction_detail(transaction: StoredTransaction, account_name: str) -> TransactionDetail:
@@ -233,7 +221,7 @@ class ReconcileView:
                     "Could not load your accounts from YNAB yet.",
                     icon_name="refresh",
                     action_label="Try again",
-                    on_action=lambda: ui.navigate.to("/reconcile"),
+                    on_action=lambda: ui.navigate.to(shell.RECONCILE_PATH),
                 )
             return
         self.build()
@@ -256,7 +244,7 @@ class ReconcileView:
             "All accounts are reconciled",
             icon_name="reconcile",
             action_label="See net worth",
-            on_action=lambda: ui.navigate.to(NETWORTH_PATH),
+            on_action=lambda: ui.navigate.to(shell.NETWORTH_PATH),
         ).mark("all-reconciled")
 
     def header(self) -> None:
@@ -588,7 +576,7 @@ class ReconcileView:
                 "lock-more"
             )
         button(
-            "See net worth", kind="primary", on_click=lambda: ui.navigate.to(NETWORTH_PATH)
+            "See net worth", kind="primary", on_click=lambda: ui.navigate.to(shell.NETWORTH_PATH)
         ).mark("see-networth")
 
     def progress_footer(self, count: int) -> None:
@@ -684,7 +672,7 @@ class ReconcileView:
 
 
 @shell.view(
-    "/reconcile",
+    shell.RECONCILE_PATH,
     key="reconcile",
     title="Reconcile",
     subtitle="Lock what the bank confirmed",
@@ -693,6 +681,4 @@ class ReconcileView:
 )
 async def reconcile_view() -> None:
     config, _ = state().require()
-    formatter = state().formatter
-    assert formatter is not None
-    await ReconcileView(config, formatter).render()
+    await ReconcileView(config, state().require_formatter()).render()

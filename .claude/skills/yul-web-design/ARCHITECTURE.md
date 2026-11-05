@@ -568,8 +568,16 @@ web/
                        run(port: int | None, open_browser: bool, announce=None)
   state.py             AppState / state(): config, client, store, formatter, loaders, last_sync
   accounts.py          effective_accounts() / by_hand_accounts() / effective_nettings():
-                       what Home, Net worth and Settings count (3.4.1)
-  shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay
+                       what Home, Net worth and Settings count (3.4.1); STALE_AFTER_DAYS
+  buckets.py           STYLES (BucketStyle: title, group_title, series slot, colour per bucket),
+                       NET_WORTH_ORDER, SETTINGS_ORDER, SERIES_BUCKETS
+  wording.py           pure (no NiceGUI): plural, short_date, human_size, budget_caption,
+                       ynab_error_message, copy_error_message, copy_line, COPY_*
+  ynab.py              fetch_budgets(token), load_budget(client, id) -> Budget,
+                       stored_accounts(sdk accounts), fallback_accounts(config)
+  shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay;
+                       the view paths (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,
+                       SETTINGS_PATH, ONBOARDING_PATH)
   theme.py             palette constants, dark/light switch, install() of static/yul.css
   security.py          per run token, TokenGuard middleware, free_port(), entry_url()
   static/              yul.css: the only stylesheet (tokens, base, shared classes, one section
@@ -582,7 +590,7 @@ web/
     reconcile_controls.py  pill_group, switch (yul-pills, yul-rec-switch);
                        generic, promote to components when another view needs them
     history_chart.py   ChartSeries, history_options() / history_chart() / set_options(),
-                       money_js() / compact_js(): the ECharts history line chart
+                       money_js(): the ECharts history line chart
   views/
     __init__.py        register(): imports every view module
     onboarding.py      /onboarding, outside the shell (token, budget, banks, done)
@@ -671,12 +679,15 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
   `net-worth`, `data`, `privacy` or `data-privacy`, case insensitive) opens that tab;
   anything else opens Connection (`settings.tab_from_slug`).
 - `shell.sync_label(last, now)` / `shell.sync_message(result)` for sync wording.
-- Navigation: `ui.navigate.to(path)`; `shell.IMPORT_PATH`, `shell.ONBOARDING_PATH`.
+- Navigation: `ui.navigate.to(path)` with the paths on `shell` (`HOME_PATH`, `IMPORT_PATH`,
+  `RECONCILE_PATH`, `NETWORTH_PATH`, `SETTINGS_PATH`, `ONBOARDING_PATH`); views never import
+  each other: shared wording is `web.wording`, shared YNAB calls are `web.ynab`.
 
 `state()` (`web/state.py`): `config: LatestConfig | None`, `client: Client | None`,
 `store: Store` (opened on first use at `store_path()`), `formatter`, `loaders:
 list[LoaderSpec]`, `last_sync`, `sync_error`, `load_error`, `configured`, `syncing`,
-`require() -> (config, client)` (raises `NotConfiguredError`), `load()` (reads the config,
+`require() -> (config, client)` and `require_formatter() -> Formatter` (both raise
+`NotConfiguredError`; the one way views get the formatter), `load()` (reads the config,
 reopens the store: after the local data was deleted) / `reload()` (after saving the config:
 keeps the store and, for the same budget, `last_sync`; the banks are discovered once per
 process), `update_config(change: Callable[[LatestConfig], None]) -> LatestConfig` (every
@@ -950,7 +961,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   saved through `state().update_config`, `store.log("reconcile", "Reconciled n transactions in m
   accounts", {"count", "accounts": [{"id", "name", "count"}]})`, `sync_in_background()`.
   The store itself is not written by the view. Errors go through
-  `onboarding.ynab_error_message` and leave config, log and rows untouched.
+  `wording.ynab_error_message` and leave config, log and rows untouched.
 - Wording: header "4 accounts · 17 transactions not reconciled", card
   button "Lock n transactions" (DESIGN), footer "Lock n transactions in m accounts" with
   "Deselect all" (or "Select all" when nothing is selected) and "Lock all"; done footer

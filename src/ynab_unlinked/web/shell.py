@@ -34,14 +34,19 @@ from ynab_unlinked.store import SyncResult
 from ynab_unlinked.web import theme
 from ynab_unlinked.web.components import button, icon, spinner
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.wording import plural, ynab_error_message
 
 UploadedFile = FileUpload
 """A file the browser sent. `await f.read()`, `await f.save(path)`, `f.name`, `f.size()`."""
 
 ToastKind = Literal["ok", "info", "warn", "error"]
 
-ONBOARDING_PATH = "/onboarding"
+HOME_PATH = "/"
 IMPORT_PATH = "/import"
+RECONCILE_PATH = "/reconcile"
+NETWORTH_PATH = "/networth"
+SETTINGS_PATH = "/settings"
+ONBOARDING_PATH = "/onboarding"
 
 _SIDEBAR_KEY = "yul.sidebar"
 _RAIL = "rail"
@@ -287,17 +292,15 @@ def sync_label(last: dt.datetime | None, now: dt.datetime) -> str:
         return f"synced {seconds // 60} min ago"
     if seconds < 86400:
         return f"synced {seconds // 3600} h ago"
-    days = seconds // 86400
-    return f"synced {days} day{'s' if days != 1 else ''} ago"
+    return f"synced {plural(seconds // 86400, 'day')} ago"
 
 
 def sync_message(result: SyncResult) -> str:
     """The toast after a sync: "6 changes pulled from YNAB"."""
     count = result.transactions_changed
-    plural = "" if count == 1 else "s"
     if result.full:
-        return f"{count} transaction{plural} loaded from YNAB"
-    return f"{count} change{plural} pulled from YNAB"
+        return f"{plural(count, 'transaction')} loaded from YNAB"
+    return f"{plural(count, 'change')} pulled from YNAB"
 
 
 def _sync_chip() -> None:
@@ -334,7 +337,7 @@ def _sync_chip() -> None:
         try:
             result = await task
         except Exception as error:
-            notify(f"Sync failed: {error}", "error")
+            notify(f"Sync failed. {ynab_error_message(error)}", "error")
         else:
             if result is not None:
                 notify(sync_message(result))

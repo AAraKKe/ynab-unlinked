@@ -23,17 +23,14 @@ from ynab_unlinked.config import (
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
 from ynab_unlinked.local_data import delete_local_data, local_data_paths
 from ynab_unlinked.store import StoredAccount
-from ynab_unlinked.utils import budget_from_plan
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell
+from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
+from ynab_unlinked.web.buckets import SETTINGS_ORDER, STYLES
 from ynab_unlinked.web.components import bank_logo, button, glass_card, icon, pill, spinner
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.views.onboarding import (
-    BUCKET_TITLES,
-    budget_caption,
-    fetch_budgets,
-    ynab_error_message,
-)
+from ynab_unlinked.web.wording import budget_caption, human_size, ynab_error_message
+from ynab_unlinked.web.ynab import fallback_accounts, fetch_budgets, load_budget
 
 TABS = ("Connection", "Banks", "Accounts", "Net worth", "Data & privacy")
 CLEARED_LABELS = {
@@ -49,15 +46,6 @@ def token_wording() -> str:
     if (name := keychain.backend_name()) is not None:
         return f"In your {name}, as the item “{keychain.SERVICE}”. Not in any file."
     return "In the settings file, since no keychain was found on this computer."
-
-
-def human_size(size: int) -> str:
-    value = float(size)
-    for unit in ("B", "KB", "MB", "GB"):
-        if value < 1024 or unit == "GB":
-            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
-        value /= 1024
-    raise AssertionError("unreachable")
 
 
 def _slug(tab: str) -> str:
@@ -105,16 +93,9 @@ def bank_summary(spec: LoaderSpec, saved: LoaderConfig | None, accounts: dict[st
     return " · ".join(parts)
 
 
-BUCKET_SWATCHES = {
-    Bucket.CASH: "var(--series-3)",
-    Bucket.SAVINGS: "var(--series-2)",
-    Bucket.ASSETS: "var(--series-1)",
-    Bucket.DEBT: "var(--text-3)",
-}
-"""The colours Net worth gives each bucket; debt has no series colour."""
 BY_HAND_HINT = (
-    "You enter this balance yourself. yul reminds you when it is older than 30 days and "
-    "shows the pencil first in Net worth."
+    f"You enter this balance yourself. yul reminds you when it is older than {STALE_AFTER_DAYS} "
+    "days and shows the pencil first in Net worth."
 )
 
 
@@ -139,15 +120,15 @@ class AccountCards:
         """(Re)draw every section. Only a bucket change moves cards, so only it redraws all."""
         self.root.clear()
         with self.root:
-            for bucket, title in BUCKET_TITLES.items():
+            for bucket in SETTINGS_ORDER:
                 ids = [i for i, row in self.rows.items() if row.bucket is bucket]
                 if not ids:
                     continue
                 with ui.element("div").classes("yul-section"):
                     ui.element("span").classes("yul-swatch").style(
-                        f"background:{BUCKET_SWATCHES[bucket]}"
+                        f"background:{STYLES[bucket].color}"
                     )
-                    ui.label(title)
+                    ui.label(STYLES[bucket].title)
                 grid = ui.element("div").classes("yul-acc-grid").mark(f"bucket-section-{bucket}")
                 if self.first:
                     grid.classes("yul-stagger")
@@ -172,8 +153,10 @@ class AccountCards:
                 switch.props["title"] = "Counted in net worth"
                 switch.props["aria-label"] = f"Count {row.name} in net worth"
             with ui.element("div").classes("yul-acc-buckets").mark(f"bucket-{account_id}"):
-                for bucket, title in BUCKET_TITLES.items():
-                    choice = pill(title, "acc" if bucket is row.bucket else "default")
+                for bucket in SETTINGS_ORDER:
+                    choice = pill(
+                        STYLES[bucket].title, "acc" if bucket is row.bucket else "default"
+                    )
                     choice.classes("click").mark(f"bucket-{account_id}-{bucket}")
                     choice.on("click", lambda _, bucket=bucket: self.set_bucket(account_id, bucket))
             with ui.element("div").classes("yul-acc-foot"):
@@ -271,20 +254,7 @@ class Settings:
             accounts = await state().budget_accounts()
         except Exception as error:
             shell.notify(ynab_error_message(error), "warn")
-            config, _ = state().require()
-            return [
-                StoredAccount(
-                    id=account.id,
-                    name=account.name,
-                    type=account.type,
-                    closed=False,
-                    on_budget=True,
-                    balance=0,
-                    cleared_balance=0,
-                    uncleared_balance=0,
-                )
-                for account in config.accounts
-            ]
+            return fallback_accounts(_config())
         return [account for account in accounts if not account.closed]
 
     # ---- Connection ----------------------------------------------------------------------
@@ -437,10 +407,7 @@ class Settings:
         ):
             return
         try:
-            plan = await run.io_bound(client.budget, budget_id)
-            if plan is None:
-                raise ValueError(f"Could not find budget with ID {budget_id}")
-            budget = budget_from_plan(plan)
+            budget = await load_budget(client, budget_id)
         except Exception as error:
             shell.notify(ynab_error_message(error), "error")
             return
@@ -818,7 +785,7 @@ class Settings:
 
 
 @shell.view(
-    "/settings",
+    shell.SETTINGS_PATH,
     key="settings",
     title="Settings",
     subtitle="Connection, banks, accounts, privacy",
