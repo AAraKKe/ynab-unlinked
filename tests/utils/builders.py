@@ -14,7 +14,7 @@ def only_table(printed: MagicMock) -> Table:
 
 
 def column(table: Table, header: str) -> list[str]:
-    return list(next(c for c in table.columns if c.header == header).cells)
+    return [str(cell) for cell in next(c for c in table.columns if c.header == header).cells]
 
 
 def styles(table: Table) -> list[str]:

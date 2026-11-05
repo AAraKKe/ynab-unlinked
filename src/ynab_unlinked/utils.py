@@ -5,6 +5,7 @@ from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.style import Style
 from rich.table import Column, Table
+from rich.text import Text
 from ynab import PlanDetail
 
 from ynab_unlinked.config import get_config
@@ -104,7 +105,8 @@ def display_transaction_table(transactions: list[Transaction], formatter: Format
         inflow, outflow = _flows(transaction.amount, formatter)
         table.add_row(
             formatter.format_date(transaction.date),
-            transaction.payee,
+            # Bank text, never markup: a payee with `[/]` would not render
+            Text(transaction.payee),
             inflow,
             outflow,
         )
@@ -129,7 +131,7 @@ def display_import_table(rows: Sequence[ImportRow], formatter: Formatter):
         style = Style(color="gray37" if row.already_imported else "green")
         table.add_row(
             formatter.format_date(row.transaction.date),
-            row.transaction.payee,
+            Text(row.transaction.payee),
             inflow,
             outflow,
             style=style,

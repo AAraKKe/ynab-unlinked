@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 
+from rich.text import Text
 from textual.app import App
 from textual.containers import Container, Grid, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
@@ -62,8 +63,8 @@ class AccountTable(Container):
 
         return cleared_str(status)
 
-    def choice_to_table(self) -> DataTable[str | None]:
-        table: DataTable[str | None] = DataTable(cursor_type="row")
+    def choice_to_table(self) -> DataTable[str | Text | None]:
+        table: DataTable[str | Text | None] = DataTable(cursor_type="row")
 
         table.add_column("Date")
         table.add_column("Payee")
@@ -76,7 +77,8 @@ class AccountTable(Container):
             amount = t.amount / 1000
             table.add_row(
                 self.formatter.format_date(t.var_date),
-                t.payee_name,
+                # YNAB text, never markup: a payee with `[/]` would not render
+                Text(t.payee_name or ""),
                 self.formatter.format_amount(amount) if amount > 0 else "",
                 self.formatter.format_amount(amount) if amount < 0 else "",
                 self._cleared_status(choice),

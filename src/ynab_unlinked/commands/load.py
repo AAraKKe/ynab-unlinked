@@ -273,6 +273,7 @@ def _plural(count: int) -> str:
 def _detection_table(detections: list[Detection], ctx: YnabUnlinkedContext[Any]) -> Table:
     from rich import box
     from rich.table import Column, Table
+    from rich.text import Text
 
     table = Table(
         Column("File"),
@@ -286,11 +287,13 @@ def _detection_table(detections: list[Detection], ctx: YnabUnlinkedContext[Any])
 
     for detection in detections:
         if (best := detection.best) is None:
-            table.add_row(detection.input_file.name, f"[red]{_status(detection)}[/]", "", "", "")
+            table.add_row(
+                Text(detection.input_file.name), Text(_status(detection), "red"), "", "", ""
+            )
             continue
 
         table.add_row(
-            detection.input_file.name,
+            Text(detection.input_file.name),
             best.loader.title,
             f"{best.confidence:.0%}",
             str(len(best.transactions or ())),
