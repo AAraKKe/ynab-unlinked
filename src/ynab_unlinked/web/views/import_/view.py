@@ -7,7 +7,7 @@ compared with YNAB (`core.importing.build_import_plan`). The review lists what w
 created; one click commits every file in turn (`commit_import_plan`) and logs it.
 
 This is the twin of `yul load auto`, built on the same core calls. The model is in `data`,
-the file rows in `rows`, the tables in `tables`.
+the file rows in `rows`, the tables in `tables`, step Done in `commit`.
 """
 
 from __future__ import annotations
@@ -18,15 +18,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from nicegui import background_tasks, context, run, ui
-from ynab import TransactionClearedStatus
 
-from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.core.detect import Candidate, detect_loaders
 from ynab_unlinked.core.importing import (
-    ImportPlan,
-    ImportResult,
     build_import_plan,
-    commit_import_plan,
     file_digest,
 )
 from ynab_unlinked.entities.registry import loaders
@@ -36,11 +31,9 @@ from ynab_unlinked.web.components import set_class
 from ynab_unlinked.web.components.dropzone import dropzone
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.storage import tab_storage
+from ynab_unlinked.web.views.import_ import commit as commit_step
 from ynab_unlinked.web.views.import_.cards import (
-    Progress,
-    done_card,
     files_footer,
-    progress_card,
     review_card,
     review_footer,
 )
@@ -49,15 +42,13 @@ from ynab_unlinked.web.views.import_.data import (
     ImportFile,
     Status,
     account_label,
-    chosen_accounts,
-    import_log,
     mark_repeated,
     problem_text,
     read_file,
     take_candidate,
 )
 from ynab_unlinked.web.views.import_.rows import draw_row
-from ynab_unlinked.web.wording import IMPORT_FAILED, plural, ynab_error_message
+from ynab_unlinked.web.wording import ynab_error_message
 
 _FLOW_KEY = "yul.import_flow"
 
@@ -378,101 +369,7 @@ class ImportFlow:
     # ---- step 3: done --------------------------------------------------------------------
 
     async def commit(self) -> None:
-        if self.committing:
-            return
-        ready = [item for item in self.ready if item.plan is not None]
-        self.committing = True
-        try:
-            await self.commit_files(ready)
-        except Exception:
-            # The import button that started the commit is gone with the review
-            assert self.content is not None
-            with self.content:
-                shell.notify(IMPORT_FAILED, "error")
-        finally:
-            self.committing = False
-
-    async def commit_files(self, ready: Sequence[ImportFile]) -> None:
-        await self.save_accounts(ready)
-        config, client = state().require()
-        cleared = (
-            TransactionClearedStatus.RECONCILED
-            if self.reconciled
-            else TransactionClearedStatus.CLEARED
-        )
-
-        self.set_step(2)
-        assert self.content is not None
-        self.content.clear()
-        progress: dict[int, Progress] = {}
-        with self.content:
-            for item in ready:
-                assert item.plan is not None
-                progress[item.key] = progress_card(item, self.account_name(item.plan.account_id))
-            done_area = ui.element("div")
-
-        created = duplicates = skipped = failed = 0
-        for item in ready:
-            assert item.plan is not None and item.candidate is not None
-            plan = item.plan
-            card = progress[item.key]
-            skipped += plan.already_imported_count
-            if not plan.new_rows:
-                card.nothing_new()
-                continue
-            card.running()
-            try:
-                result = await run.io_bound(
-                    commit_import_plan, client, config.budget.id, plan, cleared
-                )
-            except Exception as error:
-                failed += 1
-                message = ynab_error_message(error)
-                card.failed(message)
-                shell.notify(f"{item.name}: {message}", "error")
-                continue
-            if result is None:
-                return  # the app is shutting down
-
-            created += result.created
-            duplicates += len(result.duplicate_import_ids)
-            card.created(result)
-            await self.log(item, plan, result)
-
-        self.close()
-        with done_area:
-            done_card(created, duplicates, skipped, failed, self.reset)
-        if created:
-            # Reconcile and Net worth sync before showing the store again
-            state().invalidate()
-            shell.notify(f"{plural(created, 'transaction')} created in YNAB")
-
-    async def save_accounts(self, items: Sequence[ImportFile]) -> None:
-        if not (chosen := chosen_accounts(items)):
-            return
-
-        def set_accounts(config: LatestConfig) -> None:
-            for name, account_id in chosen:
-                config.set_entity_account(name, account_id)
-
-        await shell.save_config(set_accounts)
-        for item in items:
-            item.account_chosen = False
-
-    async def log(self, item: ImportFile, plan: ImportPlan, result: ImportResult) -> None:
-        config, _ = state().require()
-        assert item.candidate is not None
-        message, details = import_log(
-            item.candidate.loader.name,
-            item.name,
-            self.account_name(plan.account_id),
-            plan,
-            result,
-        )
-        try:
-            await run.io_bound(state().store.log, config.budget.id, "import", message, details)
-        except Exception as error:
-            shell.notify(f"Could not record the import in the activity log: {error}", "warn")
+        await commit_step.commit(self)
 
 
 @shell.view(

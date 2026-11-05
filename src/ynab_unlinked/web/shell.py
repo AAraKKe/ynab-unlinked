@@ -16,7 +16,6 @@ after the shell navigates to `/import`.
 
 from __future__ import annotations
 
-import datetime as dt
 import inspect
 import logging
 from collections.abc import Awaitable, Callable, Generator, Sequence
@@ -32,7 +31,6 @@ from nicegui.events import MultiUploadEventArguments
 
 from ynab_unlinked.__about__ import __version__
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.store import SyncResult
 from ynab_unlinked.web import theme
 from ynab_unlinked.web.components import (
     button,
@@ -41,7 +39,6 @@ from ynab_unlinked.web.components import (
     icon,
     run_dialog,
     set_class,
-    spinner,
 )
 
 # Every page's path, re-exported: views navigate with `shell.<NAME>_PATH`
@@ -53,7 +50,12 @@ from ynab_unlinked.web.paths import RECONCILE_PATH as RECONCILE_PATH
 from ynab_unlinked.web.paths import SETTINGS_PATH as SETTINGS_PATH
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.storage import tab_storage, user_storage
-from ynab_unlinked.web.wording import SAVE_FAILED, plural, ynab_error_message
+
+# The words of a sync, re-exported: Settings shows them as `shell.sync_label` / `sync_message`
+from ynab_unlinked.web.sync_chip import sync_chip
+from ynab_unlinked.web.sync_chip import sync_label as sync_label
+from ynab_unlinked.web.sync_chip import sync_message as sync_message
+from ynab_unlinked.web.wording import SAVE_FAILED
 
 logger = logging.getLogger(__name__)
 
@@ -319,72 +321,6 @@ def _drop_overlay() -> None:
 # ---- top bar ------------------------------------------------------------------------------
 
 
-def sync_label(last: dt.datetime | None, now: dt.datetime) -> str:
-    """ "synced 2 min ago" for the sync chip."""
-    if last is None:
-        return "not synced yet"
-    seconds = max(0, int((now - last).total_seconds()))
-    if seconds < 60:
-        return "synced just now"
-    if seconds < 3600:
-        return f"synced {seconds // 60} min ago"
-    if seconds < 86400:
-        return f"synced {seconds // 3600} h ago"
-    return f"synced {plural(seconds // 86400, 'day')} ago"
-
-
-def sync_message(result: SyncResult) -> str:
-    """The toast after a sync: "6 changes pulled from YNAB"."""
-    count = result.transactions_changed
-    if result.full:
-        return f"{plural(count, 'transaction')} loaded from YNAB"
-    return f"{plural(count, 'change')} pulled from YNAB"
-
-
-def _sync_chip() -> None:
-    with ui.element("div").classes("yul-chip click").mark("sync-chip") as chip:
-        busy = spinner()
-        dot = ui.element("span").classes("yul-dot")
-        text = ui.label()
-
-    def refresh() -> None:
-        current = state()
-        busy.set_visibility(current.syncing)
-        dot.set_visibility(not current.syncing)
-        set_class(dot, "warn", bool(current.sync_error))
-        if current.syncing:
-            text.set_text("syncing…")
-        elif current.sync_error:
-            text.set_text("sync failed · retry")
-        else:
-            text.set_text(sync_label(current.last_sync, dt.datetime.now(dt.UTC)))
-        chip.props["title"] = current.sync_error or "Sync with YNAB now"
-
-    async def sync_now() -> None:
-        current = state()
-        if current.syncing:
-            return
-        task = current.sync()
-        refresh()
-        busy.set_visibility(True)
-        dot.set_visibility(False)
-        text.set_text("syncing…")
-        try:
-            result = await task
-        except Exception as error:
-            notify(f"Sync failed. {ynab_error_message(error)}", "error")
-        else:
-            if result is not None:
-                notify(sync_message(result))
-                if result.full or result.transactions_changed:
-                    refresh_view()
-        refresh()
-
-    chip.on("click", sync_now)
-    refresh()
-    ui.timer(5.0, refresh)
-
-
 def _top_bar(dark: ui.dark_mode) -> tuple[ui.label, ui.label]:
     config = state().config
     with ui.element("header").classes("yul-top"):
@@ -395,7 +331,7 @@ def _top_bar(dark: ui.dark_mode) -> tuple[ui.label, ui.label]:
             with ui.element("div").classes("yul-chip").mark("budget-chip"):
                 ui.element("span").classes("yul-dot")
                 ui.label(config.budget.name)
-        _sync_chip()
+        sync_chip(notify, refresh_view)
 
         def toggle_theme() -> None:
             dark.value = not dark.value

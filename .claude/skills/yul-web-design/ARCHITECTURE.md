@@ -673,6 +673,9 @@ web/
                        SETTINGS_PATH, ONBOARDING_PATH), NiceGUI-free for the data modules
   shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay,
                        save_config(); re-exports the paths (views use shell.<NAME>_PATH)
+                       and sync_label / sync_message
+  sync_chip.py         sync_chip(notify, refresh_view): the top bar's sync chip, sync_label,
+                       sync_message
   theme.py             palette constants, dark/light switch, install() of static/yul.css
   security.py          per run token, TokenGuard middleware, free_port(), entry_url()
   static/              yul.css: the only stylesheet (tokens, base, shared classes, one section
@@ -713,16 +716,18 @@ web/
       data.py          Status, ImportFile, same_file, mark_repeated, take_candidate,
                        account_label, problem_text, option_choices, parse_file, read_file,
                        chosen_accounts, done_summary, import_log
-      view.py          ImportFlow (lifecycle, detection, the three steps, commit) and the view
+      view.py          ImportFlow (lifecycle, detection, steps Files and Review) and the view
+      commit.py        commit(flow): step Done, commit_files, save_accounts, log
       rows.py          draw_row(flow, item): a file row of step Files and its body
       tables.py        badge, plan_table, transactions_table
       cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
     reconcile/         /reconcile   per account cleared vs bank balance, lock (see 3.5)
       data.py          scope_start, gap_candidates, ReconcileData (read,
-                       open_transactions, has_anything), parse_bank_balance, lock_confirmation,
+                       open_transactions, has_anything), LOCK_TIMED_OUT, parse_bank_balance, lock_confirmation,
                        lock_log, lock_checkpoint, pending_title
       groups.py        Row, AccountGroup: the selection and the elements that show it
       view.py          ReconcileView and the view
+      lock.py          lock(view, groups): confirm, reconcile, log, checkpoint (3.5)
       footer.py        selection / done / locking footers
     networth/          /networth    history chart, buckets, accounts, balance updates, drawer (see 3.6)
       data.py          RANGES, MAX_PICKED, range_start, last_set, by_hand_pill, assign_slots,
