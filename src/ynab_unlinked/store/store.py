@@ -25,6 +25,9 @@ STALE_KNOWLEDGE_STATUS = 409
 _UNRECONCILED = (TransactionClearedStatus.CLEARED, TransactionClearedStatus.UNCLEARED)
 _BUDGET_TABLES = ("transactions", "accounts", "sync_state")
 
+# The CLI and the app share the file: a write waits this long for the other one to finish
+BUSY_TIMEOUT_SECONDS = 30
+
 
 class StoreError(Exception):
     pass
@@ -95,7 +98,9 @@ def _timestamp(at: dt.datetime | None = None) -> str:
 class Store:
     """A local copy of YNAB data in the SQLite file at `path`, created on first use.
 
-    Every method opens its own connection, so one store can be shared across threads.
+    Every method opens its own connection, so one store can be shared across threads. The
+    file is in WAL mode and a write waits up to `BUSY_TIMEOUT_SECONDS` for another process
+    (the CLI and the app at once), so reads never block and writes rarely fail.
     Timestamps are timezone aware, in UTC.
     """
 
@@ -107,12 +112,15 @@ class Store:
             os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
         with suppress(OSError):
             path.chmod(0o600)
+        with closing(sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_SECONDS)) as conn:
+            # Readers never wait for a writer. The mode is kept in the file, set once is enough
+            conn.execute("PRAGMA journal_mode=WAL")
         with self._connect() as conn:
             self._migrate(conn)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        with closing(sqlite3.connect(self.path)) as conn:
+        with closing(sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_SECONDS)) as conn:
             conn.row_factory = sqlite3.Row
             with conn:
                 yield conn

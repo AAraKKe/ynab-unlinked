@@ -1,6 +1,7 @@
 import datetime as dt
 import sqlite3
 import stat
+import threading
 import uuid
 from collections.abc import Sequence
 from contextlib import closing
@@ -25,7 +26,7 @@ from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.core.progress import Progress
 from ynab_unlinked.store import DailyAmounts, Store, StoredAccount, StoredTransaction, StoreError
 from ynab_unlinked.store.migrations import SCHEMA_VERSION
-from ynab_unlinked.store.store import FULL_SYNC_SINCE
+from ynab_unlinked.store.store import BUSY_TIMEOUT_SECONDS, FULL_SYNC_SINCE
 from ynab_unlinked.ynab_api import Client
 
 BUDGET_ID = "budget-1"
@@ -95,6 +96,55 @@ def test_the_store_and_its_directory_are_for_the_user_only(tmp_path: Path):
 
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+
+
+def test_two_stores_on_one_file_read_while_the_other_writes(tmp_path: Path):
+    path = tmp_path / "store.sqlite"
+    app, cli = Store(path), Store(path)
+    app.log(BUDGET_ID, "sync", "before")
+
+    with closing(sqlite3.connect(path)) as writer:
+        writer.execute("BEGIN EXCLUSIVE")
+        writer.execute(
+            "INSERT INTO activity (budget_id, at, kind, message, details) "
+            "VALUES (?, '2025-01-01', 'import', 'pending', '{}')",
+            (BUDGET_ID,),
+        )
+        # Without WAL this read waits for the exclusive lock and fails
+        seen = [a.message for a in cli.activity(BUDGET_ID)]
+        writer.rollback()
+
+    assert seen == ["before"]
+
+
+def test_a_write_waits_for_the_other_writer_instead_of_failing(tmp_path: Path):
+    path = tmp_path / "store.sqlite"
+    app, cli = Store(path), Store(path)
+    release = threading.Event()
+
+    def hold_the_lock() -> None:
+        with closing(sqlite3.connect(path)) as writer:
+            writer.execute("BEGIN IMMEDIATE")
+            release.wait()
+            writer.rollback()
+
+    holder = threading.Thread(target=hold_the_lock)
+    holder.start()
+    threading.Timer(0.3, release.set).start()
+    cli.log(BUDGET_ID, "import", "from the CLI")
+    holder.join()
+
+    assert [a.message for a in app.activity(BUDGET_ID)] == ["from the CLI"]
+    assert BUSY_TIMEOUT_SECONDS == 30
+
+
+def test_the_store_uses_write_ahead_logging(tmp_path: Path):
+    path = tmp_path / "store.sqlite"
+
+    Store(path)
+
+    with closing(sqlite3.connect(path)) as conn:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
 
 
 def test_reopening_keeps_what_was_stored(tmp_path: Path):

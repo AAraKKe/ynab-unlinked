@@ -499,7 +499,8 @@ changes the surviving row, so a pending match costs requests once, not on every 
 ghosts, and the sync still succeeds.
 
 Every method opens its own connection, so one `Store` can be shared across threads
-(`run.io_bound`). Timestamps (`synced_at`, `at`) are UTC ISO strings. `Store.sync` does not
+(`run.io_bound`). The file is in WAL mode (set once at open) and every connection waits up
+to `BUSY_TIMEOUT_SECONDS` (30) for a lock, so the CLI and the app can use it at once. Timestamps (`synced_at`, `at`) are UTC ISO strings. `Store.sync` does not
 log activity; the caller decides what is worth an entry.
 
 Schema: `accounts(budget_id, id, name, type, closed, on_budget, balance, cleared_balance,
