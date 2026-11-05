@@ -516,7 +516,7 @@ class Store:
         # because YNAB defaults a missing since_date to one year ago); else
         # client.transactions_delta(budget_id, knowledge). Upserts rows, keeps deleted rows
         # flagged, replaces the budget's accounts (closed kept, deleted skipped), stores the
-        # new server_knowledge, all in one SQLite transaction.
+        # new server_knowledge (never a lower one than stored), all in one SQLite transaction.
         # A 409 on a delta forgets the budget's rows and knowledge and redoes a full fetch once.
         # Then runs the ghost repair (below) and reports it in ghosts_removed.
     def accounts(self, budget_id: str) -> list[StoredAccount]        # sorted by name

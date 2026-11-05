@@ -319,9 +319,13 @@ class Store:
         with self._connect() as conn:
             self._upsert_transactions(conn, budget_id, transactions)
             self._replace_accounts(conn, budget_id, accounts)
+            # With two app runs on one file, an older delta can be written last: never let
+            # the knowledge go back
             conn.execute(
-                "INSERT OR REPLACE INTO sync_state (budget_id, server_knowledge, synced_at) "
-                "VALUES (?, ?, ?)",
+                "INSERT INTO sync_state (budget_id, server_knowledge, synced_at) "
+                "VALUES (?, ?, ?) ON CONFLICT (budget_id) DO UPDATE SET "
+                "server_knowledge = excluded.server_knowledge, synced_at = excluded.synced_at "
+                "WHERE excluded.server_knowledge >= sync_state.server_knowledge",
                 (budget_id, new_knowledge, fetched_at),
             )
         progress.done()

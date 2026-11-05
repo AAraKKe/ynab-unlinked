@@ -698,6 +698,23 @@ def test_a_write_logged_while_the_sync_fetches_counts_as_newer_than_the_sync(
     assert synced is not None and written is not None and synced < written
 
 
+def test_an_older_delta_written_last_never_takes_the_knowledge_back(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    # Another run of the app already wrote knowledge 30 when this delta, at 20, lands
+    serve(ynab_api, ([], 30), ([], 20), ([], 31))
+    store.sync(client, BUDGET_ID)
+    store.sync(client, BUDGET_ID)
+
+    store.sync(client, BUDGET_ID)
+
+    assert [c.get("last_knowledge_of_server") for c in transactions_calls(ynab_api)] == [
+        None,
+        30,
+        30,
+    ]
+
+
 def test_clearing_a_budget_leaves_the_others_and_forces_a_full_sync(
     store: Store, client: Client, ynab_api: YnabClientStub
 ):
