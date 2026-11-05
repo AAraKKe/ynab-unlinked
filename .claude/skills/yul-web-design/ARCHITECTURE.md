@@ -767,7 +767,9 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
   each other: shared wording is `web.wording`, shared YNAB calls are `web.ynab`.
 
 `state()` (`web/state.py`): `config: LatestConfig | None`, `client: Client | None`,
-`store: Store` (opened on first use at `store_path()`), `formatter`, `loaders:
+`store: Store` (opened on first use at `store_path()`, always off the event loop: by `load()`
+in `app.run()` before the server starts, inside the state's `run.io_bound` calls, and
+`reset` and onboarding run `load()` / `reload()` through `run.io_bound`), `formatter`, `loaders:
 list[LoaderSpec]`, `last_sync`, `sync_error`, `load_error`, `configured`, `syncing`,
 `require() -> (config, client)` and `require_formatter() -> Formatter` (both raise
 `NotConfiguredError`; the one way views get the formatter), `load()` (reads the config,

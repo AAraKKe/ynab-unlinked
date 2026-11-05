@@ -1,5 +1,6 @@
 import asyncio
 import datetime as dt
+import sqlite3
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -11,6 +12,7 @@ from ynab import TransactionsResponse, TransactionsResponseData
 
 from tests.factories import TransactionDetailFactory
 from tests.helpers.config import ConfigFiles
+from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store
@@ -258,3 +260,27 @@ def test_update_config_without_any_config_is_an_error(config: str, config_files:
     with pytest.raises(NotConfiguredError):
         app.update_config(lambda config: None)
     assert not config_files.path("V4").exists()
+
+
+async def test_the_first_sync_opens_the_store_off_the_event_loop(
+    app_state: AppState, ynab_api: YnabClientStub, mocker: MockerFixture
+):
+    Ynab(ynab_api, full=[], delta=[]).release.set()
+    # As after a reset or the first start: the store is not open yet
+    app_state._store = None  # pyright: ignore[reportPrivateUsage]
+    connects = record_threads(mocker, sqlite3, "connect")
+
+    await app_state.sync()
+
+    assert off_the_event_loop(connects)
+
+
+async def test_a_reset_opens_the_new_store_off_the_event_loop(
+    app_state: AppState, store_file: Path, mocker: MockerFixture
+):
+    mocker.patch("ynab_unlinked.web.state.delete_local_data")
+    connects = record_threads(mocker, sqlite3, "connect")
+
+    await app_state.reset([store_file])
+
+    assert off_the_event_loop(connects)

@@ -64,7 +64,12 @@ class AppState:
 
     @property
     def store(self) -> Store:
-        """The local store, opened (and created) on first use."""
+        """The local store, opened (and created) on first use.
+
+        Opening it sets up the file and runs its migrations, which can wait for the CLI: the
+        state's own calls open it off the event loop (`app.run()` before the server starts,
+        then inside each `run.io_bound` call), so views find it open.
+        """
         if self._store is None:
             self._store = Store(store_path())
         return self._store
@@ -192,9 +197,9 @@ class AppState:
         try:
             await run.io_bound(delete_local_data, paths)
         finally:
-            # The budget copy is gone too: load() opens a new one when needed. Also after a
-            # failed delete, so the app reads again whatever is left instead of nothing
-            self.load()
+            # The budget copy is gone too: load() opens a new one, off the event loop. Also
+            # after a failed delete, so the app reads again whatever is left instead of nothing
+            await run.io_bound(self.load)
 
     async def _sync_ended(self) -> None:
         while self._sync_task is not None and not self._sync_task.done():
@@ -203,7 +208,7 @@ class AppState:
 
     async def _resync(self, progress: Progress) -> SyncResult | None:
         config, _ = self.require()
-        await run.io_bound(self.store.clear, config.budget.id)
+        await run.io_bound(lambda: self.store.clear(config.budget.id))
         return await self._sync_rounds(progress)
 
     async def _sync_rounds(self, progress: Progress) -> SyncResult | None:
@@ -236,13 +241,16 @@ class AppState:
         # A write during this sync sets it again, and the next `fresh()` syncs once more
         self.stale = False
         try:
-            result = await run.io_bound(self.store.sync, client, config.budget.id, progress)
+            # In the worker: the first use opens the store, which must not block the loop
+            result = await run.io_bound(
+                lambda: self.store.sync(client, config.budget.id, progress)
+            )
         except Exception as error:
             # A stalled YNAB gives up after `REQUEST_TIMEOUT`, in the user's words
             self.sync_error = YNAB_TIMED_OUT if timed_out(error) else str(error)
             raise
         self.sync_error = None
-        self.last_sync = await run.io_bound(self.store.last_sync, config.budget.id)
+        self.last_sync = await run.io_bound(lambda: self.store.last_sync(config.budget.id))
         # A sync that brought nothing is not worth a line in the feed (one runs at every start)
         if result is not None and (
             result.full or result.transactions_changed or result.ghosts_removed
@@ -274,7 +282,7 @@ class AppState:
     async def budget_accounts(self) -> list[StoredAccount]:
         """Every account of the budget, from the store once synced, from YNAB before that."""
         config, client = self.require()
-        if stored := await run.io_bound(self.store.accounts, config.budget.id):
+        if stored := await run.io_bound(lambda: self.store.accounts(config.budget.id)):
             return stored
 
         return stored_accounts(await run.io_bound(client.accounts, config.budget.id) or [])

@@ -231,7 +231,8 @@ class Wizard:
         except (OSError, ConfigError) as error:
             self.say(f"The settings could not be saved: {error}", error=True)
             return
-        state().reload()
+        # Reading the new config opens the budget copy: off the event loop
+        await run.io_bound(state().reload)
         self.step = DONE
         self.refresh()
         await self.first_copy()
