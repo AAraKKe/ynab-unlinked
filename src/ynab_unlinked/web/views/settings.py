@@ -22,6 +22,7 @@ from ynab_unlinked.config import (
 )
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
 from ynab_unlinked.local_data import delete_local_data, local_data_paths
+from ynab_unlinked.privacy import token_location
 from ynab_unlinked.store import StoredAccount
 from ynab_unlinked.utils import budget_from_plan
 from ynab_unlinked.web import accounts as tracking
@@ -71,12 +72,6 @@ def save(change: Callable[[LatestConfig], None], message: str) -> None:
 
 def _kv(key: str) -> None:
     ui.label(key).classes("k")
-
-
-def token_location() -> str:
-    if (name := keychain.backend_name()) is not None:
-        return f"In your {name}, as the item “{keychain.SERVICE}”. Not in any file."
-    return "In the settings file, in plain text: no keychain was found on this computer."
 
 
 _SLUG_ALIASES = {"networth": "net-worth", "data": "data-privacy", "privacy": "data-privacy"}
@@ -770,7 +765,8 @@ class Settings:
             _kv("Settings file")
             ui.label(str(LatestConfig.path())).classes("yul-mono").style("word-break:break-all")
             _kv("YNAB token")
-            ui.label(token_location()).mark("token-location")
+            where = token_location(markup=False)
+            ui.label(f"{where[0].upper()}{where[1:]}.").mark("token-location")
             _kv("What is kept")
             with ui.element("div").classes("yul-muted yul-small"):
                 ui.label("The budget, banks, account settings and adjustment settings.")
