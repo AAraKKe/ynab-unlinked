@@ -9,6 +9,7 @@ from tests.helpers.statements import cobee_export
 from tests.helpers.types import CliRunner
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.entities.cobee.cobee import Cobee, Language, parse_date
+from ynab_unlinked.exceptions import ParsingError
 
 pytestmark = [pytest.mark.version("V4"), pytest.mark.usefixtures("config")]
 
@@ -175,11 +176,41 @@ def test_a_zero_amount_is_not_imported(export):
     assert [t.payee for t in transactions] == ["Mercadona"]
 
 
-def test_an_amount_before_any_date_is_rejected(export):
-    input_file = export(["Transacciones", "Restaurante Botin", "-34.80 €"])
+@pytest.mark.parametrize(
+    ("lines", "message"),
+    [
+        pytest.param(
+            ["Transacciones", "Restaurante Botin", "-34.80 €"],
+            "without a date",
+            id="an-amount-before-any-date",
+        ),
+        pytest.param(
+            ["Transacciones", "15 Foo 2025", "Restaurante Botin", "-34.80 €"],
+            "The month Foo is not valid",
+            id="an-unknown-month-name",
+        ),
+    ],
+)
+def test_a_page_that_cannot_be_read_is_a_parsing_error(export, lines: list[str], message: str):
+    input_file = export(lines)
 
-    with pytest.raises(ValueError, match="not valid"):
+    with pytest.raises(ParsingError, match=message) as error:
         Cobee(Language.ES).parse(input_file)
+
+    assert error.value.input_file == input_file
+
+
+def test_the_load_command_reports_a_page_that_cannot_be_read_without_a_traceback(
+    export, yul: CliRunner
+):
+    input_file = export(["Transacciones", "15 Foo 2025", "Restaurante Botin", "-34.80 €"])
+
+    result = yul("load", "--show", "cobee", "--lang", "es", str(input_file))
+
+    assert result.exit_code == 1
+    assert "The month Foo is not valid" in result.output
+    assert "Traceback" not in result.output
+    assert not isinstance(result.exception, ValueError)
 
 
 @pytest.mark.parametrize(

@@ -102,6 +102,7 @@ class Cobee:
         # Import now the html parser
         import html_text
 
+        from ynab_unlinked.exceptions import ParsingError
         from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import parse_amount
 
@@ -131,7 +132,11 @@ class Cobee:
             if not start:
                 continue
 
-            if (try_date := parse_date(line)) is not None:
+            try:
+                try_date = parse_date(line)
+            except ValueError as error:
+                raise ParsingError(input_file, str(error)) from None
+            if try_date is not None:
                 date = try_date
 
             if "€" in line:
@@ -148,8 +153,10 @@ class Cobee:
                 payee = previous_line
 
                 if date is None:
-                    raise ValueError(
-                        f"The input file is not valid. The amount {amount} has been found without a date or payee."
+                    raise ParsingError(
+                        input_file,
+                        f"The input file is not valid. The amount {amount} has been found "
+                        "without a date or payee.",
                     )
 
                 # If the payee is the accumulation line, we should skip it
