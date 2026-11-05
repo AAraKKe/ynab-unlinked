@@ -58,14 +58,17 @@ def migration_engine() -> MigrationEngine:
 
 
 def config_version() -> Version:
-    # Check V1
-    # V1 does not have a version in it and was stored in a different path
-    if config_path("V1").is_file():
-        return Version("Config", "V1")
+    """The version of the config on disk; the latest one when there is none yet.
 
+    V2 onwards share one file, which wins over a V1 file left behind (by a V1 migration that
+    could not remove it, say): that file is newer, and migrating the V1 one would replace it.
+    """
     latest_config_path = config_path(LATEST_VERSION.version)
     if not latest_config_path.is_file():
-        # This can happen when we run the tool for the first time. Return the latest verison
+        # V1 has no version in it and was stored in a different path
+        if config_path("V1").is_file():
+            return Version("Config", "V1")
+        # This can happen when we run the tool for the first time
         return LATEST_VERSION
 
     try:
@@ -84,8 +87,23 @@ def config_version() -> Version:
 def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
     """Get the latest supported version of the config running any migrations if needed.
 
-    `progress` shows the migration steps: the CLI passes its `CliProgress`.
+    `progress` shows the migration steps: the CLI passes its `CliProgress`. A migration holds
+    the lock of `edit_config`, and the version is read again once it has it: when the CLI
+    and the app start together on an old config, the second one finds it migrated already.
     """
+    loaded = _load_current()
+    if loaded is None or isinstance(loaded, LATEST_CONFIG_TYPE):
+        return loaded
+
+    with _edit_lock, file_lock(lock_path()):
+        loaded = _load_current()
+        if loaded is None or isinstance(loaded, LATEST_CONFIG_TYPE):
+            return loaded
+        return migration_engine().migrate(loaded, LATEST_CONFIG_TYPE, progress=progress)
+
+
+def _load_current() -> Config | None:
+    """The config on disk as the version it was saved as, None when there is none."""
     version = config_version()
 
     if (current_config := VERSION_MAPPING.get(version.version)) is None:
@@ -95,18 +113,13 @@ def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
         return None
 
     try:
-        loaded = current_config.load()
+        return current_config.load()
     except ValidationError as error:
         # Also what pydantic raises for a file that is not JSON
         raise ConfigError(
             f"The config file {config_path(version.version)} is not a valid {version.version} config: "
             f"{error}"
         ) from error
-
-    if isinstance(loaded, LATEST_CONFIG_TYPE):
-        return loaded
-
-    return migration_engine().migrate(loaded, LATEST_CONFIG_TYPE, progress=progress)
 
 
 @contextmanager

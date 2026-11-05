@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import shutil
 import threading
 
 import pytest
@@ -23,9 +24,9 @@ from ynab_unlinked.config import (
     switch_budget,
     update_config,
 )
-from ynab_unlinked.config.core import ConfigError, lock_path
+from ynab_unlinked.config.core import ConfigError, lock_path, migration_engine
 from ynab_unlinked.config.lock import file_lock
-from ynab_unlinked.config.models import ConfigV2
+from ynab_unlinked.config.models import ConfigV1, ConfigV2, DeltaConfigV1ToV2
 from ynab_unlinked.ynab_api import Client
 
 
@@ -81,6 +82,58 @@ def test_a_failed_save_of_the_migrated_v1_config_keeps_the_v1_config(
     assert config_files.v1.is_file(), "The V1 config was deleted before V2 was saved"
 
 
+def test_a_v1_file_left_behind_never_hides_the_newer_config(
+    config_files: ConfigFiles, mocker: MockerFixture
+):
+    budget = mocker.patch.object(Client, "budget", return_value=PlanDetailFactory())
+    config_files.write_asset("V1")
+    newer = ConfigV4.model_validate_json(assets.read_text("config_V4/config.json"))
+    newer.last_reconciliation_date = dt.date(2025, 5, 10)
+    newer.save()
+
+    config = get_config()
+
+    assert config is not None and config.last_reconciliation_date == dt.date(2025, 5, 10)
+    budget.assert_not_called()
+    assert ConfigV4.load().last_reconciliation_date == dt.date(2025, 5, 10)
+
+
+@pytest.mark.usefixtures("isolated_migration_registry")
+def test_a_v1_folder_removed_by_another_run_does_not_fail_the_migration(
+    config_files: ConfigFiles, mocker: MockerFixture
+):
+    mocker.patch.object(Client, "budget", return_value=PlanDetailFactory())
+    config_files.write_asset("V1")
+    v1 = ConfigV1.load()
+    shutil.rmtree(config_files.v1.parent)
+
+    migrated = DeltaConfigV1ToV2().on_migrate(v1)
+
+    assert ConfigV2.load() == migrated
+
+
+@pytest.mark.version("V3")
+def test_a_migration_waits_for_the_lock_and_skips_what_another_process_migrated(
+    config: str, mocker: MockerFixture
+):
+    migrate = mocker.spy(migration_engine(), "migrate")
+    result: list[ConfigV4 | None] = []
+    loading = threading.Thread(target=lambda: result.append(get_config()))
+
+    # Another process (the CLI) holds the lock while it migrates the same config
+    with file_lock(lock_path()):
+        loading.start()
+        loading.join(0.2)
+        assert loading.is_alive(), "The migration did not wait for the lock"
+        other = ConfigV4.model_validate_json(assets.read_text("config_V4/config.json"))
+        other.last_reconciliation_date = dt.date(2025, 5, 10)
+        other.save()
+    loading.join(5)
+
+    assert result[0] is not None and result[0].last_reconciliation_date == dt.date(2025, 5, 10)
+    migrate.assert_not_called()
+
+
 @pytest.mark.usefixtures("isolated_migration_registry")
 def test_a_second_migration_in_the_same_process_reuses_the_migration_engine(
     config_files: ConfigFiles,
@@ -92,7 +145,8 @@ def test_a_second_migration_in_the_same_process_reuses_the_migration_engine(
     config_files.write_asset("V1")
     get_config()
 
-    # The first migration removes the V1 file, so put a V1 config back to migrate again
+    # The first migration replaced the V1 file by the latest one: start from V1 again
+    config_files.v2.unlink()
     config_files.write_asset("V1")
 
     assert isinstance(get_config(), ConfigV4)

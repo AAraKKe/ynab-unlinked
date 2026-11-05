@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from contextlib import suppress
 
 from ynab_unlinked.config.migrations.base import Delta
 from ynab_unlinked.ynab_api import Client
@@ -58,7 +59,9 @@ class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
         # Save v2 before deleting v1, so a failed save leaves the old config in place.
         # This is special because v1 is stored in a different path than any other versions
         config_v2.save()
-        shutil.rmtree(ConfigV1.path().parent)
+        # Gone already when another run removed it first
+        with suppress(FileNotFoundError):
+            shutil.rmtree(ConfigV1.path().parent)
 
         return config_v2
 

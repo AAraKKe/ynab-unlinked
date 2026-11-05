@@ -455,6 +455,9 @@ def switch_budget(config: LatestConfig, budget: Budget) -> None
   `config.core.lock_path()`), so two threads of the app or the app and the CLI take turns
   and neither loses the other's change. Do not nest it. Only `yul setup` writes a whole new
   config.
+- `get_config()` migrates an old config under the same two locks and reads the version
+  again once it holds them, so the CLI and the app starting together migrate it once. The
+  V2+ file wins over a V1 file left behind (`config_version()`).
 - `switch_budget` is the one rule for a budget change (`yul config set budget` and
   Settings › Connection): another budget clears `loaders`, `accounts`, `debt_mappings` and
   `last_reconciliation_date`; the token and `adjustments` stay. The same budget again only
