@@ -6,7 +6,7 @@ Banks supported today: **BBVA** (credit card PDF), **Sabadell** (TXT or XLS expo
 
 ## Install
 
-Python 3.13 or newer. The recommended way is [uv](https://docs.astral.sh/uv/):
+Python 3.13 or newer, tested on macOS and Linux. The recommended way is [uv](https://docs.astral.sh/uv/):
 
 ```sh
 uv tool install 'ynab-unlinked[web]'   # CLI and web app

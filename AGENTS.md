@@ -102,5 +102,6 @@ real config).
   - `doc`: documentation changes.
   - `contrib`: contributor experience (tests, checks, CI, tooling).
   - `misc`: anything that fits nowhere else.
-- Releases: bump `src/ynab_unlinked/__about__.py`, run `hatch run tc:build`, merge, then
-  push a `yul-X.Y.Z` tag. The release workflow validates the version and publishes to PyPI.
+- Releases: bump `src/ynab_unlinked/__about__.py`, run `hatch run tc:build` as the LAST
+  change of the release branch (the release workflow refuses a tag while a fragment is
+  pending), merge, then push a `yul-X.Y.Z` tag. The release workflow validates the version and publishes to PyPI.

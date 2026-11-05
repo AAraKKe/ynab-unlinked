@@ -7,3 +7,11 @@ dist
 
 # Claude Code scratch worktrees (skills under .claude/skills are tracked)
 .claude/worktrees/
+
+# Bank statements dropped at the repo root while trying things out (the fixtures live in tests/assets)
+/*.xls
+/*.xlsx
+/*.pdf
+/*.html
+/*.txt
+/*.sh
