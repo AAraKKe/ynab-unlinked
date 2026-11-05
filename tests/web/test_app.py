@@ -1,3 +1,5 @@
+import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -56,3 +58,39 @@ def test_run_keeps_the_storage_secret_across_runs(config: str, ui_run):
     web_app.run(open_browser=False)
 
     assert ui_run.call_args.kwargs["storage_secret"] == first
+
+
+def mode(path: Path) -> int:
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX file modes")
+@pytest.mark.version("missing")
+def test_run_keeps_the_data_folder_and_the_storage_secret_for_the_user_only(
+    config: str, ui_run, tmp_path: Path, mocker: MockerFixture
+):
+    data = tmp_path / "data"
+    mocker.patch("ynab_unlinked.web.app.storage_dir", return_value=data / "web")
+
+    web_app.run(open_browser=False)
+
+    assert mode(data) == 0o700
+    assert mode(data / "web") == 0o700
+    assert mode(data / "web" / "secret") == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX file modes")
+@pytest.mark.version("missing")
+def test_run_narrows_a_storage_folder_an_older_yul_left_readable(
+    config: str, ui_run, tmp_path: Path
+):
+    web = tmp_path / "web"
+    web.mkdir(mode=0o755)
+    (web / "secret").write_text("kept")
+    (web / "secret").chmod(0o644)
+
+    web_app.run(open_browser=False)
+
+    assert ui_run.call_args.kwargs["storage_secret"] == "kept"
+    assert mode(web) == 0o700
+    assert mode(web / "secret") == 0o600

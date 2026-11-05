@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import secrets
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -52,14 +54,28 @@ def build(token: str, port: int) -> Callable[[], Any]:
     return shell.root
 
 
+def _private_dir(path: Path) -> None:
+    """Create `path` for the user only, and narrow one an older yul left readable."""
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with suppress(OSError):
+        path.chmod(0o700)
+
+
 def _storage_secret(directory: Path) -> str:
-    """Signs the browser session that keys the stored preferences. Kept across runs."""
+    """Signs the browser session that keys the stored preferences. Kept across runs.
+
+    The file is created readable by the user only (where the system has such modes): it is
+    never readable by others, not even for a moment.
+    """
     path = directory / "secret"
     if path.is_file():
+        with suppress(OSError):
+            path.chmod(0o600)
         return path.read_text().strip()
     secret = secrets.token_urlsafe(32)
-    path.write_text(secret)
-    path.chmod(0o600)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    with os.fdopen(os.open(path, flags, 0o600), "w") as file:
+        file.write(secret)
     return secret
 
 
@@ -73,7 +89,9 @@ def run(
     port = port or free_port()
 
     directory = storage_dir()
-    directory.mkdir(parents=True, exist_ok=True)
+    # The data folder (holding the budget copy too) and the preferences are for the user only
+    _private_dir(directory.parent)
+    _private_dir(directory)
     # NiceGUI defaults to a .nicegui folder in the working directory
     Storage.path = directory
 

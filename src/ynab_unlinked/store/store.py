@@ -115,6 +115,8 @@ class Store:
             os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
         with suppress(OSError):
             path.chmod(0o600)
+            # mkdir's mode does nothing to a folder that already exists (the app made it)
+            path.parent.chmod(0o700)
         with closing(sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_SECONDS)) as conn:
             # Readers never wait for a writer. The mode is kept in the file, set once is enough
             conn.execute("PRAGMA journal_mode=WAL")

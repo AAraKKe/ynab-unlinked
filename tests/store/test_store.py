@@ -96,6 +96,7 @@ def test_the_store_and_its_directory_are_for_the_user_only(tmp_path: Path):
 
     Store(path)
     path.chmod(0o644)  # one written by 1.0.0
+    path.parent.chmod(0o755)
     Store(path)
 
     assert stat.S_IMODE(path.stat().st_mode) == 0o600

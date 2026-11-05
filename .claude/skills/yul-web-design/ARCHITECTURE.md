@@ -450,7 +450,7 @@ class StoreError(Exception)                       # store written by a newer sch
 
 class Store:
     def __init__(self, path: Path): ...          # creates dir and schema if missing, migrates
-        # the dir is created 0700 and the file 0600 (an existing file is set to 0600)
+        # the dir is 0700 and the file 0600 (existing ones are narrowed to these modes)
     def sync(self, client: Client, budget_id: str, progress: Progress = NullProgress()) -> SyncResult
         # no knowledge stored for this budget -> full fetch
         # (client.transactions_with_knowledge with since_date=FULL_SYNC_SINCE, 1900-01-01,
@@ -655,7 +655,9 @@ web/
 - `run()` binds `127.0.0.1`, picks a free port when none is given, prints
   `http://127.0.0.1:<port>/?token=<token>` and opens it unless `--no-browser`. On startup
   it starts a background store sync when configured. NiceGUI's storage lives in
-  `storage_dir()`, not in a `.nicegui` folder in the working directory.
+  `storage_dir()`, not in a `.nicegui` folder in the working directory; it and the data
+  folder holding it are 0700, and its `secret` is created 0600 with `os.open` (existing ones
+  are narrowed).
 - `security.TokenGuard` (pure ASGI, sees http and websocket scopes, NiceGUI's static,
   upload and socket.io routes included): `?token=<token>` answers a tiny page that sets the
   HttpOnly, SameSite=Strict cookie `yul_session_<port>` (`cookie_name(port)`: cookies ignore

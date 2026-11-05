@@ -64,7 +64,7 @@ YNAB Unlinked also keeps a local copy of your budget's transactions and accounts
 
 `yul app` runs a small web server on your computer and opens it in your browser. It listens on `127.0.0.1` only, so other machines on your network cannot reach it. Each run creates a random session token, carried by the link it prints; the browser trades it for an HttpOnly, SameSite=Strict cookie, and every request without it is refused. Requests addressed to any other host name, and changes or live connections coming from a web page of another origin (another server on `127.0.0.1` included), are refused too, and no web page may show the app inside a frame. The app loads no fonts, scripts or images from the internet and has no telemetry; like the CLI, it only talks to `https://api.ynab.com`.
 
-Per browser preferences (theme, collapsed sidebar) and the secret that signs them are kept in a `web` directory inside your user data directory (next to `store.sqlite`). `yul config reset` and the app's "Reset all data" delete it.
+Per browser preferences (theme, collapsed sidebar) and the secret that signs them are kept in a `web` directory inside your user data directory (next to `store.sqlite`), readable by your user only. `yul config reset` and the app's "Reset all data" delete it.
 
 You can run `yul privacy` at any time to print the resolved paths on your machine.
 
