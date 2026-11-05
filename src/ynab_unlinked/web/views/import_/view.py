@@ -48,11 +48,13 @@ from ynab_unlinked.web.views.import_.data import (
     STEPS,
     ImportFile,
     Status,
+    account_label,
     chosen_accounts,
     import_log,
-    parse_file,
+    mark_repeated,
     problem_text,
-    same_file,
+    read_file,
+    take_candidate,
 )
 from ynab_unlinked.web.views.import_.rows import draw_row
 from ynab_unlinked.web.wording import IMPORT_FAILED, plural, ynab_error_message
@@ -149,9 +151,7 @@ class ImportFlow:
             await upload.save(path)
             item = ImportFile(key=key, name=name, size=upload.size(), path=path)
             item.digest = await run.io_bound(file_digest, path) or ""
-            if (first := same_file(item, [*self.files, *added])) is not None:
-                item.status = Status.UNSUPPORTED
-                item.problem = f"Already in this import as {first.name}"
+            mark_repeated(item, [*self.files, *added])
             added.append(item)
 
         first = not self.files
@@ -194,20 +194,9 @@ class ImportFlow:
     async def use(self, item: ImportFile, candidate: Candidate) -> None:
         """Take `candidate` for the file (detection applied the saved options): account, then plan."""
         config, _ = state().require()
-        saved = config.entity(candidate.loader.name)
-        if saved is not None and not saved.enabled:
-            item.candidate = candidate
-            item.status = Status.UNSUPPORTED
-            item.problem = f"{candidate.loader.title} is turned off in Settings › Banks"
+        if not take_candidate(item, candidate, config.entity(candidate.loader.name)):
             self.refresh(item)
             return
-        item.version += 1
-        previous, item.candidate = item.candidate, candidate
-        item.plan = None
-        if previous is None or previous.loader != candidate.loader:
-            item.account_chosen = False
-        if not item.account_chosen:
-            item.account_id = saved.account_id if saved else None
         await self.advance(item)
 
     async def reparse(self, item: ImportFile, options: dict[str, str]) -> None:
@@ -220,20 +209,12 @@ class ImportFlow:
         item.plan = None
         self.refresh(item)
         spec = item.candidate.loader
-        try:
-            transactions = await run.io_bound(parse_file, spec, item.path, options)
-        except Exception as error:
-            if version != item.version:
-                return
-            item.candidate = dataclasses.replace(
-                item.candidate, options=options, transactions=None, error=str(error)
-            )
-        else:
-            if version != item.version:
-                return
-            item.candidate = dataclasses.replace(
-                item.candidate, options=options, transactions=tuple(transactions or ()), error=None
-            )
+        transactions, error = await run.io_bound(read_file, spec, item.path, options) or ((), None)
+        if version != item.version:
+            return
+        item.candidate = dataclasses.replace(
+            item.candidate, options=options, transactions=transactions, error=error
+        )
         await self.advance(item)
 
     async def advance(self, item: ImportFile) -> None:
@@ -295,12 +276,7 @@ class ImportFlow:
         return self.account_names
 
     def account_name(self, account_id: str) -> str:
-        if (name := (self.account_names or {}).get(account_id)) is not None:
-            return name
-        config, _ = state().require()
-        if (account := config.account(account_id)) is not None:
-            return account.name
-        return account_id
+        return account_label(account_id, self.account_names or {}, state().require()[0])
 
     # ---- row actions ---------------------------------------------------------------------
 

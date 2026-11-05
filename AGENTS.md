@@ -63,11 +63,16 @@ imported.
 1. Create `src/ynab_unlinked/entities/<name>/` with a parser class implementing the
    `Entity` protocol from `entities/_protocol.py`: `parse(path)` returns
    `list[Transaction]` and raises `ParsingError` naming the line or row it cannot read,
-   `name()` returns the entity key, `sniff()` returns a `Match` (confidence and a short
+   `name()` returns the entity name, `sniff()` returns a `Match` (confidence and a short
    reason) after reading only the head of the file, and never raises. Options (a language,
    a year) are constructor arguments: the parser never sees the CLI context.
-2. Expose a `spec: LoaderSpec` (`entities/registry.py`: key, title, input types, options,
-   `build`, the command `help`) in the package. `build(options)` binds every option.
+2. Expose a `spec: LoaderSpec` (`entities/registry.py`: key, name, title, input types,
+   options, `build`, the command `help`) in the package. `build(options)` binds every option.
+   `key` is the package name, used on the command line, in URLs and for the logo
+   (`yul load bbva`); `name` is `Entity.name()`, the key of the bank in the config
+   (`loaders[name]`, where its account and options are saved). They are the same for new
+   banks; BBVA keeps `name="BBVA Credit Card"` (key `bbva`) so existing configs still find
+   its account.
    `cli/commands/load.py` generates `yul load <key>` from the spec, one command line option per
    `LoaderOption` (`flags`, `help`), and runs `process_transactions()` from `cli/process.py`;
    `yul load auto` and the web app find the loader through the same `spec`.

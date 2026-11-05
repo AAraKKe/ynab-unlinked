@@ -476,7 +476,8 @@ def switch_budget(config: LatestConfig, budget: Budget) -> None
 
 ```python
 # store/paths.py
-def store_path() -> Path   # user_data_dir("ynab-unlinked", "committhatline") / "store.sqlite"
+def store_path() -> Path   # config.paths.data_dir() / "store.sqlite": $YUL_HOME when set,
+                           # else user_data_dir("ynab-unlinked", "committhatline")
 
 # store/store.py
 @dataclass(frozen=True)
@@ -668,7 +669,10 @@ web/
                        money_js(): the ECharts history line chart
   views/
     __init__.py        register(): imports every view module
-    onboarding.py      /onboarding, outside the shell (token, budget, banks, done)
+    onboarding/        /onboarding, outside the shell (token, budget, banks, done)
+      data.py          STEPS, TOKEN..DONE, CopyState, AccountOption
+      progress.py      LineProgress: the copy's progress on one label, from any thread
+      view.py          Wizard and page()
     Every view with data to shape is a package: data.py is pure (no NiceGUI, not even
     through its imports: web.accounts, web.buckets, web.paths, web.wording are NiceGUI-free)
     and unit testable; the other modules draw. __init__ re-exports the names tests use.
@@ -677,8 +681,9 @@ web/
                        message_markup, Attention, attention_items
       view.py          the page (hero with count_up, spark_options, activity, banner)
     import_/           /import      Files -> Review -> Done on core.detect and core.importing
-      data.py          Status, ImportFile, same_file, problem_text, option_choices,
-                       parse_file, chosen_accounts, done_summary, import_log
+      data.py          Status, ImportFile, same_file, mark_repeated, take_candidate,
+                       account_label, problem_text, option_choices, parse_file, read_file,
+                       chosen_accounts, done_summary, import_log
       view.py          ImportFlow (lifecycle, detection, the three steps, commit) and the view
       rows.py          draw_row(flow, item): a file row of step Files and its body
       tables.py        badge, plan_table, transactions_table
@@ -686,8 +691,9 @@ web/
     reconcile/         /reconcile   per account cleared vs bank balance, lock (see 3.5)
       data.py          scope_start, gap_candidates, transaction_detail, ReconcileData (read,
                        open_transactions, has_anything), parse_bank_balance, lock_confirmation,
-                       lock_log
-      view.py          Row, AccountGroup, ReconcileView and the view
+                       lock_log, lock_checkpoint, pending_title
+      groups.py        Row, AccountGroup: the selection and the elements that show it
+      view.py          ReconcileView and the view
       footer.py        selection / done / locking footers
     networth/          /networth    history chart, buckets, accounts, balance updates, drawer (see 3.6)
       data.py          RANGES, MAX_PICKED, range_start, last_set, by_hand_pill, assign_slots,
@@ -978,7 +984,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
 - Tests seed the store through `Store.sync` with the `ynab_api` stub answering
   (`serve()` in `tests/web/views/test_networth.py`); no write API was added to `Store`.
 
-### 3.7 Onboarding as built (`views/onboarding.py`)
+### 3.7 Onboarding as built (`views/onboarding/`)
 
 - `STEPS = ("Token", "Budget", "Banks", "Done")`, one `Wizard` per page. `refresh()` redraws
   the rail and the step and runs only on a change of step; selection and state changes

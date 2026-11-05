@@ -5,12 +5,13 @@ option choices, what is parsed and saved, and the words of the Done step and the
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.core.detect import Candidate, Detection
 from ynab_unlinked.core.importing import ImportPlan, ImportResult, parse_transactions
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
@@ -88,6 +89,44 @@ def same_file(item: ImportFile, others: Sequence[ImportFile]) -> ImportFile | No
     )
 
 
+def mark_repeated(item: ImportFile, others: Sequence[ImportFile]) -> None:
+    """Grey out `item` when the same bytes are already in the import."""
+    if (first := same_file(item, others)) is not None:
+        item.status = Status.UNSUPPORTED
+        item.problem = f"Already in this import as {first.name}"
+
+
+def take_candidate(item: ImportFile, candidate: Candidate, saved: LoaderConfig | None) -> bool:
+    """Read the file with `candidate` from now on, `saved` being its bank's settings.
+
+    False when the bank is turned off: the file is then unsupported. Otherwise the plan is
+    dropped, and the account comes from the settings unless one was picked on the row for
+    this bank.
+    """
+    if saved is not None and not saved.enabled:
+        item.candidate = candidate
+        item.status = Status.UNSUPPORTED
+        item.problem = f"{candidate.loader.title} is turned off in Settings › Banks"
+        return False
+    item.version += 1
+    previous, item.candidate = item.candidate, candidate
+    item.plan = None
+    if previous is None or previous.loader != candidate.loader:
+        item.account_chosen = False
+    if not item.account_chosen:
+        item.account_id = saved.account_id if saved else None
+    return True
+
+
+def account_label(account_id: str, names: Mapping[str, str], config: LatestConfig) -> str:
+    """The name of an account: from the budget, else from the settings, else its id."""
+    if (name := names.get(account_id)) is not None:
+        return name
+    if (account := config.account(account_id)) is not None:
+        return account.name
+    return account_id
+
+
 def problem_text(detection: Detection, specs: Sequence[LoaderSpec]) -> str:
     """Why a file without a usable loader cannot be imported."""
     if detection.candidates:
@@ -111,6 +150,16 @@ def option_choices(option: LoaderOption, current: str, today: dt.date) -> list[s
 def parse_file(spec: LoaderSpec, path: Path, options: dict[str, str]) -> list[Transaction]:
     """Read the file with the bank and these option values. Blocking: run it through io_bound."""
     return parse_transactions(spec.build(options), path)
+
+
+def read_file(
+    spec: LoaderSpec, path: Path, options: dict[str, str]
+) -> tuple[tuple[Transaction, ...] | None, str | None]:
+    """`parse_file`, as (transactions, None) or (None, why it failed). Blocking."""
+    try:
+        return tuple(parse_file(spec, path, options) or ()), None
+    except Exception as error:
+        return None, str(error)
 
 
 def chosen_accounts(items: Sequence[ImportFile]) -> list[tuple[str, str]]:
@@ -158,12 +207,16 @@ __all__ = [
     "YEARS_OFFERED",
     "ImportFile",
     "Status",
+    "account_label",
     "chosen_accounts",
     "done_summary",
     "file_color",
     "import_log",
+    "mark_repeated",
     "option_choices",
     "parse_file",
     "problem_text",
+    "read_file",
     "same_file",
+    "take_candidate",
 ]

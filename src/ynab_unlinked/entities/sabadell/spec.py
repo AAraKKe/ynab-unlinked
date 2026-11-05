@@ -33,7 +33,7 @@ spec = LoaderSpec(
     help="""
     Inputs transactions from a Sabadell TXT or XLS file.
 
-    From your Sabadell Credit Card statement, you can download a txt file with the transactions.
-    At the moment only txt format is supported.
+    From your Sabadell Credit Card statement, download the transactions as a txt or an xls
+    file.
     """,
 )

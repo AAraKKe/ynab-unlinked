@@ -1,17 +1,12 @@
-"""First run: token, budget, banks, then the config is written and the budget is copied.
-
-A full screen page outside the shell: a centered glass card with the step rail on its left.
-"""
+"""The onboarding wizard (`Wizard`) and its page. The steps and the account choices are in
+`data`, the copy's progress line in `progress`."""
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Literal
 
 from fastapi.responses import RedirectResponse
-from nicegui import Client as NiceClient
 from nicegui import context, run, ui
 from ynab import PlanSummary
 
@@ -33,59 +28,26 @@ from ynab_unlinked.web.components import (
     spinner,
 )
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.views.onboarding.data import (
+    BUDGET,
+    DONE,
+    LOADERS,
+    STEPS,
+    TOKEN,
+    AccountOption,
+    CopyState,
+)
+from ynab_unlinked.web.views.onboarding.progress import LineProgress
 from ynab_unlinked.web.wording import (
     COPY_FAILED,
     COPY_NOTE,
     COPY_TITLE,
     copy_error_message,
-    copy_line,
     plural,
     ynab_error_message,
 )
 from ynab_unlinked.web.ynab import fetch_budgets, load_budget
 from ynab_unlinked.ynab_api import Client
-
-STEPS = ("Token", "Budget", "Banks", "Done")
-TOKEN, BUDGET, LOADERS, DONE = range(len(STEPS))
-
-CopyState = Literal["running", "done", "failed"]
-
-
-@dataclass(frozen=True)
-class AccountOption:
-    id: str
-    name: str
-
-
-class LineProgress:
-    """Shows the copy's progress messages on one label, from whatever thread sends them."""
-
-    def __init__(self, label: ui.label, client: NiceClient) -> None:
-        self.label = label
-        self.client = client
-        self.loop = asyncio.get_running_loop()
-
-    def _show(self, message: str) -> None:
-        self.loop.call_soon_threadsafe(self._apply, copy_line(message))
-
-    def _apply(self, text: str) -> None:
-        if self.label.is_deleted:
-            return
-        with self.client:
-            self.label.set_text(text)
-
-    def start(self, message: str) -> None:
-        self._show(message)
-
-    def done(self, message: str | None = None) -> None:
-        if message:
-            self._show(message)
-
-    def info(self, message: str) -> None:
-        self._show(message)
-
-    def warn(self, message: str) -> None:
-        self._show(message)
 
 
 @dataclass

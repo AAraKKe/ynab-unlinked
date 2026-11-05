@@ -82,10 +82,10 @@ in the same change. Never update a document to describe something you did not bu
   `web.ynab` (`fetch_budgets`, `load_budget`, `fallback_accounts`), `web.buckets` (title and
   colour of each bucket), `web.accounts.STALE_AFTER_DAYS`. A view never imports another
   view: what two views share lives in one of these.
-- A view with data to shape is a package (`views/home/`, `import_/`, `reconcile/`,
-  `networth/`, `settings/`): `data.py` is pure, no NiceGUI even through its imports, and is
-  tested directly; the render modules draw; `__init__` re-exports what tests import. Keep
-  each file under about 500 lines.
+- A view with data to shape is a package (`views/home/`, `import_/`, `onboarding/`,
+  `reconcile/`, `networth/`, `settings/`): `data.py` is pure, no NiceGUI even through its
+  imports, and is tested directly; the render modules draw; `__init__` re-exports what tests
+  import. Keep each file under about 500 lines.
 
 ## Tests
 

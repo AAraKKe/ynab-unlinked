@@ -17,6 +17,7 @@ from ynab import TransactionClearedStatus, TransactionDetail
 
 from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.core.balances import parse_amount_to_milliunits
+from ynab_unlinked.core.reconcile import next_reconciliation_date
 from ynab_unlinked.store import Store, StoredAccount, StoredTransaction
 from ynab_unlinked.web.wording import plural
 
@@ -171,6 +172,39 @@ def lock_log(batches: Sequence[LockBatch]) -> tuple[str, dict[str, Any]]:
     return message, details
 
 
+def lock_checkpoint(
+    locked: Sequence[StoredTransaction],
+    pending: Sequence[StoredTransaction],
+    *,
+    include_uncleared: bool,
+) -> dt.date | None:
+    """The next `last_reconciliation_date` after locking `locked`, `pending` being every row
+    still not reconciled in the scope (the locked ones included or not)."""
+    locking = {transaction.id for transaction in locked}
+    return next_reconciliation_date(
+        [transaction.date for transaction in locked],
+        # Only rows the user chose to skip hold the checkpoint back: an uncleared row they
+        # could not pick ("include uncleared" off) would pin it, and the scope, forever
+        [
+            transaction.date
+            for transaction in pending
+            if transaction.id not in locking
+            and (include_uncleared or transaction.cleared is not TransactionClearedStatus.UNCLEARED)
+        ],
+    )
+
+
+def pending_title(accounts: int, transactions: int, any_account: bool) -> str:
+    """The header of the list: what is left to reconcile in the scope."""
+    if transactions:
+        return (
+            f"{plural(accounts, 'account')} · {plural(transactions, 'transaction')} not reconciled"
+        )
+    if any_account:
+        return "Everything here is reconciled"
+    return "Nothing to reconcile in this range"
+
+
 __all__ = [
     "ALL_TIME",
     "SCOPE_BUFFER_DAYS",
@@ -180,9 +214,11 @@ __all__ = [
     "LockBatch",
     "ReconcileData",
     "gap_candidates",
+    "lock_checkpoint",
     "lock_confirmation",
     "lock_log",
     "parse_bank_balance",
+    "pending_title",
     "scope_start",
     "transaction_detail",
 ]

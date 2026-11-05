@@ -2,21 +2,21 @@
 
 Everything on screen comes from the local store, synced first when it is older than ten
 minutes. The only write to YNAB is `core.reconcile.reconcile`, behind one confirmation. What
-is shown and written is worked out in `data`; this module keeps the selection and draws it.
+is shown and written is worked out in `data`; this module keeps the selection (`groups`) and
+draws it.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Sequence
-from dataclasses import dataclass
 from functools import partial
 
 from nicegui import run, ui
 from ynab import TransactionClearedStatus
 
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.core.reconcile import next_reconciliation_date, reconcile
+from ynab_unlinked.core.reconcile import reconcile
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import StoredAccount, StoredTransaction
 from ynab_unlinked.web import shell
@@ -39,55 +39,16 @@ from ynab_unlinked.web.views.reconcile.data import (
     UNCLEARED_SKIPPED,
     ReconcileData,
     gap_candidates,
+    lock_checkpoint,
     lock_confirmation,
     lock_log,
     parse_bank_balance,
+    pending_title,
     scope_start,
     transaction_detail,
 )
+from ynab_unlinked.web.views.reconcile.groups import AccountGroup, Row
 from ynab_unlinked.web.wording import plural, short_date, ynab_error_message
-
-
-@dataclass(eq=False)
-class Row:
-    transaction: StoredTransaction
-    selected: bool
-    locked: bool = False
-    element: ui.element | None = None
-    box: ui.element | None = None
-    status: ui.label | None = None
-
-    @property
-    def uncleared(self) -> bool:
-        return self.transaction.cleared is TransactionClearedStatus.UNCLEARED
-
-    @property
-    def to_lock(self) -> bool:
-        return self.selected and not self.locked
-
-
-@dataclass(eq=False)
-class AccountGroup:
-    account: StoredAccount
-    rows: list[Row]
-    matches: bool | None = None
-    """None until a bank balance is typed, then whether it equals the cleared balance."""
-    difference: int = 0
-    open: bool = False
-    count: ui.label | None = None
-    lock_button: ui.button | None = None
-    lock_label: ui.label | None = None
-    done: ui.element | None = None
-    match: ui.element | None = None
-    rows_box: ui.element | None = None
-    toggle: ui.label | None = None
-    bank: ui.input | None = None
-
-    def to_lock(self) -> list[Row]:
-        return [row for row in self.rows if row.to_lock]
-
-    def pending(self) -> list[Row]:
-        return [row for row in self.rows if not row.locked]
 
 
 class ReconcileView:
@@ -416,15 +377,7 @@ class ReconcileView:
         pending_rows = sum(len(group.pending()) for group in self.groups)
         pending_accounts = sum(1 for group in self.groups if group.pending())
         if self.title is not None:
-            if pending_rows:
-                self.title.set_text(
-                    f"{plural(pending_accounts, 'account')} · "
-                    f"{plural(pending_rows, 'transaction')} not reconciled"
-                )
-            elif self.groups:
-                self.title.set_text("Everything here is reconciled")
-            else:
-                self.title.set_text("Nothing to reconcile in this range")
+            self.title.set_text(pending_title(pending_accounts, pending_rows, bool(self.groups)))
 
         for group in self.groups:
             to_lock = len(group.to_lock())
@@ -494,18 +447,10 @@ class ReconcileView:
             self.refresh()
             return
 
-        locking = {row.transaction.id for _, rows in batches for row in rows}
-        next_date = next_reconciliation_date(
-            [row.transaction.date for _, rows in batches for row in rows],
-            # Only rows the user chose to skip hold the checkpoint back: an uncleared row they
-            # could not pick ("include uncleared" off) would pin it, and the scope, forever
-            [
-                row.transaction.date
-                for group in self.groups
-                for row in group.pending()
-                if row.transaction.id not in locking
-                and (self.include_uncleared or not row.uncleared)
-            ],
+        next_date = lock_checkpoint(
+            [row.transaction for _, rows in batches for row in rows],
+            [row.transaction for group in self.groups for row in group.pending()],
+            include_uncleared=self.include_uncleared,
         )
         # YNAB changed: show it, log it and sync before anything that can still fail
         try:
