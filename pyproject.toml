@@ -89,6 +89,8 @@ cov = ["pytest --cov=src --cov-report term-missing:skip-covered tests {args:}"]
 
 
 [tool.pyright]
+# `src` is checked in strict mode; tests stay at the default level.
+strict = ["src"]
 exclude = [
   "**/.vscode/**",
   "**/__pycache__/**",

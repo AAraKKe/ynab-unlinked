@@ -37,6 +37,7 @@ src/ynab_unlinked/
   web/               NiceGUI app behind `yul app`, only importable with the `web` extra.
   setup.py           First-run setup and loading the `YnabUnlinkedContext` for commands.
 tests/               Mirrors `src`. Fixtures in `tests/assets`, helpers in `tests/helpers`.
+typings/             Local stubs pyright reads for the untyped parts of pyexcel and html_text.
 changelog/           Towncrier fragments, one per PR.
 .claude/skills/      Project skills. `yul-web-design/` holds the web app's architecture
                      contract (ARCHITECTURE.md) and design (DESIGN.md).
