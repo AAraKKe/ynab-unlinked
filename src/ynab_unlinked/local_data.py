@@ -10,9 +10,8 @@ import shutil
 from pathlib import Path
 
 from ynab_unlinked import keychain
-from ynab_unlinked.config.paths import config_path, v1_config_path
+from ynab_unlinked.config.paths import config_path, v1_config_path, web_storage_dir
 from ynab_unlinked.store import store_path
-from ynab_unlinked.web import storage_dir as web_storage_dir
 
 logger = logging.getLogger(__name__)
 

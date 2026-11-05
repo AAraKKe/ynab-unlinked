@@ -23,6 +23,14 @@ def data_dir() -> Path:
     return Path(user_data_dir("ynab-unlinked", "committhatline"))
 
 
+def web_storage_dir() -> Path:
+    """Where the web app keeps per browser preferences (theme, sidebar) and their secret.
+
+    Here rather than in `web` so what lists and deletes local data needs no web module.
+    """
+    return data_dir() / "web"
+
+
 def v1_config_path() -> Path:
     # This needs to be done especifically for version 1 because it was stored in a different path
     # and was the version before any versioning was implemented

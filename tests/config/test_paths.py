@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -12,7 +14,7 @@ def test_yul_home_holds_every_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
     assert paths.config_path() == tmp_path / "config.json"
     assert store_path() == tmp_path / "store.sqlite"
-    assert storage_dir() == tmp_path / "web"
+    assert paths.web_storage_dir() == storage_dir() == tmp_path / "web"
     assert paths.v1_config_path() == Path.home() / ".config/ynab_unlinked/config.json"
 
 
@@ -21,4 +23,14 @@ def test_without_yul_home_the_system_locations_are_used(monkeypatch: pytest.Monk
 
     assert paths.config_path().name == "config.json"
     assert store_path().name == "store.sqlite"
-    assert storage_dir() == store_path().parent / "web"
+    assert paths.web_storage_dir() == storage_dir() == store_path().parent / "web"
+
+
+def test_listing_and_deleting_local_data_needs_no_web_module():
+    # Core modules shared by the CLI and the app depend on no UI package
+    code = (
+        "import sys, ynab_unlinked.local_data, ynab_unlinked.privacy;"
+        "sys.exit(any(m.startswith('ynab_unlinked.web') for m in sys.modules))"
+    )
+
+    assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 0
