@@ -30,9 +30,18 @@ from nicegui.elements.upload_files import FileUpload
 from nicegui.events import MultiUploadEventArguments
 
 from ynab_unlinked.__about__ import __version__
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import SyncResult
 from ynab_unlinked.web import theme
-from ynab_unlinked.web.components import button, icon, spinner
+from ynab_unlinked.web.components import (
+    button,
+    clickable,
+    dialog_box,
+    icon,
+    run_dialog,
+    set_class,
+    spinner,
+)
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.wording import plural, ynab_error_message
 
@@ -151,10 +160,7 @@ def _set_active(key: str | None) -> None:
         return
     shell.active = key
     for nav_key, element in shell.nav.items():
-        if nav_key == key:
-            element.classes(add="on")
-        else:
-            element.classes(remove="on")
+        set_class(element, "on", nav_key == key)
 
 
 @contextmanager
@@ -193,31 +199,38 @@ def notify(message: str, kind: ToastKind = "ok") -> None:
     )
 
 
+@contextmanager
+def edit_config(message: str | None = None) -> Iterator[LatestConfig]:
+    """Change the config on disk in a block, then toast `message` (when given).
+
+    Built on `state().edit_config()`: the file is read again first, so what the CLI saved
+    meanwhile is kept, and the app state is reloaded after the save.
+    """
+    with state().edit_config() as config:
+        yield config
+    if message:
+        notify(message)
+
+
 async def confirm(
     title: str, lines: Sequence[str], action_label: str, *, danger: bool = False
 ) -> bool:
     """Ask once before a change: title, the list of what will happen, one primary action."""
-    with ui.dialog() as dialog, ui.element("div").classes("yul-card yul-dialog"):
-        ui.label(title).classes("yul-h2")
-        if lines:
-            with ui.element("ul").classes("yul-change-list"):
-                for line in lines:
-                    with ui.element("li"):
-                        ui.label(line)
-        with ui.element("div").classes("yul-row").style("justify-content:flex-end"):
-            button("Cancel", kind="ghost", on_click=lambda: dialog.submit(False)).mark(
-                "confirm-cancel"
-            )
-            button(
-                action_label,
-                kind="danger-primary" if danger else "primary",
-                on_click=lambda: dialog.submit(True),
-            ).mark("confirm-action")
-    dialog.open()
-    try:
-        return (await dialog) is True
-    finally:
-        dialog.delete()
+    box = dialog_box(title)
+    dialog = box.dialog
+    if lines:
+        with box.body, ui.element("ul").classes("yul-change-list"):
+            for line in lines:
+                with ui.element("li"):
+                    ui.label(line)
+    with box.actions:
+        button("Cancel", kind="ghost", on_click=lambda: dialog.submit(False)).mark("confirm-cancel")
+        button(
+            action_label,
+            kind="danger-primary" if danger else "primary",
+            on_click=lambda: dialog.submit(True),
+        ).mark("confirm-action")
+    return (await run_dialog(dialog)) is True
 
 
 # ---- drop handoff -------------------------------------------------------------------------
@@ -313,10 +326,7 @@ def _sync_chip() -> None:
         current = state()
         busy.set_visibility(current.syncing)
         dot.set_visibility(not current.syncing)
-        if current.sync_error:
-            dot.classes(add="warn")
-        else:
-            dot.classes(remove="warn")
+        set_class(dot, "warn", bool(current.sync_error))
         if current.syncing:
             text.set_text("syncing…")
         elif current.sync_error:
@@ -387,11 +397,7 @@ def _nav_item(v: View) -> ui.element:
         icon(v.icon)
         ui.label(v.title).classes("yul-nav-label")
     item.props["title"] = v.title
-    item.props["role"] = "link"
-    item.props["tabindex"] = "0"
-    item.on("click", lambda: ui.navigate.to(v.path))
-    item.on("keydown.enter", lambda: ui.navigate.to(v.path))
-    return item
+    return clickable(item, lambda: ui.navigate.to(v.path), role="link")
 
 
 def _collapse_item(frame: ui.element) -> None:
@@ -399,8 +405,6 @@ def _collapse_item(frame: ui.element) -> None:
     with ui.element("div").classes("yul-nav collapse").mark("sidebar-toggle") as item:
         icon("sidebar")
         ui.label("Collapse").classes("yul-nav-label")
-    item.props["role"] = "button"
-    item.props["tabindex"] = "0"
 
     def refresh() -> None:
         item.props["title"] = (
@@ -409,15 +413,11 @@ def _collapse_item(frame: ui.element) -> None:
 
     def toggle() -> None:
         rail = "rail" not in frame.classes
-        if rail:
-            frame.classes(add="rail")
-        else:
-            frame.classes(remove="rail")
+        set_class(frame, "rail", rail)
         app.storage.user[_SIDEBAR_KEY] = _RAIL if rail else _WIDE
         refresh()
 
-    item.on("click", toggle)
-    item.on("keydown.enter", toggle)
+    clickable(item, toggle)
     refresh()
 
 

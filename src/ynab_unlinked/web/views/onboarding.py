@@ -21,13 +21,22 @@ from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.config.models.v2 import Budget
 from ynab_unlinked.entities.registry import LoaderSpec
 from ynab_unlinked.web import shell, theme
-from ynab_unlinked.web.components import bank_logo, button, check, pill, spinner
+from ynab_unlinked.web.components import (
+    bank_logo,
+    budget_tiles,
+    button,
+    check,
+    loading,
+    pill,
+    set_class,
+    show_state,
+    spinner,
+)
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.wording import (
     COPY_FAILED,
     COPY_NOTE,
     COPY_TITLE,
-    budget_caption,
     copy_error_message,
     copy_line,
     plural,
@@ -168,11 +177,8 @@ class Wizard:
             str(budget.id) == kept.budget.id for budget in budgets
         ):
             # The same budget: the saved config only needs its token back
-
-            def change(config: LatestConfig) -> None:
+            with shell.edit_config() as config:
                 config.api_key = token
-
-            state().update_config(change)
             with client:
                 ui.navigate.to(shell.HOME_PATH)
             return True
@@ -295,10 +301,8 @@ class Wizard:
                         "num"
                     )
                     ui.label(name)
-                if index == self.step:
-                    item.classes(add="on")
-                elif index < self.step:
-                    item.classes(add="done")
+                set_class(item, "on", index == self.step)
+                set_class(item, "done", index < self.step)
 
         self.body.clear()
         self.message_box = self.forward = self.loaders_box = self.done_box = None
@@ -325,16 +329,14 @@ class Wizard:
         """Redraw only the message line under the step."""
         if self.message_box is None or self.message_box.is_deleted:
             return
-        self.message_box.clear()
-        with self.message_box:
-            if self.busy:
-                spinner()
-                ui.label(self.message or "Checking with YNAB…").classes("yul-muted")
-            elif self.message and self.message_is_error:
-                ui.label(self.message).classes("yul-bad")
-            elif self.message:
-                check()
-                ui.label(self.message).classes("yul-muted")
+        if self.busy:
+            show_state(self.message_box, "loading", self.message or "Checking with YNAB…")
+        elif self.message and self.message_is_error:
+            show_state(self.message_box, "error", self.message)
+        elif self.message:
+            show_state(self.message_box, "ok", self.message)
+        else:
+            self.message_box.clear()
 
     def render_token(self) -> None:
         ui.label("Connect to YNAB").classes("yul-h2")
@@ -378,26 +380,17 @@ class Wizard:
     def render_budget(self) -> None:
         ui.label("Pick a budget").classes("yul-h2")
         ui.label(f"{plural(len(self.budgets), 'budget')} for this token.").classes("yul-lede")
-        with ui.element("div").classes("yul-optgrid yul-stagger"):
-            for budget in self.budgets:
-                budget_id = str(budget.id)
-                with ui.element("div").classes("yul-opt").mark(f"budget-{budget_id}") as option:
-                    ui.label(budget.name)
-                    ui.label(budget_caption(budget)).classes("yul-faint yul-small")
-                if budget_id == self.budget_id:
-                    option.classes(add="on")
-                option.on("click", lambda _, budget_id=budget_id: self.pick_budget(budget_id))
-                self.budget_tiles[budget_id] = option
+        grid, self.budget_tiles = budget_tiles(
+            self.budgets, self.budget_id, lambda budget: self.pick_budget(str(budget.id))
+        )
+        grid.classes("yul-stagger")
         self.render_message()
 
     def pick_budget(self, budget_id: str) -> None:
         """Mark the tile in place: redrawing the grid would replay its entrance."""
         self.budget_id = budget_id
         for tile_id, tile in self.budget_tiles.items():
-            if tile_id == budget_id:
-                tile.classes(add="on")
-            else:
-                tile.classes(remove="on")
+            set_class(tile, "on", tile_id == budget_id)
         self.say(None)
         self.update_footer()
 
@@ -420,8 +413,7 @@ class Wizard:
         with box:
             if self.busy:
                 with ui.element("div").classes("yul-wait").mark("loading-accounts"):
-                    spinner()
-                    ui.label("Reading your accounts…").classes("yul-muted")
+                    loading("Reading your accounts…")
                 return
             if not self.accounts_loaded:
                 with ui.element("div").classes("yul-wait").mark("accounts-error"):

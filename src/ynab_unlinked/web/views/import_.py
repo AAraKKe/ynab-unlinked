@@ -23,7 +23,6 @@ from typing import Any
 from nicegui import background_tasks, context, run, ui
 from ynab import TransactionClearedStatus
 
-from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.detect import Candidate, Detection, detect_loaders
 from ynab_unlinked.core.importing import (
@@ -38,7 +37,16 @@ from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec, load
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import Transaction
 from ynab_unlinked.web import shell
-from ynab_unlinked.web.components import bank_logo, button, check, glass_card, pill, spinner
+from ynab_unlinked.web.components import (
+    bank_logo,
+    button,
+    check,
+    glass_card,
+    loading,
+    pill,
+    set_class,
+    spinner,
+)
 from ynab_unlinked.web.components.dropzone import dropzone
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.wording import human_size, plural, ynab_error_message
@@ -173,11 +181,8 @@ class ImportFlow:
     def set_step(self, step: int) -> None:
         self.step = step
         for index, element in enumerate(self.stepper):
-            element.classes(remove="on done")
-            if index == step:
-                element.classes(add="on")
-            elif index < step:
-                element.classes(add="done")
+            set_class(element, "on", index == step)
+            set_class(element, "done", index < step)
 
     def context(self) -> YnabUnlinkedContext[Any]:
         current = state()
@@ -380,9 +385,6 @@ class ImportFlow:
 
     # ---- row actions ---------------------------------------------------------------------
 
-    async def choose(self, item: ImportFile, candidate: Candidate) -> None:
-        await self.use(item, candidate)
-
     async def pick_account(self, item: ImportFile, account_id: str | None) -> None:
         if not account_id:
             return
@@ -394,9 +396,6 @@ class ImportFlow:
         if item.candidate is None or item.candidate.options.get(key) == value:
             return
         await self.reparse(item, {**item.candidate.options, key: value})
-
-    async def retry(self, item: ImportFile) -> None:
-        await self.advance(item)
 
     def remove(self, item: ImportFile) -> None:
         item.version += 1
@@ -412,10 +411,7 @@ class ImportFlow:
     def toggle(self, item: ImportFile) -> None:
         item.open = not item.open
         if (row := self.rows.get(item.key)) is not None:
-            if item.open:
-                row.classes(add="open")
-            else:
-                row.classes(remove="open")
+            set_class(row, "open", item.open)
 
     # ---- step 1: files -------------------------------------------------------------------
 
@@ -457,10 +453,7 @@ class ImportFlow:
         if row is None or row.is_deleted:
             return
         row.clear()
-        if item.status is Status.UNSUPPORTED:
-            row.classes(add="off")
-        else:
-            row.classes(remove="off")
+        set_class(row, "off", item.status is Status.UNSUPPORTED)
         with row:
             with ui.element("div").classes("yul-imp-head") as head:
                 self.badge(item.suffix)
@@ -484,8 +477,7 @@ class ImportFlow:
     def draw_detection(self, item: ImportFile) -> None:
         match item.status:
             case Status.DETECTING:
-                spinner()
-                ui.label("Detecting…").classes("yul-muted")
+                loading("Detecting…")
                 return
             case Status.UNSUPPORTED:
                 ui.label(item.problem or "Not supported").classes("yul-imp-reason").mark(
@@ -524,7 +516,7 @@ class ImportFlow:
                 error = ui.label(item.problem or "Error").classes("yul-imp-reason yul-bad")
                 error.mark(f"error-{item.key}")
                 if candidate.transactions is not None:
-                    button("Retry", small=True, on_click=lambda: self.retry(item)).mark(
+                    button("Retry", small=True, on_click=lambda: self.advance(item)).mark(
                         f"retry-{item.key}"
                     )
             case _:
@@ -543,7 +535,7 @@ class ImportFlow:
                 option.mark(f"choose-{item.key}-{candidate.loader.key}")
                 if item.candidate is not None and item.candidate.loader == candidate.loader:
                     option.classes(add="on")
-                option.on("click", lambda _, c=candidate: self.choose(item, c))
+                option.on("click", lambda _, c=candidate: self.use(item, c))
 
     def option_select(self, item: ImportFile, candidate: Candidate, option: LoaderOption) -> None:
         current = candidate.options.get(option.key, "")
@@ -801,11 +793,9 @@ class ImportFlow:
         if not chosen:
             return
 
-        def change(config: LatestConfig) -> None:
+        with shell.edit_config() as config:
             for name, account_id in chosen:
                 config.set_entity_account(name, account_id)
-
-        state().update_config(change)
         for item in items:
             item.account_chosen = False
 

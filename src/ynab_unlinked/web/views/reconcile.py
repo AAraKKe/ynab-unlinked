@@ -20,8 +20,17 @@ from ynab_unlinked.core.reconcile import next_reconciliation_date, reconcile
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import StoredAccount, StoredTransaction
 from ynab_unlinked.web import shell
-from ynab_unlinked.web.components import button, check, empty_state, glass_card, pill, spinner
-from ynab_unlinked.web.components.reconcile_controls import pill_group, switch
+from ynab_unlinked.web.components import (
+    button,
+    check,
+    empty_state,
+    glass_card,
+    loading,
+    pill,
+    set_class,
+    spinner,
+)
+from ynab_unlinked.web.components.controls import pill_group, switch
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.wording import plural, short_date, ynab_error_message
 
@@ -208,9 +217,8 @@ class ReconcileView:
 
     async def render(self) -> None:
         self.root = ui.element("div").mark("reconcile")
-        with self.root, ui.element("div").classes("yul-row yul-muted"):
-            spinner()
-            ui.label("Getting the latest from YNAB…")
+        with self.root, ui.element("div").classes("yul-row"):
+            loading("Getting the latest from YNAB…")
 
         synced = await self.ensure_fresh()
         await self.load()
@@ -426,10 +434,7 @@ class ReconcileView:
         for row in group.rows:
             if row.element is None:
                 continue
-            if row.transaction.id in ids:
-                row.element.classes(add="gap")
-            else:
-                row.element.classes(remove="gap")
+            set_class(row.element, "gap", row.transaction.id in ids)
 
     # ---- rows ----------------------------------------------------------------------------
 
@@ -450,18 +455,9 @@ class ReconcileView:
     def paint_row(self, row: Row) -> None:
         assert row.element is not None and row.box is not None and row.status is not None
         selectable = not row.uncleared or self.include_uncleared
-        for name, on in (
-            ("on", row.selected or row.locked),
-            ("off", not selectable and not row.locked),
-        ):
-            if on:
-                row.box.classes(add=name)
-            else:
-                row.box.classes(remove=name)
-        if row.uncleared and not row.locked:
-            row.element.classes(add="unclear")
-        else:
-            row.element.classes(remove="unclear")
+        set_class(row.box, "on", row.selected or row.locked)
+        set_class(row.box, "off", not selectable and not row.locked)
+        set_class(row.element, "unclear", row.uncleared and not row.locked)
         if row.locked:
             row.element.classes(add="locked", remove="gap")
             row.status.set_text("🔒 reconciled")
@@ -526,10 +522,7 @@ class ReconcileView:
             group.lock_button.set_enabled(to_lock > 0 and not self.busy)
             group.lock_button.set_visibility(left)
             group.done.set_visibility(not left)
-            if group.matches:
-                group.lock_button.classes(add="primary")
-            else:
-                group.lock_button.classes(remove="primary")
+            set_class(group.lock_button, "primary", bool(group.matches))
         self.render_footer()
 
     def render_footer(self) -> None:
@@ -638,11 +631,8 @@ class ReconcileView:
             ],
         )
         if next_date is not None:
-
-            def change(config: LatestConfig) -> None:
-                config.last_reconciliation_date = next_date
-
-            state().update_config(change)
+            with shell.edit_config() as saved:
+                saved.last_reconciliation_date = next_date
         state().store.log(
             config.budget.id,
             kind="reconcile",

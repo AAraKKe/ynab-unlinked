@@ -1,8 +1,8 @@
-"""Controls the Reconcile view needs that `components` does not offer yet.
+"""Controls drawn like the mock rather than with Quasar's widgets.
 
-A pill group (one choice out of a few, like the date scope) and a switch, both drawn like the
-mock rather than with Quasar's widgets. Their classes (`yul-pills`, `yul-rec-switch`) live in
-`static/yul.css`. They are generic: promote them to `components` when another view needs them.
+A pill group (one choice out of a few: Reconcile's date scope, Net worth's ranges) and a
+switch (Reconcile's "include uncleared"; cards with a switch use `ui.switch`, DESIGN rule 3).
+Their classes (`yul-pills`, `yul-rec-switch`) live in `static/yul.css`.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from nicegui import ui
+
+from ynab_unlinked.web.components import clickable, set_class
 
 
 def _call(handler: Callable[[Any], Any], value: Any) -> Any:
@@ -31,10 +33,7 @@ def pill_group(
 
     async def select(key: str) -> None:
         for name, element in pills.items():
-            if name == key:
-                element.classes(add="on")
-            else:
-                element.classes(remove="on")
+            set_class(element, "on", name == key)
         if (pending := _call(on_change, key)) is not None:
             await pending
 
@@ -62,10 +61,7 @@ def switch(label: str, value: bool, on_change: Callable[[bool], Any]) -> ui.elem
         ui.element("span").classes("yul-rec-sw")
 
     def show() -> None:
-        if current["on"]:
-            element.classes(add="on")
-        else:
-            element.classes(remove="on")
+        set_class(element, "on", current["on"])
         element.props["aria-checked"] = "true" if current["on"] else "false"
         element.update()
 
@@ -75,11 +71,8 @@ def switch(label: str, value: bool, on_change: Callable[[bool], Any]) -> ui.elem
         if (pending := _call(on_change, current["on"])) is not None:
             await pending
 
-    element.props["role"] = "switch"
-    element.props["tabindex"] = "0"
-    element.on("click", toggle)
+    clickable(element, toggle, role="switch")
     element.on("keydown.space.prevent", toggle)
-    element.on("keydown.enter", toggle)
     show()
     return element
 

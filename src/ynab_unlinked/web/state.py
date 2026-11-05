@@ -12,7 +12,8 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
 from nicegui import background_tasks, run
 from pydantic import ValidationError
@@ -147,16 +148,25 @@ class AppState:
         The file is read again first, so what the CLI saved while the app was open (a bank's
         account, the last reconciliation) survives a save from the app.
         """
+        with self.edit_config() as config:
+            change(config)
+        return config
+
+    @contextmanager
+    def edit_config(self) -> Iterator[LatestConfig]:
+        """`update_config` as a block: change the config it yields; saved when the block ends.
+
+        Nothing is saved when the block raises.
+        """
         if LatestConfig.exists():
             config = LatestConfig.load()
         elif (current := self.config or self.token_lost) is not None:
             config = current.model_copy(deep=True)
         else:
             raise NotConfiguredError()
-        change(config)
+        yield config
         config.save()
         self.reload()
-        return config
 
     async def sync(self, progress: Progress = _NO_PROGRESS) -> SyncResult | None:
         """Bring the store up to date with YNAB. Concurrent callers share the running sync.

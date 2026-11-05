@@ -13,10 +13,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 from nicegui import ui
+from ynab import PlanSummary
 
 from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.web.components.history_chart import money_js
 from ynab_unlinked.web.theme import STATIC_ROUTE
+from ynab_unlinked.web.wording import budget_caption
 
 LOGOS_DIR = Path(__file__).resolve().parent.parent / "static" / "logos"
 """One `<loader key>.svg` per bank yul ships a logo for; others get a monogram."""
@@ -243,22 +245,169 @@ def check(*, big: bool = False) -> ui.html:
     ).style("display:contents")
 
 
+# ---- behaviour and layout helpers ------------------------------------------------------------
+
+
+def set_class(element: ui.element, name: str, on: bool) -> None:
+    """Add the class `name` (one or more, space separated) when `on`, remove it otherwise."""
+    if on:
+        element.classes(add=name)
+    else:
+        element.classes(remove=name)
+
+
+def clickable(
+    element: ui.element, handler: Callable[..., Any], *, role: str = "button"
+) -> ui.element:
+    """Make a plain element act on click and on Enter, reachable with Tab, with an ARIA role."""
+    element.props["role"] = role
+    element.props["tabindex"] = "0"
+    element.on("click", handler)
+    element.on("keydown.enter", handler)
+    return element
+
+
+def loading(text: str) -> ui.label:
+    """A spinner and a muted line: "Checking with YNAB…". Returns the line."""
+    spinner()
+    return ui.label(text).classes("yul-muted")
+
+
+StateKind = Literal["loading", "error", "ok"]
+
+
+def show_state(box: ui.element, kind: StateKind, text: str) -> ui.label:
+    """Replace what `box` shows with one state line: loading, an error, or a check and text."""
+    box.clear()
+    with box:
+        match kind:
+            case "loading":
+                return loading(text)
+            case "error":
+                return ui.label(text).classes("yul-bad")
+            case "ok":
+                check()
+                return ui.label(text).classes("yul-muted")
+
+
+def section_title(text: str, *, swatch: str | None = None) -> ui.element:
+    """A `yul-section` heading, with a colour swatch before the text when given."""
+    with ui.element("div").classes("yul-section") as title:
+        if swatch:
+            ui.element("span").classes("yul-swatch").style(f"background:{swatch}")
+        ui.label(text)
+    return title
+
+
+def card_switch(
+    card: ui.element,
+    *,
+    on: bool,
+    marker: str,
+    title: str,
+    on_change: Callable[[bool], Any],
+    aria_label: str | None = None,
+) -> ui.switch:
+    """The switch in the header of a card that can be turned on (DESIGN rule 3).
+
+    Makes the card `live` when on and `off` (muted) when off, and draws the `ui.switch`, marked
+    `marker`, where it is called. `on_change` gets the new value.
+    """
+    card.classes(add="live" if on else "off", remove="off" if on else "live")
+    switch = ui.switch(value=on).props("dense").mark(marker)
+    switch.props["title"] = title
+    if aria_label is not None:
+        switch.props["aria-label"] = aria_label
+    switch.on_value_change(lambda e: on_change(bool(e.value)))
+    return switch
+
+
+@dataclass(frozen=True)
+class DialogBox:
+    """The parts of a `dialog_box`: fill `body`, put Cancel and the primary in `actions`."""
+
+    dialog: ui.dialog
+    card: ui.element
+    body: ui.element
+    actions: ui.element
+
+
+def dialog_box(
+    title: str | None = None, *, lede: str | None = None, classes: str = ""
+) -> DialogBox:
+    """A dialog on a solid card: title, lede, a body and the actions row aligned right.
+
+    Without a title the body draws its own head (the bank dialog has the logo in it).
+    """
+    with (
+        ui.dialog() as dialog,
+        ui.element("div").classes(f"yul-card yul-dialog {classes}".strip()) as card,
+    ):
+        if title is not None:
+            ui.label(title).classes("yul-h2")
+        if lede is not None:
+            ui.label(lede).classes("yul-lede")
+        body = ui.element("div")
+        actions = ui.element("div").classes("yul-row").style("justify-content:flex-end")
+    return DialogBox(dialog=dialog, card=card, body=body, actions=actions)
+
+
+async def run_dialog(dialog: ui.dialog) -> Any:
+    """Open `dialog`, wait for what it is submitted with (None when dismissed), delete it."""
+    dialog.open()
+    try:
+        return await dialog
+    finally:
+        dialog.delete()
+
+
+def budget_tiles(
+    budgets: Sequence[PlanSummary], selected: str | None, on_pick: Callable[[PlanSummary], Any]
+) -> tuple[ui.element, dict[str, ui.element]]:
+    """The budgets as a grid of tiles (name and caption), the selected one `on`.
+
+    Each tile is marked `budget-{id}`. Returns the grid and the tiles by budget id.
+    """
+    tiles: dict[str, ui.element] = {}
+    with ui.element("div").classes("yul-optgrid") as grid:
+        for budget in budgets:
+            budget_id = str(budget.id)
+            with ui.element("div").classes("yul-opt").mark(f"budget-{budget_id}") as tile:
+                ui.label(budget.name)
+                ui.label(budget_caption(budget)).classes("yul-faint yul-small")
+            set_class(tile, "on", budget_id == selected)
+            tile.on("click", lambda _, budget=budget: on_pick(budget))
+            tiles[budget_id] = tile
+    return grid, tiles
+
+
 __all__ = [
     "ICONS",
     "LOGOS_DIR",
-    "bank_logo",
     "ButtonKind",
+    "DialogBox",
     "PillKind",
     "Segment",
+    "StateKind",
+    "bank_logo",
+    "budget_tiles",
     "button",
+    "card_switch",
     "check",
+    "clickable",
     "count_up",
+    "dialog_box",
     "empty_state",
     "glass_card",
     "icon",
+    "loading",
     "pill",
+    "run_dialog",
+    "section_title",
     "segmented_bar",
+    "set_class",
     "share_bar",
+    "show_state",
     "spinner",
     "stat_tile",
 ]

@@ -27,9 +27,23 @@ from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
 from ynab_unlinked.web.buckets import SETTINGS_ORDER, STYLES
-from ynab_unlinked.web.components import bank_logo, button, glass_card, icon, pill, spinner
+from ynab_unlinked.web.components import (
+    bank_logo,
+    budget_tiles,
+    button,
+    card_switch,
+    dialog_box,
+    glass_card,
+    icon,
+    loading,
+    pill,
+    run_dialog,
+    section_title,
+    set_class,
+    show_state,
+)
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.wording import budget_caption, human_size, ynab_error_message
+from ynab_unlinked.web.wording import human_size, ynab_error_message
 from ynab_unlinked.web.ynab import fallback_accounts, fetch_budgets, load_budget
 
 TABS = ("Connection", "Banks", "Accounts", "Net worth", "Data & privacy")
@@ -56,12 +70,6 @@ def _config() -> LatestConfig:
     """The config as the app holds it, for reading. Changes go through `save`."""
     config, _ = state().require()
     return config
-
-
-def save(change: Callable[[LatestConfig], None], message: str) -> None:
-    """Apply `change` to the config on disk, keeping what another process saved, and toast."""
-    state().update_config(change)
-    shell.notify(message)
 
 
 def _kv(key: str) -> None:
@@ -124,11 +132,7 @@ class AccountCards:
                 ids = [i for i, row in self.rows.items() if row.bucket is bucket]
                 if not ids:
                     continue
-                with ui.element("div").classes("yul-section"):
-                    ui.element("span").classes("yul-swatch").style(
-                        f"background:{STYLES[bucket].color}"
-                    )
-                    ui.label(STYLES[bucket].title)
+                section_title(STYLES[bucket].title, swatch=STYLES[bucket].color)
                 grid = ui.element("div").classes("yul-acc-grid").mark(f"bucket-section-{bucket}")
                 if self.first:
                     grid.classes("yul-stagger")
@@ -144,14 +148,18 @@ class AccountCards:
         row = self.rows[account_id]
         on = row.counted
         card.clear()
-        card.classes(add="live" if on else "off", remove="off" if on else "live")
         with card:
             with ui.element("div").classes("yul-acc-head"):
                 name = ui.label(row.name).classes("yul-acc-name yul-grow")
                 name.props["title"] = row.name
-                switch = ui.switch(value=on).props("dense").mark(f"account-{account_id}")
-                switch.props["title"] = "Counted in net worth"
-                switch.props["aria-label"] = f"Count {row.name} in net worth"
+                card_switch(
+                    card,
+                    on=on,
+                    marker=f"account-{account_id}",
+                    title="Counted in net worth",
+                    aria_label=f"Count {row.name} in net worth",
+                    on_change=lambda value: self.set_counted(account_id, value, card),
+                )
             with ui.element("div").classes("yul-acc-buckets").mark(f"bucket-{account_id}"):
                 for bucket in SETTINGS_ORDER:
                     choice = pill(
@@ -170,7 +178,6 @@ class AccountCards:
                     icon("pencil", 15)
                     ui.label("balance by hand")
                 hand.on("click", lambda: self.set_by_hand(account_id, card))
-        switch.on_value_change(lambda e: self.set_counted(account_id, bool(e.value), card))
 
     def set_counted(self, account_id: str, on: bool, card: ui.element) -> None:
         row = self.rows[account_id]
@@ -202,11 +209,9 @@ class AccountCards:
             if row != self.defaults[account_id]
         ]
 
-        def change(config: LatestConfig) -> None:
+        with shell.edit_config(message) as config:
             kept = [account for account in config.accounts if account.id not in self.rows]
             config.accounts = kept + rows
-
-        save(change, message)
 
 
 class Settings:
@@ -227,10 +232,7 @@ class Settings:
     async def select(self, tab: str) -> None:
         self.tab = tab
         for name, item in self.tab_buttons.items():
-            if name == tab:
-                item.classes(add="on")
-            else:
-                item.classes(remove="on")
+            set_class(item, "on", name == tab)
         renderers: dict[str, Callable[[], Awaitable[None] | None]] = {
             "Connection": self.connection,
             "Banks": self.loaders,
@@ -315,81 +317,63 @@ class Settings:
 
         async def check_and_save() -> None:
             token = (new_token.value or "").strip()
-            status.clear()
             if not token:
-                with status:
-                    ui.label("Paste the new token first.").classes("yul-bad")
+                show_state(status, "error", "Paste the new token first.")
                 return
-            with status:
-                spinner()
-                ui.label("Checking with YNAB…").classes("yul-muted")
+            show_state(status, "loading", "Checking with YNAB…")
             save_button.disable()
             try:
                 budgets = await fetch_budgets(token)
             except Exception as error:
-                status.clear()
-                with status:
-                    ui.label(ynab_error_message(error)).classes("yul-bad")
+                show_state(status, "error", ynab_error_message(error))
                 return
             finally:
                 save_button.enable()
 
-            config = _config()
-            if all(str(budget.id) != config.budget.id for budget in budgets):
-                status.clear()
-                with status:
-                    ui.label(
-                        f"This token cannot see the budget {config.budget.name!r}. "
-                        "Use a token of the same YNAB account."
-                    ).classes("yul-bad")
+            budget = _config().budget
+            if all(str(summary.id) != budget.id for summary in budgets):
+                show_state(
+                    status,
+                    "error",
+                    f"This token cannot see the budget {budget.name!r}. "
+                    "Use a token of the same YNAB account.",
+                )
                 return
 
-            def change(config: LatestConfig) -> None:
+            with shell.edit_config("Token updated") as config:
                 config.api_key = token
-
-            save(change, "Token updated")
             await self.rerender()
 
         save_button.on("click", check_and_save)
 
     async def budget_dialog(self) -> None:
         config, _ = state().require()
-        with ui.dialog() as dialog, ui.element("div").classes("yul-card yul-dialog"):
-            ui.label("Change budget").classes("yul-h2")
-            ui.label(
-                "Account settings, bank mappings and debt mappings belong to a budget, so "
-                "switching clears them."
-            ).classes("yul-lede")
-            body = ui.element("div")
-            with body, ui.element("div").classes("yul-row yul-inline-state"):
-                spinner()
-                ui.label("Asking YNAB for your budgets…").classes("yul-muted")
-            with ui.element("div").classes("yul-row").style("justify-content:flex-end"):
-                button("Cancel", kind="ghost", on_click=dialog.close)
+        box = dialog_box(
+            "Change budget",
+            lede="Account settings, bank mappings and debt mappings belong to a budget, so "
+            "switching clears them.",
+        )
+        dialog, body = box.dialog, box.body
+        with body, ui.element("div").classes("yul-row yul-inline-state"):
+            loading("Asking YNAB for your budgets…")
+        with box.actions:
+            button("Cancel", kind="ghost", on_click=dialog.close)
         dialog.open()
 
         try:
             budgets = await fetch_budgets(config.api_key)
         except Exception as error:
-            body.clear()
-            with body:
-                ui.label(ynab_error_message(error)).classes("yul-bad")
+            show_state(body, "error", ynab_error_message(error))
             return
 
         body.clear()
-        with body, ui.element("div").classes("yul-optgrid").style("margin-bottom:14px"):
-            for budget in budgets:
-                with ui.element("div").classes("yul-opt").mark(f"budget-{budget.id}") as option:
-                    ui.label(budget.name)
-                    ui.label(budget_caption(budget)).classes("yul-faint yul-small")
-                if str(budget.id) == config.budget.id:
-                    option.classes(add="on")
-                option.on(
-                    "click",
-                    lambda _, budget_id=str(budget.id), name=budget.name: self.switch_budget(
-                        dialog, budget_id, name
-                    ),
-                )
+        with body:
+            grid, _ = budget_tiles(
+                budgets,
+                config.budget.id,
+                lambda budget: self.switch_budget(dialog, str(budget.id), budget.name),
+            )
+            grid.style("margin-bottom:14px")
 
     async def switch_budget(self, dialog: ui.dialog, budget_id: str, name: str) -> None:
         config, client = state().require()
@@ -412,14 +396,12 @@ class Settings:
             shell.notify(ynab_error_message(error), "error")
             return
 
-        def change(config: LatestConfig) -> None:
+        with shell.edit_config(f"Budget switched to {budget.name}") as config:
             config.budget = budget
             config.loaders = {}
             config.accounts = []
             config.debt_mappings = []
             config.last_reconciliation_date = None
-
-        save(change, f"Budget switched to {budget.name}")
         dialog.close()
         state().sync_in_background()
         ui.navigate.reload()
@@ -451,13 +433,17 @@ class Settings:
         saved = config.entity(spec.name)
         on = saved is not None and saved.enabled
         card.clear()
-        card.classes(add="live" if on else "off", remove="off" if on else "live")
         with card:
             with ui.element("div").classes("yul-bank-head"):
                 bank_logo(spec.key, spec.title, size=40)
                 ui.element("span").classes("yul-grow")
-                switch = ui.switch(value=on).props("dense").mark(f"bank-toggle-{spec.key}")
-                switch.props["title"] = "Read this bank's statements"
+                card_switch(
+                    card,
+                    on=on,
+                    marker=f"bank-toggle-{spec.key}",
+                    title="Read this bank's statements",
+                    on_change=lambda value: self.toggle_bank(spec, value, card, accounts),
+                )
             ui.label(spec.title).classes("yul-bank-name")
             summary = ui.label(bank_summary(spec, saved, accounts)).classes("yul-bank-sum")
             summary.mark(f"bank-summary-{spec.key}")
@@ -472,7 +458,6 @@ class Settings:
                     small=True,
                     on_click=lambda: self.bank_dialog(spec, card, accounts),
                 ).mark(f"bank-settings-{spec.key}")
-        switch.on_value_change(lambda e: self.toggle_bank(spec, bool(e.value), card, accounts))
 
     async def toggle_bank(
         self, spec: LoaderSpec, on: bool, card: ui.element, accounts: dict[str, str]
@@ -488,11 +473,9 @@ class Settings:
         if saved.enabled == on:
             return
 
-        def change(config: LatestConfig) -> None:
+        with shell.edit_config(f"{spec.title} turned {'on' if on else 'off'}") as config:
             if (loader := config.entity(spec.name)) is not None:
                 loader.enabled = on
-
-        save(change, f"{spec.title} turned {'on' if on else 'off'}")
         self.draw_bank(spec, card, accounts)
 
     async def bank_dialog(
@@ -506,10 +489,9 @@ class Settings:
             option.key: saved.options.get(option.key, option.default) if saved else option.default
             for option in spec.options
         }
-        with (
-            ui.dialog() as dialog,
-            ui.element("div").classes("yul-card yul-dialog yul-bank-dialog"),
-        ):
+        box = dialog_box(classes="yul-bank-dialog")
+        dialog = box.dialog
+        with box.body:
             with ui.element("div").classes("yul-row").style("margin-bottom:14px"):
                 bank_logo(spec.key, spec.title, size=36)
                 with ui.element("div"):
@@ -529,11 +511,11 @@ class Settings:
                 for option in spec.options:
                     self.option_control(spec, option, values)
             problem = ui.label().classes("yul-bad yul-small yul-inline-state")
-            with ui.element("div").classes("yul-row").style("justify-content:flex-end"):
-                button("Cancel", kind="ghost", on_click=dialog.close)
-                button("Save", kind="primary", on_click=lambda: save_bank()).mark(
-                    f"save-bank-{spec.key}"
-                )
+        with box.actions:
+            button("Cancel", kind="ghost", on_click=dialog.close)
+            button("Save", kind="primary", on_click=lambda: save_bank()).mark(
+                f"save-bank-{spec.key}"
+            )
 
         def save_bank() -> None:
             account_id = chosen[spec.name]
@@ -546,22 +528,16 @@ class Settings:
                 if values[option.key] != option.default
             }
 
-            def change(config: LatestConfig) -> None:
+            with shell.edit_config(f"{spec.title} saved") as config:
                 current = config.entity(spec.name)
                 config.loaders[spec.name] = LoaderConfig(
                     account_id=account_id,
                     options=non_default,
                     enabled=current.enabled if current else True,
                 )
-
-            save(change, f"{spec.title} saved")
             dialog.submit(True)
 
-        dialog.open()
-        try:
-            await dialog
-        finally:
-            dialog.delete()
+        await run_dialog(dialog)
         if not card.is_deleted:
             self.draw_bank(spec, card, accounts)
 
@@ -659,7 +635,7 @@ class Settings:
             new_memo = memo.value or ""
             new_cleared = ClearedStatus(cleared.value)
 
-            def change(config: LatestConfig) -> None:
+            with shell.edit_config("Net worth settings saved") as config:
                 # Mappings of debts not listed here (left out, closed) are kept as they are
                 config.debt_mappings = [
                     mapping
@@ -673,8 +649,6 @@ class Settings:
                 config.adjustments.memo = new_memo
                 config.adjustments.payee = payee_name
                 config.adjustments.cleared = new_cleared
-
-            save(change, "Net worth settings saved")
 
         with ui.element("div").classes("yul-row").style("justify-content:flex-end;margin-top:12px"):
             button("Save net worth settings", kind="primary", on_click=save_net_worth).mark(

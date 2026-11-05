@@ -42,14 +42,18 @@ from ynab_unlinked.web.components import (
     PillKind,
     Segment,
     button,
+    clickable,
     count_up,
     empty_state,
     glass_card,
     pill,
+    section_title,
     segmented_bar,
+    set_class,
     share_bar,
     stat_tile,
 )
+from ynab_unlinked.web.components.controls import pill_group
 from ynab_unlinked.web.components.history_chart import (
     ChartSeries,
     history_chart,
@@ -244,7 +248,6 @@ class NetWorthView:
         self.delta: ui.element | None = None
         self.picker: ui.element | None = None
         self.chips: ui.element | None = None
-        self.pills: dict[str, ui.element] = {}
         self.rows: dict[str, tuple[ui.element, Callable[[], None]]] = {}
         self.drawer: tuple[ui.echart, list[ChartSeries]] | None = None
 
@@ -385,15 +388,9 @@ class NetWorthView:
                     figure.classes("yul-grad yul-nw-figure").mark("nw-figure")
                 self.delta = ui.element("div").classes("yul-nw-delta").mark("nw-delta")
                 ui.element("span").classes("yul-grow")
-                with ui.element("div").classes("yul-pills").mark("ranges"):
-                    self.pills = {}
-                    for key in RANGES:
-                        item = ui.label(key).mark(f"range-{key}")
-                        item.props["role"] = "button"
-                        item.props["tabindex"] = "0"
-                        item.on("click", lambda _, key=key: self.set_range(key))
-                        item.on("keydown.enter", lambda _, key=key: self.set_range(key))
-                        self.pills[key] = item
+                pill_group(
+                    {key: key for key in RANGES}, self.range, self.set_range, marker="range"
+                ).mark("ranges")
                 ui.select(
                     GROUPINGS, value=self.grouping, on_change=lambda e: self.set_grouping(e.value)
                 ).props("outlined dense options-dense").classes("yul-nw-select").mark("grouping")
@@ -414,11 +411,6 @@ class NetWorthView:
         self._sync_controls()
 
     def _sync_controls(self) -> None:
-        for key, item in self.pills.items():
-            if key == self.range:
-                item.classes(add="on")
-            else:
-                item.classes(remove="on")
         if self.picker is not None:
             self.picker.set_visibility(self.grouping == "account")
         self._show_delta()
@@ -539,8 +531,7 @@ class NetWorthView:
             with ui.element("div").classes("yul-chips"):
                 for account in table_order(snapshot):
                     chip = ui.element("div").classes("yul-chipc").mark(f"pick-{account.id}")
-                    chip.props["role"] = "button"
-                    chip.props["tabindex"] = "0"
+                    clickable(chip, lambda _, account_id=account.id: self.toggle_pick(account_id))
                     on = account.id in picked
                     chip.props["aria-pressed"] = "true" if on else "false"
                     if on:
@@ -556,11 +547,6 @@ class NetWorthView:
                                 f"background:var(--series-{slot})"
                             )
                         ui.label(snapshot.name(account))
-                    chip.on("click", lambda _, account_id=account.id: self.toggle_pick(account_id))
-                    chip.on(
-                        "keydown.enter",
-                        lambda _, account_id=account.id: self.toggle_pick(account_id),
-                    )
 
     # ---- buckets ---------------------------------------------------------------------------
 
@@ -628,10 +614,7 @@ class NetWorthView:
                 if not accounts:
                     continue
                 style = STYLES[bucket]
-                with ui.element("div").classes("yul-section").mark(f"group-{bucket.value}"):
-                    if style.series:
-                        ui.element("span").classes("yul-swatch").style(f"background:{style.series}")
-                    ui.label(style.group_title)
+                section_title(style.group_title, swatch=style.series).mark(f"group-{bucket.value}")
                 with ui.element("div").classes("yul-stagger"):
                     for account in accounts:
                         self._account_row(snapshot, account, style.color, shares, widest)
@@ -652,18 +635,12 @@ class NetWorthView:
         def fill() -> None:
             editing = self.editing == account.id
             row.clear()
-            if editing:
-                row.classes(add="editing")
-            else:
-                row.classes(remove="editing")
+            set_class(row, "editing", editing)
             with row:
                 with ui.element("div").classes("yul-nw-name-cell"):
                     name = ui.label(snapshot.name(account)).classes("yul-nw-name")
                     name.mark(f"name-{account.id}")
-                    name.props["role"] = "button"
-                    name.props["tabindex"] = "0"
-                    name.on("click", lambda: self.open_drawer(account.id))
-                    name.on("keydown.enter", lambda: self.open_drawer(account.id))
+                    clickable(name, lambda: self.open_drawer(account.id))
                     if account.track_balance:
                         text, kind = by_hand_pill(
                             snapshot.last_set.get(account.id), dt.date.today()

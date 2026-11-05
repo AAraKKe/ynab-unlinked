@@ -23,7 +23,15 @@ from ynab_unlinked.store import Activity, Store
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell, theme
 from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
-from ynab_unlinked.web.components import PillKind, count_up, glass_card, icon, pill, spinner
+from ynab_unlinked.web.components import (
+    PillKind,
+    clickable,
+    count_up,
+    glass_card,
+    icon,
+    pill,
+    spinner,
+)
 from ynab_unlinked.web.components.dropzone import dropzone
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.wording import plural, short_date
@@ -316,10 +324,7 @@ def _hero(data: HomeData, today: dt.date) -> None:
             )
         if len(data.spark) > 1:
             ui.echart(spark_options(data.spark)).classes("yul-spark").mark("sparkline")
-    card.props["role"] = "link"
-    card.props["tabindex"] = "0"
-    card.on("click", lambda: ui.navigate.to(shell.NETWORTH_PATH))
-    card.on("keydown.enter", lambda: ui.navigate.to(shell.NETWORTH_PATH))
+    clickable(card, lambda: ui.navigate.to(shell.NETWORTH_PATH), role="link")
     count_up(figure, data.net_worth, config.budget.currency_format)
 
 
@@ -344,9 +349,6 @@ def _activity(entries: Sequence[Activity]) -> None:
 
 
 def _attention_card(item: Attention) -> None:
-    def go() -> None:
-        ui.navigate.to(item.path)
-
     with glass_card(hover=True).classes("yul-attn-card").mark(f"attention-{item.key}") as card:
         with ui.element("div").classes("yul-attn-head"):
             with ui.element("div").classes("yul-attn-ic"):
@@ -355,10 +357,7 @@ def _attention_card(item: Attention) -> None:
         ui.label(item.figure).classes("yul-attn-k")
         ui.label(item.line).classes("yul-attn-l")
         ui.label(f"{item.action} →").classes("yul-attn-go")
-    card.props["role"] = "link"
-    card.props["tabindex"] = "0"
-    card.on("click", go)
-    card.on("keydown.enter", go)
+    clickable(card, lambda: ui.navigate.to(item.path), role="link")
 
 
 def _import_section(data: HomeData, today: dt.date) -> None:

@@ -59,13 +59,20 @@ in the same change. Never update a document to describe something you did not bu
   `icon(name)` from `ICONS`, `pill(text, kind)`, `glass_card(hover, flush)`, `stat_tile`,
   `segmented_bar`, `share_bar`, `empty_state`, `spinner`, `check`, `bank_logo`,
   `count_up(label, milliunits, currency_format)` (the one count up).
-- `components.dropzone`, `components.history_chart`, `components.reconcile_controls` for
-  the bigger pieces.
+- `components` helpers instead of hand rolled NiceGUI: `set_class(el, name, on)`,
+  `clickable(el, handler, role=...)` (Tab, click and Enter), `loading(text)` /
+  `show_state(box, "loading" | "error" | "ok", text)`, `section_title(text, swatch=)`,
+  `card_switch(card, on=, marker=, title=, on_change=)` (rule 3; the marker stays on the
+  `ui.switch`), `dialog_box(title, lede=)` + `run_dialog(dialog)` (rule 7's skeleton),
+  `budget_tiles(budgets, selected, on_pick)`.
+- `components.dropzone`, `components.history_chart`, `components.controls` (`pill_group`,
+  `switch`) for the bigger pieces.
 - CSS classes are prefixed `yul-` and live only in `web/static/yul.css`, in the section of
   their view (never `ui.add_css` or a CSS string in Python); a flow's sticky footer is
   `yul-foot` with `yul-foot-stat`. Use the tokens (`var(--accent-solid)`,
   `var(--text-2)`, `color-mix(...)`), never literal colours except in the tokens table.
 - `shell`: `@shell.view`, `shell.notify`, `shell.confirm`, `shell.set_header`,
+  `with shell.edit_config("Saved") as config:` (every config save, then the toast),
   `shell.pending_uploads` / `shell.on_drop`, `shell.refresh_view`, and every view path
   (`shell.HOME_PATH`, `RECONCILE_PATH`, `NETWORTH_PATH`, `SETTINGS_PATH`, ...).
 - `state()`: config, client, store, `require_formatter()` (the one way to the formatter),

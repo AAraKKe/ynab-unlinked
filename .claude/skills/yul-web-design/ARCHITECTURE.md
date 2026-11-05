@@ -585,10 +585,19 @@ web/
                        No CSS lives in Python.
   components/          button, glass_card, pill, bank_logo, stat_tile, segmented_bar, share_bar,
                        empty_state, spinner, check, icon (+ ICONS), count_up (the one count up
-                       animation: Home and Net worth heroes)
+                       animation: Home and Net worth heroes); the helpers every view reuses:
+                       set_class(el, name, on), clickable(el, handler, role="button") (role,
+                       tabindex, click and Enter), loading(text) / show_state(box, kind, text)
+                       (loading, error, ok lines), section_title(text, swatch=None),
+                       card_switch(card, on, marker, title, on_change, aria_label=None) (the
+                       live/off flip and the ui.switch of rule 3, marker on the switch),
+                       dialog_box(title=None, lede=None, classes="") -> DialogBox(dialog, card,
+                       body, actions) and run_dialog(dialog) (open, await, delete),
+                       budget_tiles(budgets, selected, on_pick) -> (grid, tiles by id)
     dropzone.py        dropzone(on_files, *, compact=False, accept=None): Home and Import step 1
-    reconcile_controls.py  pill_group, switch (yul-pills, yul-rec-switch);
-                       generic, promote to components when another view needs them
+    controls.py        pill_group(options, value, on_change, marker=None) (yul-pills: Reconcile's
+                       scope, Net worth's ranges), switch(label, value, on_change) (yul-rec-switch:
+                       Reconcile's "include uncleared")
     history_chart.py   ChartSeries, history_options() / history_chart() / set_options(),
                        money_js(): the ECharts history line chart
   views/
@@ -692,7 +701,10 @@ reopens the store: after the local data was deleted) / `reload()` (after saving 
 keeps the store and, for the same budget, `last_sync`; the banks are discovered once per
 process), `update_config(change: Callable[[LatestConfig], None]) -> LatestConfig` (every
 config save in the app: reads the file again, applies `change`, saves and reloads, so what
-the CLI saved meanwhile is kept; never save `state().config` or a copy of it),
+the CLI saved meanwhile is kept; never save `state().config` or a copy of it;
+`edit_config()` is the same as a `with` block yielding the config to change, saved at the
+end of the block, and views use `shell.edit_config(message=None)`, which toasts `message`
+after the save),
 `await sync(progress=NullProgress())` (shared by concurrent callers, runs through
 `run.io_bound`), `await resync(progress=NullProgress())` (waits for a running sync, then
 `store.clear(budget)` and a full sync as the shared sync task; the activity log stays),
@@ -958,7 +970,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   `run.io_bound` with `TransactionDetail`s rebuilt from the stored rows
   (`transaction_detail()`), then `last_reconciliation_date = next_reconciliation_date(locked
   dates, dates of the rows still pending in the current scope)`
-  saved through `state().update_config`, `store.log("reconcile", "Reconciled n transactions in m
+  saved through `shell.edit_config()`, `store.log("reconcile", "Reconciled n transactions in m
   accounts", {"count", "accounts": [{"id", "name", "count"}]})`, `sync_in_background()`.
   The store itself is not written by the view. Errors go through
   `wording.ynab_error_message` and leave config, log and rows untouched.
