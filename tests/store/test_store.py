@@ -26,7 +26,11 @@ from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.core.progress import Progress
 from ynab_unlinked.store import DailyAmounts, Store, StoredAccount, StoredTransaction, StoreError
 from ynab_unlinked.store.migrations import SCHEMA_VERSION
-from ynab_unlinked.store.store import BUSY_TIMEOUT_SECONDS, FULL_SYNC_SINCE
+from ynab_unlinked.store.store import (
+    BUSY_TIMEOUT_SECONDS,
+    FULL_SYNC_SINCE,
+    GHOST_CHECKS_PER_SYNC,
+)
 from ynab_unlinked.ynab_api import Client
 
 BUDGET_ID = "budget-1"
@@ -367,6 +371,52 @@ def test_a_full_sync_checks_every_duplicate_group(
     result = store.sync(client, BUDGET_ID)
 
     assert (result.full, result.ghosts_removed) == (True, 1)
+
+
+def merged_groups(count: int) -> list[TransactionDetail]:
+    """`count` merges: an `imported-<n>` gone from YNAB and the `manual-<n>` that took its id."""
+    return [
+        TransactionDetailFactory(id=f"{kind}-{n:02d}", import_id=f"YNAB:-{n + 1}000:2026-11-01:1")
+        for n in range(count)
+        for kind in ("imported", "manual")
+    ]
+
+
+def test_a_sync_checks_a_limited_number_and_leaves_the_rest_for_the_next(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    # 30 groups of two: 60 ids, more than one sync checks
+    serve(ynab_api, (merged_groups(30), 10), ([], 15), ([], 16))
+    endpoint = answer_exists(ynab_api, missing={f"imported-{n:02d}" for n in range(30)})
+    progress = MagicMock(spec=Progress)
+
+    first = store.sync(client, BUDGET_ID, progress)
+    first_calls = endpoint.call_count
+    second = store.sync(client, BUDGET_ID)
+    third = store.sync(client, BUDGET_ID)
+
+    assert first_calls == GHOST_CHECKS_PER_SYNC == 50
+    assert (first.ghosts_removed, second.ghosts_removed, third.ghosts_removed) == (25, 5, 0)
+    assert endpoint.call_count == 60
+    progress.warn.assert_called_once()
+    assert "10 more transactions" in progress.warn.call_args.args[0]
+    assert ids(store.unreconciled(BUDGET_ID)) == [f"manual-{n:02d}" for n in range(30)]
+
+
+def test_a_failed_ghost_check_is_tried_again_on_the_next_sync(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    serve(ynab_api, (merged_groups(1), 10), ([], 15))
+    endpoint = ynab_api.api("transactions").get_transaction_by_id
+    endpoint.side_effect = ApiException(status=429, reason="Too Many Requests")
+    store.sync(client, BUDGET_ID)
+
+    endpoint.side_effect = None
+    answer_exists(ynab_api, missing={"imported-00"})
+    result = store.sync(client, BUDGET_ID)
+
+    assert result.ghosts_removed == 1
+    assert ids(store.unreconciled(BUDGET_ID)) == ["manual-00"]
 
 
 @pytest.mark.parametrize(

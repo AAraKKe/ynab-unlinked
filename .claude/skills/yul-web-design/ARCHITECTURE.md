@@ -494,9 +494,12 @@ deleted rows sharing `(account_id, import_id)`, checks each id with
 `client.transaction_exists` and flags the missing ones `deleted = 1`. A group where every
 row exists (a match not approved yet) stays. No duplicate groups, no requests. Only groups
 holding a row this sync received are checked (every group on a full sync): the merge always
-changes the surviving row, so a pending match costs requests once, not on every sync. An
-`ApiException`, urllib3 `HTTPError` or `OSError` during the check is a `progress.warn`, 0
-ghosts, and the sync still succeeds.
+changes the surviving row, so a pending match costs requests once, not on every sync. One
+sync checks at most `GHOST_CHECKS_PER_SYNC` (50) ids, whole groups only; the groups left over
+go to the `ghost_checks` table (schema 2), a `progress.warn` says how many wait, and the next
+sync checks them first. An `ApiException`, urllib3 `HTTPError` or `OSError` during the check
+is a `progress.warn`, 0 ghosts, the groups it was checking wait in `ghost_checks`, and the
+sync still succeeds.
 
 Every method opens its own connection, so one `Store` can be shared across threads
 (`run.io_bound`). The file is in WAL mode (set once at open) and every connection waits up

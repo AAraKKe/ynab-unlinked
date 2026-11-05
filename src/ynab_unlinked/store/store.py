@@ -23,7 +23,10 @@ STALE_KNOWLEDGE_STATUS = 409
 
 
 _UNRECONCILED = (TransactionClearedStatus.CLEARED, TransactionClearedStatus.UNCLEARED)
-_BUDGET_TABLES = ("transactions", "accounts", "sync_state")
+_BUDGET_TABLES = ("transactions", "accounts", "sync_state", "ghost_checks")
+
+# YNAB allows 200 requests an hour: the ghost repair leaves most of them to the import
+GHOST_CHECKS_PER_SYNC = 50
 
 # The CLI and the app share the file: a write waits this long for the other one to finish
 BUSY_TIMEOUT_SECONDS = 30
@@ -191,9 +194,12 @@ class Store:
         The merge always changes the surviving row, so only groups holding a row of
         `received` (the ids this sync brought, None for every row on a full sync) are checked:
         a match waiting for approval costs requests only on the sync that brings it, not on
-        every sync after. The check is best effort: when YNAB refuses or cannot be reached
-        it is skipped with a warning (the sync itself already committed) and the next sync
-        that touches the group tries again.
+        every sync after. YNAB allows 200 requests an hour, so one sync checks at most
+        `GHOST_CHECKS_PER_SYNC` ids, whole groups only (a single larger group is checked
+        whole). The groups left over are kept in `ghost_checks`, a warning says so, and the
+        next sync checks them first. The check is best effort: when YNAB refuses or cannot
+        be reached it is skipped with a warning (the sync itself already committed) and the
+        groups it was going to check are kept for the next sync.
         """
         with self._connect() as conn:
             rows = conn.execute(
@@ -205,16 +211,35 @@ class Store:
                 "WHERE t.budget_id = ? AND t.deleted = 0 ORDER BY t.id",
                 (budget_id, budget_id),
             ).fetchall()
+            left_over = {
+                (row["account_id"], row["import_id"])
+                for row in conn.execute(
+                    "SELECT account_id, import_id FROM ghost_checks WHERE budget_id = ?",
+                    (budget_id,),
+                )
+            }
         groups: dict[tuple[str, str], list[str]] = {}
         for row in rows:
             groups.setdefault((row["account_id"], row["import_id"]), []).append(row["id"])
-        candidates = [
-            transaction_id
-            for group in groups.values()
-            if received is None or not received.isdisjoint(group)
-            for transaction_id in group
-        ]
+        # What an earlier sync left goes first, so every group is checked eventually
+        due = sorted(
+            (
+                key
+                for key, group in groups.items()
+                if key in left_over or received is None or not received.isdisjoint(group)
+            ),
+            key=lambda key: key not in left_over,
+        )
+        checked: list[tuple[str, str]] = []
+        candidates: list[str] = []
+        for key in due:
+            if candidates and len(candidates) + len(groups[key]) > GHOST_CHECKS_PER_SYNC:
+                break
+            checked.append(key)
+            candidates.extend(groups[key])
+        waiting = due[len(checked) :]
         if not candidates:
+            self._keep_ghost_checks(budget_id, waiting)
             return 0
 
         progress.start("Checking transactions YNAB may have merged")
@@ -225,15 +250,32 @@ class Store:
                 if not client.transaction_exists(budget_id, transaction_id)
             ]
         except (ApiException, HTTPError, OSError) as error:
+            self._keep_ghost_checks(budget_id, due)
             progress.warn(f"Could not check the transactions YNAB may have merged: {error}")
             return 0
+        self._keep_ghost_checks(budget_id, waiting)
         with self._connect() as conn:
             conn.executemany(
                 "UPDATE transactions SET deleted = 1 WHERE budget_id = ? AND id = ?",
                 [(budget_id, ghost) for ghost in ghosts],
             )
         progress.done(f"{len(ghosts)} stale transactions removed")
+        if waiting:
+            unchecked = sum(len(groups[key]) for key in waiting)
+            progress.warn(
+                f"{unchecked} more transactions YNAB may have merged will be checked "
+                "on the next sync"
+            )
         return len(ghosts)
+
+    def _keep_ghost_checks(self, budget_id: str, keys: Sequence[tuple[str, str]]) -> None:
+        """Make `keys` the groups the next ghost repair of the budget checks first."""
+        with self._connect() as conn:
+            conn.execute("DELETE FROM ghost_checks WHERE budget_id = ?", (budget_id,))
+            conn.executemany(
+                "INSERT INTO ghost_checks (budget_id, account_id, import_id) VALUES (?, ?, ?)",
+                [(budget_id, account_id, import_id) for account_id, import_id in keys],
+            )
 
     def _sync(
         self,
