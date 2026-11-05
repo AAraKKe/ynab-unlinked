@@ -571,8 +571,8 @@ log activity; the caller decides what is worth an entry.
 Schema: `accounts(budget_id, id, name, type, closed, on_budget, balance, cleared_balance,
 uncleared_balance, PRIMARY KEY(budget_id, id))`, `transactions(budget_id, id, account_id,
 date, amount, cleared, approved, deleted, payee_name, category_name, import_id, memo,
-transfer_account_id, PRIMARY KEY(budget_id, id))` with an index on `(budget_id, account_id,
-date)`, `sync_state(budget_id PRIMARY KEY, server_knowledge, synced_at)`,
+transfer_account_id, PRIMARY KEY(budget_id, id))` with indexes on `(budget_id, account_id,
+date)` and, for the ghost repair, `(budget_id, account_id, import_id)` (schema 3), `sync_state(budget_id PRIMARY KEY, server_knowledge, synced_at)`,
 `activity(budget_id, at, kind, message, details)` (details is a JSON object). The schema
 version lives in `PRAGMA user_version`; `store/migrations/NNNN_*.sql` are the steps, one file each (`store.migrations.MIGRATIONS`).
 `migrations.apply` runs each step as `BEGIN IMMEDIATE`, reads the version again inside that

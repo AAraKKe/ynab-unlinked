@@ -37,6 +37,26 @@ def test_each_script_applies_on_top_of_the_previous_one(conn: sqlite3.Connection
     assert version_of(conn) == SCHEMA_VERSION
 
 
+def test_the_ghost_repair_groups_rows_through_the_import_id_index(tmp_path: Path):
+    path = tmp_path / "store.sqlite"
+    Store(path)
+
+    with closing(sqlite3.connect(path)) as store:
+        indexes = {row[0] for row in store.execute("SELECT name FROM sqlite_master")}
+        plan = " ".join(
+            str(row[3])
+            for row in store.execute(
+                "EXPLAIN QUERY PLAN SELECT account_id, import_id FROM transactions "
+                "WHERE budget_id = ? AND deleted = 0 AND import_id IS NOT NULL "
+                "GROUP BY account_id, import_id HAVING COUNT(*) > 1",
+                ("budget",),
+            )
+        )
+
+    assert "transactions_by_import_id" in indexes
+    assert "transactions_by_import_id" in plan
+
+
 def test_only_the_scripts_the_store_has_not_seen_run(conn: sqlite3.Connection):
     scripts = (
         Migration(1, "0001_a.sql", "CREATE TABLE a (id INTEGER);"),
