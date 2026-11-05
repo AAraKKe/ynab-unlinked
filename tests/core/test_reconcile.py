@@ -134,6 +134,19 @@ def test_reconcile_with_nothing_selected_never_reaches_ynab(
     ynab_api.api("transactions").update_transactions.assert_not_called()
 
 
-def test_next_reconciliation_date_rewinds_by_the_grace_period():
-    # Two days back so transactions YNAB clears late are offered again next time
-    assert next_reconciliation_date(dt.date(2025, 5, 1)) == dt.date(2025, 4, 29)
+@pytest.mark.parametrize(
+    ("locked", "remaining", "expected"),
+    [
+        pytest.param([5, 20], [], 20, id="everything-locked-the-latest-locked"),
+        pytest.param([20], [9, 12], 9, id="rows-left-the-earliest-left"),
+        pytest.param([5], [12], 12, id="left-rows-newer-than-locked-ones"),
+        pytest.param([], [12], None, id="nothing-locked"),
+    ],
+)
+def test_next_reconciliation_date(locked: list[int], remaining: list[int], expected: int | None):
+    def may(days: list[int]) -> list[dt.date]:
+        return [dt.date(2025, 5, day) for day in days]
+
+    result = next_reconciliation_date(may(locked), may(remaining))
+
+    assert result == (None if expected is None else dt.date(2025, 5, expected))

@@ -146,8 +146,11 @@ def reconcile(
     # patches cleared=RECONCILED (on copies, the caller's objects are untouched), returns
     # the latest transaction date or None if empty (YNAB is not called then)
 
-def next_reconciliation_date(latest: dt.date) -> dt.date
-    # latest - TRANSACTION_GRACE_PERIOD_DAYS
+def next_reconciliation_date(locked: Iterable[dt.date],
+                             remaining: Iterable[dt.date] = ()) -> dt.date | None
+    # None when nothing was locked; the earliest date left unreconciled in scope when
+    # anything was, else the latest locked date. No buffer: the scope rewinds once from it
+    # (`yul reconcile --buffer`, default 7, and the app's "since" pill, 7 days)
 ```
 
 `commands/reconcile.py` and the Textual app keep working on top of these.
@@ -917,7 +920,8 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   when no single row does.
 - Lock (per account or all): `shell.confirm`, then `core.reconcile.reconcile` through
   `run.io_bound` with `TransactionDetail`s rebuilt from the stored rows
-  (`transaction_detail()`), then `last_reconciliation_date = next_reconciliation_date(latest)`
+  (`transaction_detail()`), then `last_reconciliation_date = next_reconciliation_date(locked
+  dates, dates of the rows still pending in the current scope)`
   saved through `state().update_config`, `store.log("reconcile", "Reconciled n transactions in m
   accounts", {"count", "accounts": [{"id", "name", "count"}]})`, `sync_in_background()`.
   The store itself is not written by the view. Errors go through

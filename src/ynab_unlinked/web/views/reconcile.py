@@ -695,15 +695,24 @@ class ReconcileView:
         ]
         try:
             config, client = state().require()
-            latest = await run.io_bound(reconcile, client, config.budget.id, details)
+            await run.io_bound(reconcile, client, config.budget.id, details)
         except Exception as error:
             self.busy = False
             shell.notify(f"Nothing was locked. {ynab_error_message(error)}", "error")
             self.refresh()
             return
 
-        if latest is not None:
-            next_date = next_reconciliation_date(latest)
+        locking = {row.transaction.id for _, rows in batches for row in rows}
+        next_date = next_reconciliation_date(
+            [row.transaction.date for _, rows in batches for row in rows],
+            [
+                row.transaction.date
+                for group in self.groups
+                for row in group.pending()
+                if row.transaction.id not in locking
+            ],
+        )
+        if next_date is not None:
 
             def change(config: LatestConfig) -> None:
                 config.last_reconciliation_date = next_date

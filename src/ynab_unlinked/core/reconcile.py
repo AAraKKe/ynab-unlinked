@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 from ynab import Account, TransactionClearedStatus, TransactionDetail
 
-from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 from ynab_unlinked.ynab_api.client import Client
 
@@ -78,6 +77,17 @@ def reconcile(
     return max(t.var_date for t in transactions)
 
 
-def next_reconciliation_date(latest: dt.date) -> dt.date:
-    """Where the next reconciliation starts, rewound so late cleared transactions are seen."""
-    return latest - dt.timedelta(days=TRANSACTION_GRACE_PERIOD_DAYS)
+def next_reconciliation_date(
+    locked: Iterable[dt.date], remaining: Iterable[dt.date] = ()
+) -> dt.date | None:
+    """Where the next reconciliation starts, None when nothing was locked.
+
+    `locked` are the dates just reconciled, `remaining` those of the transactions in scope
+    left unreconciled. With anything left it is the earliest of those, so the next default
+    scope still shows them; otherwise the latest date locked. No buffer is applied here: the
+    scope rewinds from this date once (`yul reconcile --buffer`, the app's "since" pill).
+    """
+    latest = max(locked, default=None)
+    if latest is None:
+        return None
+    return min(remaining, default=latest)

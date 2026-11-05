@@ -111,6 +111,13 @@ def reconcile(
         for child in choice.choices
         if child.transaction and child.is_selected
     ]
+    selected_ids = {transaction.id for transaction in selected_transactions}
+    left_unreconciled = [
+        transaction.var_date
+        for group in overview
+        for transaction in group.transactions
+        if transaction.id not in selected_ids
+    ]
 
     with CliProgress() as progress:
         latest_date = reconcile_transactions(
@@ -121,7 +128,9 @@ def reconcile(
         display.info("Nothing to reconcile.\n👋 Bye!")
         return
 
-    config.last_reconciliation_date = next_reconciliation_date(latest_date)
+    config.last_reconciliation_date = next_reconciliation_date(
+        [t.var_date for t in selected_transactions], left_unreconciled
+    )
     config.save()
 
     display.success("🎉 Reconciliation done!")

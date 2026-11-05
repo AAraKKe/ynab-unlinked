@@ -116,8 +116,35 @@ def test_reconcile_moves_the_checkpoint_to_the_latest_reconciled_transaction(
     result = yul("reconcile")
 
     assert result.exit_code == 0, result.output
-    # The grace period rewinds the checkpoint so late-cleared transactions are seen again
-    assert LatestConfig.load().last_reconciliation_date == dt.date(2025, 5, 18)
+    # Only `--buffer` rewinds the next scope; the checkpoint itself is not moved back
+    assert LatestConfig.load().last_reconciliation_date == dt.date(2025, 5, 20)
+
+
+def test_reconcile_keeps_the_checkpoint_before_what_was_left_unreconciled(
+    yul: CliRunner, ynab: YnabClientStub, stored_config: LatestConfig, tui: TuiStub
+):
+    given_ynab_data(
+        ynab,
+        [
+            TransactionDetailFactory(
+                id="left", account_id=CHECKING_ID, var_date=dt.date(2025, 5, 2)
+            ),
+            TransactionDetailFactory(
+                id="pending", account_id=SAVINGS_ID, var_date=dt.date(2025, 5, 6), cleared=UNCLEARED
+            ),
+            TransactionDetailFactory(
+                id="latest", account_id=CHECKING_ID, var_date=dt.date(2025, 5, 20)
+            ),
+        ],
+        [CHECKING, SAVINGS],
+    )
+    tui.selected_ids = {"transaction-latest"}
+
+    result = yul("reconcile")
+
+    assert result.exit_code == 0, result.output
+    assert [update.id for update in updates_sent(ynab)] == ["latest"]
+    assert LatestConfig.load().last_reconciliation_date == dt.date(2025, 5, 2)
 
 
 @pytest.mark.parametrize(
