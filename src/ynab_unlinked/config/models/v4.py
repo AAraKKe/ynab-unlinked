@@ -150,10 +150,6 @@ class ConfigV4(BaseModel):
     def account(self, id: str) -> TrackedAccount | None:
         return next((account for account in self.accounts if account.id == id), None)
 
-    def tracked(self) -> list[TrackedAccount]:
-        """Accounts whose balance the user updates by hand in the net worth view."""
-        return [account for account in self.accounts if account.track_balance]
-
     def debt_mapping(self, debt_account_id: str) -> DebtMapping | None:
         return next(
             (

@@ -396,8 +396,6 @@ class ConfigV4(BaseModel):
     def set_entity_account(self, name, account_id)
     # new
     def account(self, id) -> TrackedAccount | None
-    def tracked(self) -> list[TrackedAccount]     # entries with track_balance, CLI only; the
-                                                  # app uses web.accounts.by_hand_accounts
     def debt_mapping(self, debt_account_id) -> DebtMapping | None
 ```
 
@@ -737,7 +735,7 @@ def effective_accounts(config, stored: Iterable[StoredAccount]) -> list[TrackedA
     # entries of closed or unknown accounts are ignored
 def by_hand_accounts(config, stored) -> list[TrackedAccount]
     # effective_accounts() with track_balance: the pencil always shown, the age pill, the
-    # Home "stale balances" card. Replaces `config.tracked()` in the app
+    # Home "stale balances" card
 def effective_nettings(config) -> tuple[DebtNetting, ...]   # config.debt_mappings, always
 ```
 
