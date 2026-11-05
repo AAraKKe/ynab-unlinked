@@ -14,12 +14,9 @@ from typing import Any
 from ynab_unlinked.cli import display
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store, store_path
+from ynab_unlinked.text import plural
 
 logger = logging.getLogger(__name__)
-
-
-def _plural(count: int, noun: str) -> str:
-    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 def _open_store() -> Store | None:
@@ -67,7 +64,7 @@ def log_import(
         store,
         config.budget.id,
         "import",
-        f"Imported {_plural(created, 'transaction')} to {account_name} from {file}",
+        f"Imported {plural(created, 'transaction')} to {account_name} from {file}",
         {
             "loader": loader,
             "account_id": account_id,
@@ -89,7 +86,7 @@ def log_reconcile(config: LatestConfig, accounts: Sequence[tuple[str, str, int]]
         store,
         config.budget.id,
         "reconcile",
-        f"Reconciled {_plural(count, 'transaction')} in {_plural(len(accounts), 'account')}",
+        f"Reconciled {plural(count, 'transaction')} in {plural(len(accounts), 'account')}",
         {
             "count": count,
             "accounts": [

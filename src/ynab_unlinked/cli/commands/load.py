@@ -10,6 +10,7 @@ import typer
 from ynab_unlinked.cli import display
 from ynab_unlinked.cli.setup import ensure_config
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec, loaders
+from ynab_unlinked.text import plural
 
 if TYPE_CHECKING:
     from rich.table import Table
@@ -205,8 +206,7 @@ def auto(
 
     count = sum(len(plan.new_rows) for plan in to_import)
     question = (
-        f"Create {count} transaction{_plural(count)} from "
-        f"{len(to_import)} file{_plural(len(to_import))} in YNAB?"
+        f"Create {plural(count, 'transaction')} from {plural(len(to_import), 'file')} in YNAB?"
     )
     if not ctx.yes and not display.confirm(question):
         return
@@ -240,7 +240,7 @@ def auto(
         display.console().print(display.bullet_list(duplicates))
 
     total = sum(created.values())
-    display.success(f"🎉 All done! {total} transaction{_plural(total)} imported.")
+    display.success(f"🎉 All done! {plural(total, 'transaction')} imported.")
     display.console().print(
         display.bullet_list(
             f"{_account_name(account_id, ctx)}: {amount}" for account_id, amount in created.items()
@@ -265,10 +265,6 @@ def _parse(input_file: Path, candidate: Candidate) -> list[Transaction]:
 def _account_name(account_id: str, ctx: YnabUnlinkedContext) -> str:
     account = ctx.config.account(account_id)
     return account_id if account is None else account.name
-
-
-def _plural(count: int) -> str:
-    return "" if count == 1 else "s"
 
 
 def _detection_table(detections: list[Detection], ctx: YnabUnlinkedContext) -> Table:

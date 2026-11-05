@@ -29,6 +29,7 @@ src/ynab_unlinked/
   activity.py        Activity log entries the CLI writes to the store (`import`, `reconcile`).
   privacy.py         The privacy notice and summary the CLI prints.
   models.py          `Transaction` and import id assignment.
+  text.py            `plural`, the one wording helper the CLI and the web app share.
   buckets.py         Net worth `Bucket` and the default bucket of a YNAB account type.
   store/             SQLite copy of the budget's accounts and transactions, synced by
                      server knowledge, plus the activity log. Its schema is `store/migrations/NNNN_*.sql`,

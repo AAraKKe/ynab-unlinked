@@ -11,6 +11,7 @@ import re
 
 from ynab import ApiException, PlanSummary
 
+from ynab_unlinked.text import plural
 from ynab_unlinked.ynab_api.errors import api_reason, api_status, timed_out
 
 COPY_TITLE = "Copying your budget from YNAB"
@@ -21,11 +22,6 @@ IMPORT_FAILED = "The import stopped before it finished. Check the account in YNA
 YNAB_TIMED_OUT = "YNAB did not answer in time. Check your connection and try again."
 
 _NUMBER = re.compile(r"\d{4,}")
-
-
-def plural(count: int, word: str) -> str:
-    """ "1 file", "3 files"."""
-    return f"{count} {word}{'' if count == 1 else 's'}"
 
 
 def short_date(day: dt.date, today: dt.date) -> str:

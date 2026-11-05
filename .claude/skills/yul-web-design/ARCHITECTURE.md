@@ -633,9 +633,10 @@ web/
                        what Home, Net worth and Settings count (3.4.1); STALE_AFTER_DAYS
   buckets.py           STYLES (BucketStyle: title, group_title, series slot, colour per bucket),
                        NET_WORTH_ORDER, SETTINGS_ORDER, SERIES_BUCKETS
-  wording.py           pure (no NiceGUI): plural, short_date, human_size, budget_caption,
+  wording.py           pure (no NiceGUI): plural (re-exported from ynab_unlinked.text),
+                       short_date, human_size, budget_caption,
                        ynab_error_message (a timeout reads YNAB_TIMED_OUT, also the sync
-                       chip's error), copy_error_message, copy_line, COPY_*
+                       chip's error), copy_error_message, copy_line, COPY_*, IMPORT_FAILED
   ynab.py              fetch_budgets(token), load_budget(client, id) -> Budget,
                        stored_accounts(sdk accounts), fallback_accounts(config)
   paths.py             every page's path (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,
