@@ -8,8 +8,14 @@ on:
 
 jobs:
   pr-checks:
-    name: PR checks
-    runs-on: ubuntu-latest
+    # The ubuntu job keeps its plain "PR checks" name so a required check by that name still matches
+    name: PR checks${{ matrix.os == 'macos-latest' && ' (macOS)' || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS runs the keychain and platformdirs paths for real
+        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

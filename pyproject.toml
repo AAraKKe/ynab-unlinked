@@ -5,21 +5,20 @@ build-backend = "hatchling.build"
 [project]
 name = "ynab-unlinked"
 dynamic = ["version"]
-description = ''
+description = "Import bank statement exports into YNAB from the command line or a local web app"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
 keywords = []
 authors = [{ name = "Juanpe Araque", email = "juanpe@committhatline.com" }]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: End Users/Desktop",
   "Intended Audience :: Developers",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
   # This is mostly because the config is handled. Once updated
   # should be usable in any OS.
   # https://github.com/AAraKKe/ynab-unlinked/issues/1
