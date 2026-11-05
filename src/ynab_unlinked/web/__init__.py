@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from ynab_unlinked.config.paths import data_dir
+from ynab_unlinked.config.paths import web_storage_dir
 
 
 def available() -> bool:
@@ -19,4 +19,4 @@ def available() -> bool:
 
 def storage_dir() -> Path:
     """Where the web UI keeps per browser preferences (theme, sidebar) and their secret."""
-    return data_dir() / "web"
+    return web_storage_dir()

@@ -15,7 +15,7 @@ def test_yul_home_holds_every_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     assert paths.config_path() == tmp_path / "config.json"
     assert store_path() == tmp_path / "store.sqlite"
     assert paths.web_storage_dir() == storage_dir() == tmp_path / "web"
-    assert paths.v1_config_path() == Path.home() / ".config/ynab_unlinked/config.json"
+    assert paths.v1_config_path() == tmp_path / "v1" / "config.json"
 
 
 def test_without_yul_home_the_system_locations_are_used(monkeypatch: pytest.MonkeyPatch):

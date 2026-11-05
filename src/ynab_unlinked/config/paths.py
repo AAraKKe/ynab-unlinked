@@ -32,8 +32,13 @@ def web_storage_dir() -> Path:
 
 
 def v1_config_path() -> Path:
-    # This needs to be done especifically for version 1 because it was stored in a different path
-    # and was the version before any versioning was implemented
+    """Where the first, unversioned release kept its config.
+
+    Under `YUL_HOME` it is a path inside that folder, so a scratch run never finds (and the
+    V1 migration never removes) the real one.
+    """
+    if (home := yul_home()) is not None:
+        return home / "v1" / "config.json"
     return Path.home() / ".config/ynab_unlinked/config.json"
 
 
