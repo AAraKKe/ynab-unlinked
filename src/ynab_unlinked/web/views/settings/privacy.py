@@ -9,7 +9,7 @@ from nicegui import run, ui
 
 from ynab_unlinked import keychain
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.local_data import delete_local_data, local_data_paths
+from ynab_unlinked.local_data import local_data_paths
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button
 from ynab_unlinked.web.state import state
@@ -79,7 +79,5 @@ async def reset() -> None:
     lines.append("Your YNAB budget is not touched. Revoke the token in YNAB if you stop using yul.")
     if not await shell.confirm("Reset all data?", lines, "Delete everything", danger=True):
         return
-    await run.io_bound(delete_local_data, paths)
-    # The budget copy is gone too: load() opens a new one when needed
-    state().load()
+    await state().reset(paths)
     ui.navigate.to(shell.ONBOARDING_PATH)

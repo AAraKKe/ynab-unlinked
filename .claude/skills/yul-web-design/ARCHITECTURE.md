@@ -746,7 +746,9 @@ after the save),
 `await sync(progress=NullProgress())` (shared by concurrent callers, runs through
 `run.io_bound`), `await resync(progress=NullProgress())` (waits for a running sync, then
 `store.clear(budget)` and a full sync as the shared sync task; the activity log stays),
-`sync_in_background()`, `stale` / `invalidate()` (call after every write to YNAB: marks the
+`await reset(paths)` (Settings "Reset all data": waits for a running sync, forgets the
+config so no new one starts, `delete_local_data(paths)` through `run.io_bound`, then
+`load()`), `sync_in_background()`, `stale` / `invalidate()` (call after every write to YNAB: marks the
 store stale and starts a background sync; during a sync it asks for one more round when the
 running one ends) and `fresh(max_age) -> bool` (synced within `max_age`, not stale, not
 syncing: what Reconcile checks before showing the store),

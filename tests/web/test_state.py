@@ -92,6 +92,40 @@ async def test_a_resync_while_a_sync_runs_waits_for_it_and_loses_no_rows(
     assert stored_ids(app_state) == ["t1", "t2", "t3"]
 
 
+async def test_a_reset_while_a_sync_runs_waits_for_it_before_deleting(
+    app_state: AppState, ynab_api: YnabClientStub, store_file: Path, mocker: MockerFixture
+):
+    ynab = Ynab(ynab_api, full=[], delta=["t3"])
+    running = asyncio.ensure_future(app_state.sync())
+    await ynab.blocked()
+    deleted_while_syncing: list[bool] = []
+    delete = mocker.patch(
+        "ynab_unlinked.web.state.delete_local_data",
+        side_effect=lambda paths: deleted_while_syncing.append(not running.done()),
+    )
+
+    reset = asyncio.ensure_future(app_state.reset([store_file]))
+    await asyncio.sleep(0.05)
+    assert not delete.called
+    ynab.release.set()
+    await running
+    await reset
+
+    delete.assert_called_once_with([store_file])
+    assert deleted_while_syncing == [False]
+
+
+async def test_a_reset_deletes_the_budget_copy_and_forgets_the_config(
+    app_state: AppState, store_file: Path, config_files: ConfigFiles
+):
+    await app_state.reset([store_file, config_files.v2.parent])
+
+    assert not store_file.exists()
+    assert not app_state.configured
+    app_state.sync_in_background()
+    assert not app_state.syncing
+
+
 async def test_a_sync_during_a_resync_joins_it(app_state: AppState, ynab_api: YnabClientStub):
     ynab = Ynab(ynab_api, full=["t1", "t2"], delta=[])
 

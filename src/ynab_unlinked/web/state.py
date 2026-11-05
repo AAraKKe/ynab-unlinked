@@ -4,7 +4,8 @@ There is one `AppState` per process, reached through `state()`. Views read from 
 the config through `update_config()`, which keeps changes another process (the CLI) saved.
 
 Every sync runs as the one shared `_sync_task`: `sync()` joins it, `invalidate()` during it asks
-for one more round when it ends, and `resync()` waits for it before starting from scratch.
+for one more round when it ends, and `resync()` and `reset()` wait for it before starting from
+scratch or deleting everything.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import datetime as dt
 import logging
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 from nicegui import background_tasks, run
 from pydantic import ValidationError
@@ -23,6 +25,7 @@ from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.core.progress import NullProgress, Progress
 from ynab_unlinked.entities.registry import LoaderSpec, loaders
 from ynab_unlinked.formatter import Formatter
+from ynab_unlinked.local_data import delete_local_data
 from ynab_unlinked.store import Store, StoredAccount, StoreError, SyncResult, store_path
 from ynab_unlinked.web.wording import plural
 from ynab_unlinked.web.ynab import stored_accounts
@@ -182,11 +185,27 @@ class AppState:
         then runs as the shared sync task: a `sync()` meanwhile joins it.
         """
         self.require()
+        await self._sync_ended()
+        self._sync_task = asyncio.ensure_future(self._resync(progress))
+        return await asyncio.shield(self._sync_task)
+
+    async def reset(self, paths: list[Path]) -> None:
+        """Delete `paths` and the token (`delete_local_data`), then load the empty state.
+
+        Waits for a running sync first, so it cannot write the deleted budget back into a
+        new copy, and forgets the config before deleting so no other sync starts meanwhile.
+        """
+        await self._sync_ended()
+        self.config = None
+        self.client = None
+        await run.io_bound(delete_local_data, paths)
+        # The budget copy is gone too: load() opens a new one when needed
+        self.load()
+
+    async def _sync_ended(self) -> None:
         while self._sync_task is not None and not self._sync_task.done():
             # wait() never raises: how the running sync ended is its callers' business
             await asyncio.wait({self._sync_task})
-        self._sync_task = asyncio.ensure_future(self._resync(progress))
-        return await asyncio.shield(self._sync_task)
 
     async def _resync(self, progress: Progress) -> SyncResult | None:
         config, _ = self.require()
