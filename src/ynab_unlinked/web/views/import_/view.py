@@ -36,6 +36,7 @@ from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import set_class
 from ynab_unlinked.web.components.dropzone import dropzone
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.storage import tab_storage
 from ynab_unlinked.web.views.import_.cards import (
     Progress,
     done_card,
@@ -162,7 +163,8 @@ class ImportFlow:
             self.draw_drop_area()
         for item in added:
             self.add_row(item)
-            background_tasks.create(self.detect(item), name=f"yul detect {item.name}")
+            # NiceGUI returns the task as a bare `asyncio.Task`
+            background_tasks.create(self.detect(item), name=f"yul detect {item.name}")  # pyright: ignore[reportUnknownMemberType]
         self.draw_footer()
 
     async def detect(self, item: ImportFile) -> None:
@@ -505,12 +507,13 @@ class ImportFlow:
     live=False,
 )
 async def import_view() -> None:
-    storage = context.client.storage
+    storage = tab_storage()
     if isinstance(previous := storage.get(_FLOW_KEY), ImportFlow):
         previous.close()
     flow = ImportFlow()
     storage[_FLOW_KEY] = flow
-    context.client.on_delete(flow.close)
+    # NiceGUI types the handler as a bare `Callable`
+    context.client.on_delete(flow.close)  # pyright: ignore[reportUnknownMemberType]
 
     root = flow.render()
     shell.on_drop(flow.add_files, owner=root)

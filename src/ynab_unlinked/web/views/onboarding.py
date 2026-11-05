@@ -93,11 +93,11 @@ class Wizard:
     step: int = TOKEN
     token: str = ""
     checked_token: str | None = None
-    budgets: list[PlanSummary] = field(default_factory=list)
+    budgets: list[PlanSummary] = field(default_factory=list[PlanSummary])
     budget_id: str | None = None
     budget: Budget | None = None
-    accounts: list[AccountOption] = field(default_factory=list)
-    loader_accounts: dict[str, str | None] = field(default_factory=dict)
+    accounts: list[AccountOption] = field(default_factory=list[AccountOption])
+    loader_accounts: dict[str, str | None] = field(default_factory=dict[str, str | None])
     busy: bool = False
     message: str | None = None
     message_is_error: bool = False
@@ -108,7 +108,7 @@ class Wizard:
     body: ui.element | None = None
     message_box: ui.element | None = None
     forward: ui.button | None = None
-    budget_tiles: dict[str, ui.element] = field(default_factory=dict)
+    budget_tiles: dict[str, ui.element] = field(default_factory=dict[str, ui.element])
     loaders_box: ui.element | None = None
     done_box: ui.element | None = None
 

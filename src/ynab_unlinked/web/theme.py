@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from nicegui import app, ui
+from nicegui import ui
+
+from ynab_unlinked.web.storage import user_storage
 
 STATIC_ROUTE = "/yul-static"
 
@@ -79,11 +81,11 @@ LIGHT_PALETTE = Palette(
 
 def is_dark() -> bool:
     """The theme the current browser chose. Dark unless it picked light."""
-    return app.storage.user.get(_THEME_KEY, _DARK) != _LIGHT
+    return user_storage().get(_THEME_KEY, _DARK) != _LIGHT
 
 
 def save_theme(dark: bool) -> None:
-    app.storage.user[_THEME_KEY] = _DARK if dark else _LIGHT
+    user_storage()[_THEME_KEY] = _DARK if dark else _LIGHT
 
 
 def palette() -> Palette:

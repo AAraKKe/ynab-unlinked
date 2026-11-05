@@ -11,6 +11,8 @@ import re
 
 from ynab import ApiException, PlanSummary
 
+from ynab_unlinked.ynab_api.errors import api_reason, api_status
+
 COPY_TITLE = "Copying your budget from YNAB"
 COPY_NOTE = "The first time can take a minute."
 COPY_FAILED = "Could not copy your budget from YNAB. Check your connection and try again."
@@ -42,11 +44,12 @@ def human_size(size: int) -> str:
 def ynab_error_message(error: Exception) -> str:
     """What to tell the user when a call to YNAB fails."""
     if isinstance(error, ApiException):
-        if error.status == 401:
+        status = api_status(error)
+        if status == 401:
             return "YNAB rejected this token. Check that you copied all of it."
-        if error.status == 429:
+        if status == 429:
             return "YNAB is rate limiting this token. Try again in a few minutes."
-        return f"YNAB answered {error.status}: {error.reason}"
+        return f"YNAB answered {status}: {api_reason(error)}"
     return f"Could not reach YNAB: {error}"
 
 

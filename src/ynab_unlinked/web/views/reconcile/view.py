@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import partial
 
 from nicegui import run, ui
 from ynab import TransactionClearedStatus
@@ -278,7 +279,7 @@ class ReconcileView:
                         "click", lambda _, group=group: self.set_open(group, not group.open)
                     )
                 with ui.element("div").classes("yul-rec-lockcell"):
-                    group.lock_button = button(on_click=lambda group=group: self.lock([group]))
+                    group.lock_button = button(on_click=partial(self.lock, [group]))
                     group.lock_button.mark(f"lock-{account.id}")
                     with group.lock_button:
                         group.lock_label = ui.label()

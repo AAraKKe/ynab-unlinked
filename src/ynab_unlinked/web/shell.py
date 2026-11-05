@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import datetime as dt
 import inspect
-from collections.abc import Awaitable, Callable, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from fastapi.responses import RedirectResponse
-from nicegui import PageArguments, app, context, ui
+from nicegui import PageArguments, ui
 from nicegui.client import Client
 from nicegui.elements.upload_files import FileUpload
 from nicegui.events import MultiUploadEventArguments
@@ -51,6 +51,7 @@ from ynab_unlinked.web.paths import ONBOARDING_PATH as ONBOARDING_PATH
 from ynab_unlinked.web.paths import RECONCILE_PATH as RECONCILE_PATH
 from ynab_unlinked.web.paths import SETTINGS_PATH as SETTINGS_PATH
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.storage import tab_storage, user_storage
 from ynab_unlinked.web.wording import plural, ynab_error_message
 
 UploadedFile = FileUpload
@@ -67,6 +68,19 @@ _PENDING_KEY = "yul.pending_uploads"
 _DROP_HANDLER_KEY = "yul.drop_handler"
 
 DropHandler = Callable[[list[UploadedFile]], Awaitable[None] | None]
+
+
+@dataclass(frozen=True)
+class _DropTarget:
+    """The live drop handler of a tab, and the element whose lifetime it follows."""
+
+    owner: ui.element
+    handler: DropHandler
+
+
+def _queued(files: object) -> list[UploadedFile]:
+    """The files queued under `_PENDING_KEY`: only `hand_off_uploads` writes that list."""
+    return list(cast(list[UploadedFile], files)) if files else []
 
 
 @dataclass(frozen=True)
@@ -143,7 +157,7 @@ class _Shell:
 
 
 def _shell() -> _Shell | None:
-    shell = context.client.storage.get(_SHELL_KEY)
+    shell = tab_storage().get(_SHELL_KEY)
     return shell if isinstance(shell, _Shell) else None
 
 
@@ -168,7 +182,7 @@ def _set_active(key: str | None) -> None:
 @contextmanager
 def page(
     title: str | None = None, subtitle: str | None = None, *, key: str | None = None
-) -> Iterator[ui.element]:
+) -> Generator[ui.element]:
     """Render a view's content inside the shell: sets the top bar, yields the content column.
 
     `@view` builders already run inside it; call it yourself only for content that is not a
@@ -202,7 +216,7 @@ def notify(message: str, kind: ToastKind = "ok") -> None:
 
 
 @contextmanager
-def edit_config(message: str | None = None) -> Iterator[LatestConfig]:
+def edit_config(message: str | None = None) -> Generator[LatestConfig]:
     """Change the config on disk in a block, then toast `message` (when given).
 
     Built on `state().edit_config()`: the file is read again first, so what the CLI saved
@@ -244,14 +258,12 @@ def on_drop(handler: DropHandler, owner: ui.element) -> None:
     Without a live handler, dropped files are queued for `pending_uploads()` and the shell
     navigates to `/import`.
     """
-    context.client.storage[_DROP_HANDLER_KEY] = (owner, handler)
+    tab_storage()[_DROP_HANDLER_KEY] = _DropTarget(owner, handler)
 
 
 def pending_uploads(client: Client | None = None) -> list[UploadedFile]:
     """Take the files dropped on another page of this tab. Each file is returned once."""
-    storage = (client or context.client).storage
-    files: list[UploadedFile] = list(storage.pop(_PENDING_KEY, None) or [])
-    return files
+    return _queued(tab_storage(client).pop(_PENDING_KEY, None))
 
 
 async def hand_off_uploads(files: list[UploadedFile], client: Client | None = None) -> None:
@@ -259,18 +271,17 @@ async def hand_off_uploads(files: list[UploadedFile], client: Client | None = No
 
     What the global drop overlay does with a drop; other drop zones (Home's) call it too.
     """
-    storage = (client or context.client).storage
-    registered = storage.get(_DROP_HANDLER_KEY)
-    if registered is not None:
-        owner, handler = registered
-        if not owner.is_deleted:
-            result = handler(files)
+    storage = tab_storage(client)
+    target = storage.get(_DROP_HANDLER_KEY)
+    if isinstance(target, _DropTarget):
+        if not target.owner.is_deleted:
+            result = target.handler(files)
             if inspect.isawaitable(result):
                 await result
             return
         storage.pop(_DROP_HANDLER_KEY, None)
 
-    storage[_PENDING_KEY] = [*(storage.get(_PENDING_KEY) or []), *files]
+    storage[_PENDING_KEY] = [*_queued(storage.get(_PENDING_KEY)), *files]
     ui.navigate.to(IMPORT_PATH)
 
 
@@ -416,7 +427,7 @@ def _collapse_item(frame: ui.element) -> None:
     def toggle() -> None:
         rail = "rail" not in frame.classes
         set_class(frame, "rail", rail)
-        app.storage.user[_SIDEBAR_KEY] = _RAIL if rail else _WIDE
+        user_storage()[_SIDEBAR_KEY] = _RAIL if rail else _WIDE
         refresh()
 
     clickable(item, toggle)
@@ -458,7 +469,7 @@ def root() -> RedirectResponse | None:
         return RedirectResponse(ONBOARDING_PATH)
 
     dark = theme.page_setup()
-    rail = app.storage.user.get(_SIDEBAR_KEY) == _RAIL
+    rail = user_storage().get(_SIDEBAR_KEY) == _RAIL
     with ui.element("div").classes("yul-frame") as frame:
         if rail:
             frame.classes(add="rail")
@@ -466,7 +477,7 @@ def root() -> RedirectResponse | None:
         with ui.element("main").classes("yul-main"):
             title, subtitle = _top_bar(dark)
             shell = _Shell(title=title, subtitle=subtitle, nav=nav)
-            context.client.storage[_SHELL_KEY] = shell
+            tab_storage()[_SHELL_KEY] = shell
             with ui.element("div").classes("yul-views"):
                 shell.pages = ui.sub_pages({v.path: _renderer(v) for v in views()})
     _drop_overlay()

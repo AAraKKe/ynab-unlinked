@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -154,7 +154,7 @@ class AppState:
         return config
 
     @contextmanager
-    def edit_config(self) -> Iterator[LatestConfig]:
+    def edit_config(self) -> Generator[LatestConfig]:
         """`update_config` as a block: change the config it yields; saved when the block ends.
 
         Built on `config.edit_config()`; nothing is saved when the block raises.
@@ -270,7 +270,8 @@ class AppState:
             except Exception as error:
                 logger.warning("Background sync with YNAB failed: %s", error)
 
-        background_tasks.create(sync_logged(), name="yul store sync")
+        # NiceGUI returns the task as a bare `asyncio.Task`
+        background_tasks.create(sync_logged(), name="yul store sync")  # pyright: ignore[reportUnknownMemberType]
 
     async def budget_accounts(self) -> list[StoredAccount]:
         """Every account of the budget, from the store once synced, from YNAB before that."""
@@ -281,13 +282,13 @@ class AppState:
         return stored_accounts(await run.io_bound(client.accounts, config.budget.id) or [])
 
 
-_STATE: AppState | None = None
+_state: AppState | None = None
 
 
 def state() -> AppState:
     """The state shared by every page of this process, loaded on first use."""
-    global _STATE
-    if _STATE is None:
-        _STATE = AppState()
-        _STATE.load()
-    return _STATE
+    global _state
+    if _state is None:
+        _state = AppState()
+        _state.load()
+    return _state

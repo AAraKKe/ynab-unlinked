@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+from functools import partial
 
 from nicegui import run, ui
 
@@ -332,7 +333,7 @@ class NetWorthView:
             with ui.element("div").classes("yul-chips"):
                 for account in table_order(snapshot):
                     chip = ui.element("div").classes("yul-chipc").mark(f"pick-{account.id}")
-                    clickable(chip, lambda _, account_id=account.id: self.toggle_pick(account_id))
+                    clickable(chip, partial(self.toggle_pick, account.id))
                     on = account.id in picked
                     chip.props["aria-pressed"] = "true" if on else "false"
                     if on:

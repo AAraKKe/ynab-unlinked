@@ -26,7 +26,7 @@ async def guest(
     """
     # A fresh AppState per test: a sync a previous test left running (views sync a stale
     # store on open) must not leak its error or its task into this one.
-    monkeypatch.setattr(web_state, "_STATE", None)
+    monkeypatch.setattr(web_state, "_state", None)
     with fresh_nicegui():
         os.environ["NICEGUI_USER_SIMULATION"] = "true"
         try:

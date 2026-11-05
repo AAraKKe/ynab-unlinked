@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import importlib
+
+_VIEW_MODULES = ("home", "import_", "networth", "reconcile", "settings")
+
 
 def register() -> None:
     """Import every view module so the shell knows about it."""
-    from . import home, import_, networth, reconcile, settings  # noqa: F401
+    for module in _VIEW_MODULES:
+        importlib.import_module(f"{__name__}.{module}")

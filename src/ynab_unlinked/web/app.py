@@ -96,14 +96,16 @@ def run(
     Storage.path = directory
 
     state().load()
-    app.on_startup(state().sync_in_background)
+    # NiceGUI types the handler as a bare `Callable`
+    app.on_startup(state().sync_in_background)  # pyright: ignore[reportUnknownMemberType]
     root = build(token, port)
 
     if announce is not None:
         announce(f"yul is running at {entry_url(port, token)}")
         announce("Press Ctrl+C to stop it.")
 
-    ui.run(
+    # NiceGUI types the root builder as a bare `Callable`
+    ui.run(  # pyright: ignore[reportUnknownMemberType]
         root,
         host=HOST,
         port=port,
