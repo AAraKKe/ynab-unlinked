@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -42,12 +43,15 @@ from ynab_unlinked.web.wording import (
     COPY_FAILED,
     COPY_NOTE,
     COPY_TITLE,
+    SAVE_FAILED,
     copy_error_message,
     plural,
     ynab_error_message,
 )
 from ynab_unlinked.web.ynab import fetch_budgets, load_budget
 from ynab_unlinked.ynab_api import Client
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -142,8 +146,13 @@ class Wizard:
             def set_token(config: LatestConfig) -> None:
                 config.api_key = token
 
-            # The same budget: the saved config only needs its token back
-            if not await shell.save_config(set_token):
+            # The same budget: the saved config only needs its token back, even if its file
+            # is gone (the only save with a fallback). Not `shell.save_config`, which has none
+            try:
+                await run.io_bound(state().update_config, set_token, kept)
+            except Exception:
+                logger.exception("The token could not be saved")
+                shell.notify(SAVE_FAILED, "error")
                 return False
             with client:
                 ui.navigate.to(shell.HOME_PATH)

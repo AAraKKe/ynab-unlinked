@@ -20,12 +20,14 @@ from tests.factories import (
     PlanSummaryFactory,
     TransactionDetailFactory,
 )
+from tests.helpers.config import ConfigFiles
 from tests.helpers.keychain import MemoryKeyring
 from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked import keychain
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.wording import SAVE_FAILED
 from ynab_unlinked.web.views.onboarding import copy_line
 
 pytestmark = pytest.mark.version("missing")
@@ -257,6 +259,39 @@ async def test_a_token_gone_from_the_keychain_is_asked_for_and_the_rest_is_kept(
     assert config.api_key == "my-new-token"
     assert config.loaders == config_v4.loaders
     assert memory_keychain.passwords[(keychain.service_name(), keychain.ACCOUNT)] == "my-new-token"
+
+
+@pytest.mark.version("V4")
+@pytest.mark.parametrize("file_gone", [False, True], ids=["saved", "file-gone"])
+async def test_recovering_the_token_keeps_the_config_without_its_file_and_toasts_a_failed_save(
+    ynab: YnabClientStub,
+    memory_keychain: MemoryKeyring,
+    config_v4: LatestConfig,
+    config_files: ConfigFiles,
+    user: User,
+    mocker: MockerFixture,
+    file_gone: bool,
+):
+    config_v4.save()  # the token moves to the keychain
+    memory_keychain.passwords.clear()
+    state().reload()
+    await user.open("/")
+    await user.should_see(marker="token-lost")
+    if file_gone:
+        # The kept config is the fallback of this one save, so the budget and banks survive
+        config_files.path("V4").unlink()
+    else:
+        mocker.patch.object(LatestConfig, "save", side_effect=OSError("disk full"))
+
+    user.find(marker="token-input").type("my-new-token")
+    user.find(marker="check-token").click()
+
+    if file_gone:
+        await user.should_see(marker="nav-home", retries=20)
+        assert LatestConfig.load().loaders == config_v4.loaders
+    else:
+        await user.should_see(SAVE_FAILED, retries=20)
+        await user.should_see(marker="token-lost")
 
 
 async def test_the_first_config_save_runs_off_the_event_loop(

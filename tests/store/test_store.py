@@ -1,4 +1,5 @@
 import datetime as dt
+import shutil
 import sqlite3
 import stat
 import threading
@@ -101,6 +102,20 @@ def test_the_store_and_its_directory_are_for_the_user_only(tmp_path: Path):
 
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+
+
+def test_a_store_whose_file_was_deleted_serves_queries_again(tmp_path: Path):
+    # `yul config reset` deletes the file while the app keeps its open store
+    path = tmp_path / "data" / "store.sqlite"
+    store = Store(path)
+    store.log(BUDGET_ID, "sync", "before the reset")
+    shutil.rmtree(path.parent)
+
+    assert store.accounts(BUDGET_ID) == []
+    store.log(BUDGET_ID, "import", "after the reset")
+
+    assert [a.message for a in store.activity(BUDGET_ID)] == ["after the reset"]
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_two_stores_on_one_file_read_while_the_other_writes(tmp_path: Path):

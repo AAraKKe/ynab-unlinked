@@ -110,6 +110,11 @@ class Store:
 
     def __init__(self, path: Path):
         self.path = path
+        self._open()
+
+    def _open(self) -> None:
+        """Create the file (for the user only) when missing, and bring its schema up to date."""
+        path = self.path
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         # The budget's transactions are for the user only (SQLite gives its journal the same mode)
         if not path.exists():
@@ -121,11 +126,16 @@ class Store:
         with closing(sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_SECONDS)) as conn:
             # Readers never wait for a writer. The mode is kept in the file, set once is enough
             conn.execute("PRAGMA journal_mode=WAL")
-        with self._connect() as conn:
-            self._migrate(conn)
+            conn.row_factory = sqlite3.Row
+            with conn:
+                self._migrate(conn)
 
     @contextmanager
     def _connect(self) -> Generator[sqlite3.Connection]:
+        if not self.path.exists():
+            # Deleted under an open store (`yul config reset` while the app runs): SQLite
+            # would create an empty file without tables, so set it up again
+            self._open()
         with closing(sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_SECONDS)) as conn:
             conn.row_factory = sqlite3.Row
             with conn:

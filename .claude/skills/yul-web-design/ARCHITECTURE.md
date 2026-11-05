@@ -449,8 +449,8 @@ def switch_budget(config: LatestConfig, budget: Budget) -> None
 - Every config save, in the CLI and in the app, goes through `edit_config` / `update_config`:
   the file is read again, the change applied and the result saved, so each writer only
   changes what it touches and what another process saved meanwhile is kept. With no file,
-  `fallback` is changed instead (the app passes its copy); without one it raises
-  `ConfigError`. Nothing is saved when the block raises. The read, change and save hold a
+  `fallback` is changed instead (only onboarding passes one, when it recovers the token);
+  without one it raises `ConfigError`. Nothing is saved when the block raises. The read, change and save hold a
   process wide `threading.Lock` and an advisory lock on `config.json.lock` next to the file
   (`config.lock.file_lock`: `fcntl.flock` on POSIX, `msvcrt.locking` on Windows;
   `config.core.lock_path()`), so two threads of the app or the app and the CLI take turns
@@ -508,6 +508,7 @@ class StoreError(Exception)                       # store written by a newer sch
 
 class Store:
     def __init__(self, path: Path): ...          # creates dir and schema if missing, migrates
+                                                 # (again on use when the file was deleted)
         # the dir is 0700 and the file 0600 (existing ones are narrowed to these modes)
     def sync(self, client: Client, budget_id: str, progress: Progress = NullProgress()) -> SyncResult
         # no knowledge stored for this budget -> full fetch
@@ -813,9 +814,11 @@ list[LoaderSpec]`, `last_sync`, `sync_error`, `load_error`, `configured`, `synci
 `NotConfiguredError`; the one way views get the formatter), `load()` (reads the config,
 reopens the store: after the local data was deleted) / `reload()` (after saving the config:
 keeps the store and, for the same budget, `last_sync`; the banks are discovered once per
-process), `update_config(change: Callable[[LatestConfig], None]) -> LatestConfig` (every
-config save in the app: `config.update_config` with the app's copy as the fallback, then a
-reload, so what the CLI saved meanwhile is kept; never save `state().config` or a copy of it;
+process), `update_config(change: Callable[[LatestConfig], None], fallback=None) -> LatestConfig` (every
+config save in the app: `config.update_config`, then a reload, so what the CLI saved
+meanwhile is kept; with the file gone (`yul config reset` while the app is open) it raises
+`ConfigError` after `load()`, so the app drops to onboarding and nothing comes back; only
+onboarding's token recovery passes the config it kept as `fallback`; never save `state().config` or a copy of it;
 it blocks on the disk and the keychain, so views never call it on the event loop: they
 `await shell.save_config(change, message=None) -> bool`, which runs it through `run.io_bound`
 and then toasts `message` when given; a save that raises is logged, toasted as

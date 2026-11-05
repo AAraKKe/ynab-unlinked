@@ -12,9 +12,12 @@ from ynab import TransactionsResponse, TransactionsResponseData
 
 from tests.factories import TransactionDetailFactory
 from tests.helpers.config import ConfigFiles
+from tests.helpers.keychain import MemoryKeyring
 from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config.core import ConfigError
+from ynab_unlinked.local_data import delete_local_data
 from ynab_unlinked.store import Store
 from ynab_unlinked.web.state import AppState, NotConfiguredError
 from ynab_unlinked.web.wording import YNAB_TIMED_OUT
@@ -266,6 +269,44 @@ def test_update_config_applies_the_change_to_the_file_not_to_the_old_copy(config
     assert on_disk.adjustments.payee == "Set by the app"
     assert saved == on_disk
     assert app.config == on_disk
+
+
+def test_a_save_after_a_reset_from_the_cli_brings_nothing_back(
+    config: str, config_files: ConfigFiles, memory_keychain: MemoryKeyring
+):
+    app = AppState()
+    app.load()
+    assert memory_keychain.passwords, "The token moved to the keychain on load"
+    budget_id = app.require()[0].budget.id
+    app.store.log(budget_id, "sync", "before the reset")
+
+    # `yul config reset` in a terminal while the app is open
+    delete_local_data()
+
+    with pytest.raises(ConfigError):
+        app.update_config(lambda saved: setattr(saved, "last_reconciliation_date", dt.date.today()))
+
+    assert not config_files.path("V4").exists()
+    assert memory_keychain.passwords == {}
+    assert not app.configured
+    assert app.store.activity(budget_id) == []
+
+
+def test_only_an_explicit_fallback_is_saved_when_the_file_is_gone(
+    config: str, config_files: ConfigFiles
+):
+    app = AppState()
+    app.load()
+    kept = app.require()[0]
+    config_files.path("V4").unlink()
+
+    def set_token(saved: LatestConfig) -> None:
+        saved.api_key = "recovered-token"
+
+    app.update_config(set_token, fallback=kept)
+
+    assert LatestConfig.load().api_key == "recovered-token"
+    assert app.require()[0].api_key == "recovered-token"
 
 
 @pytest.mark.version("missing")
