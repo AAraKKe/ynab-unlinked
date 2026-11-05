@@ -72,7 +72,8 @@ in the same change. Never update a document to describe something you did not bu
   `yul-foot` with `yul-foot-stat`. Use the tokens (`var(--accent-solid)`,
   `var(--text-2)`, `color-mix(...)`), never literal colours except in the tokens table.
 - `shell`: `@shell.view`, `shell.notify`, `shell.confirm`, `shell.set_header`,
-  `with shell.edit_config("Saved") as config:` (every config save, then the toast),
+  `await shell.save_config(change, "Saved")` (every config save, off the event loop, then
+  the toast),
   `shell.pending_uploads` / `shell.on_drop`, `shell.refresh_view`, and every view path
   (`shell.HOME_PATH`, `RECONCILE_PATH`, `NETWORTH_PATH`, `SETTINGS_PATH`, ...).
 - `state()`: config, client, store, `require_formatter()` (the one way to the formatter),

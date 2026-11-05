@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from nicegui.testing.user import User
+from pytest_mock import MockerFixture
 from ynab import (
     Account,
     AccountsResponse,
@@ -17,6 +18,7 @@ from ynab import (
 )
 
 from tests.factories import AccountFactory, TransactionDetailFactory
+from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store, StoredTransaction
@@ -239,6 +241,24 @@ async def test_locking_everything_moves_the_checkpoint_to_the_latest_locked_date
     await user.should_see("5 transactions locked", retries=20)
     # No grace days taken off: the "since" pill already starts a week before it
     assert LatestConfig.load().last_reconciliation_date == oct_(31)
+
+
+async def test_the_checkpoint_and_the_activity_entry_are_written_off_the_event_loop(
+    user: User, seed: Seed, ynab_api: YnabClientStub, mocker: MockerFixture
+):
+    seed()
+    await open_reconcile(user)
+    saves = record_threads(mocker, LatestConfig, "save")
+    logs = record_threads(mocker, Store, "log")
+
+    user.find(marker="lock-all").click()
+    await user.should_see(marker="confirm-action", retries=20)
+    user.find(marker="confirm-action").click()
+    await user.should_see("transactions locked", retries=20)
+
+    assert off_the_event_loop(saves, calls=1)
+    # The lock's entry, and the sync's one when the sync it starts is already done
+    assert off_the_event_loop(logs)
 
 
 async def test_the_account_lock_touches_only_that_account(

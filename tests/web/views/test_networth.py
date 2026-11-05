@@ -1,8 +1,6 @@
-import asyncio
 import datetime as dt
 import itertools
 import uuid
-from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -21,6 +19,7 @@ from ynab import (
 )
 
 from tests.factories import AccountFactory, TransactionDetailFactory
+from tests.helpers.web import eventually
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
@@ -189,15 +188,6 @@ def chart_series(user: User, marker: str = "nw-chart") -> list[dict]:
     chart = user.find(marker=marker).elements.pop()
     assert isinstance(chart, ui.echart)
     return chart.options["series"]
-
-
-async def eventually(check: Callable[[], bool]) -> None:
-    """Wait for a background handler (a click that reads the store) to finish."""
-    for _ in range(100):
-        if check():
-            return
-        await asyncio.sleep(0.02)
-    assert check()
 
 
 async def open_networth(user: User) -> None:

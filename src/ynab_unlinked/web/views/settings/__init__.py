@@ -1,7 +1,7 @@
 """Settings: connection, banks, accounts, net worth and data, one module per tab.
 
-Every save goes through `shell.edit_config`, which changes the config on disk, reloads the
-app state, and toasts.
+Every save goes through `shell.save_config`, which changes the config on disk off the event
+loop, reloads the app state, and toasts.
 """
 
 from __future__ import annotations

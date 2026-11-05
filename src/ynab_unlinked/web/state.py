@@ -13,8 +13,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from collections.abc import Callable
 from pathlib import Path
 
 from nicegui import background_tasks, run
@@ -148,23 +147,17 @@ class AppState:
 
         The file is read again first, so what the CLI saved while the app was open (a bank's
         account, the last reconciliation) survives a save from the app.
-        """
-        with self.edit_config() as config:
-            change(config)
-        return config
 
-    @contextmanager
-    def edit_config(self) -> Generator[LatestConfig]:
-        """`update_config` as a block: change the config it yields; saved when the block ends.
-
-        Built on `config.edit_config()`; nothing is saved when the block raises.
+        It blocks on the disk and the keychain: views call it through `shell.save_config`,
+        which runs it off the event loop. Nothing is saved when `change` raises.
         """
         current = self.config or self.token_lost
         if current is None and not LatestConfig.exists():
             raise NotConfiguredError()
         with edit_config(fallback=current) as config:
-            yield config
+            change(config)
         self.reload()
+        return config
 
     async def sync(self, progress: Progress = _NO_PROGRESS) -> SyncResult | None:
         """Bring the store up to date with YNAB. Concurrent callers share the running sync.

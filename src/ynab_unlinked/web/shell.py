@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from fastapi.responses import RedirectResponse
-from nicegui import PageArguments, ui
+from nicegui import PageArguments, run, ui
 from nicegui.client import Client
 from nicegui.elements.upload_files import FileUpload
 from nicegui.events import MultiUploadEventArguments
@@ -215,15 +215,15 @@ def notify(message: str, kind: ToastKind = "ok") -> None:
     )
 
 
-@contextmanager
-def edit_config(message: str | None = None) -> Generator[LatestConfig]:
-    """Change the config on disk in a block, then toast `message` (when given).
+async def save_config(change: Callable[[LatestConfig], None], message: str | None = None) -> None:
+    """Apply `change` to the config on disk off the event loop, then toast `message`.
 
-    Built on `state().edit_config()`: the file is read again first, so what the CLI saved
-    meanwhile is kept, and the app state is reloaded after the save.
+    `state().update_config(change)` through `run.io_bound`: reading and saving the file can
+    wait on the disk and the keychain, and must not freeze every open page. The file is read
+    again first, so what the CLI saved meanwhile is kept, and the app state is reloaded after
+    the save. No toast without a `message`.
     """
-    with state().edit_config() as config:
-        yield config
+    await run.io_bound(state().update_config, change)
     if message:
         notify(message)
 

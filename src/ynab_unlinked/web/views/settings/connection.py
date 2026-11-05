@@ -98,8 +98,10 @@ def _token_change(page: Settings, area: ui.element) -> None:
             )
             return
 
-        with shell.edit_config("Token updated") as config:
+        def set_token(config: LatestConfig) -> None:
             config.api_key = token
+
+        await shell.save_config(set_token, "Token updated")
         await page.rerender()
 
     save_button.on("click", check_and_save)
@@ -156,8 +158,9 @@ async def switch_budget(dialog: ui.dialog, budget_id: str, name: str) -> None:
         shell.notify(ynab_error_message(error), "error")
         return
 
-    with shell.edit_config(f"Budget switched to {budget.name}") as config:
-        switch_budget_in(config, budget)
+    await shell.save_config(
+        lambda config: switch_budget_in(config, budget), f"Budget switched to {budget.name}"
+    )
     dialog.close()
     state().sync_in_background()
     ui.navigate.reload()

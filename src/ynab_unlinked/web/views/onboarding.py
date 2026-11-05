@@ -176,9 +176,12 @@ class Wizard:
         if (kept := state().token_lost) is not None and any(
             str(budget.id) == kept.budget.id for budget in budgets
         ):
-            # The same budget: the saved config only needs its token back
-            with shell.edit_config() as config:
+
+            def set_token(config: LatestConfig) -> None:
                 config.api_key = token
+
+            # The same budget: the saved config only needs its token back
+            await shell.save_config(set_token)
             with client:
                 ui.navigate.to(shell.HOME_PATH)
             return True
@@ -223,7 +226,7 @@ class Wizard:
 
     async def finish(self) -> None:
         try:
-            self.draft().save()
+            await run.io_bound(self.draft().save)
         except (OSError, ConfigError) as error:
             self.say(f"The settings could not be saved: {error}", error=True)
             return

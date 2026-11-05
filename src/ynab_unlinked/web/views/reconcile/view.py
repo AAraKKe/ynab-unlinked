@@ -505,10 +505,13 @@ class ReconcileView:
             ],
         )
         if next_date is not None:
-            with shell.edit_config() as saved:
+
+            def set_last_reconciliation(saved: LatestConfig) -> None:
                 saved.last_reconciliation_date = next_date
+
+            await shell.save_config(set_last_reconciliation)
         message, log_details = lock_log(locked)
-        state().store.log(config.budget.id, kind="reconcile", message=message, details=log_details)
+        await run.io_bound(state().store.log, config.budget.id, "reconcile", message, log_details)
         state().invalidate()
 
         for _, rows in batches:

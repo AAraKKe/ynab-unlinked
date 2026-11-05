@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from nicegui import ui
 
 from ynab_unlinked.buckets import Bucket
-from ynab_unlinked.config import TrackedAccount
+from ynab_unlinked.config import LatestConfig, TrackedAccount
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
@@ -98,29 +98,29 @@ class AccountCards:
                     ui.label("balance by hand")
                 hand.on("click", lambda: self.set_by_hand(account_id, card))
 
-    def set_counted(self, account_id: str, on: bool, card: ui.element) -> None:
+    async def set_counted(self, account_id: str, on: bool, card: ui.element) -> None:
         row = self.rows[account_id]
         if row.counted == on:
             return
         row.counted = on
-        self.save("Counted in net worth" if on else "Left out of net worth")
+        await self.save("Counted in net worth" if on else "Left out of net worth")
         self.draw_card(account_id, card)
 
-    def set_bucket(self, account_id: str, bucket: Bucket) -> None:
+    async def set_bucket(self, account_id: str, bucket: Bucket) -> None:
         row = self.rows[account_id]
         if row.bucket is bucket:
             return
         row.bucket = bucket
-        self.save()
+        await self.save()
         self.draw()
 
-    def set_by_hand(self, account_id: str, card: ui.element) -> None:
+    async def set_by_hand(self, account_id: str, card: ui.element) -> None:
         row = self.rows[account_id]
         row.track_balance = not row.track_balance
-        self.save()
+        await self.save()
         self.draw_card(account_id, card)
 
-    def save(self, message: str = "Accounts saved") -> None:
+    async def save(self, message: str = "Accounts saved") -> None:
         """Write the rows that differ from their defaults, keeping every other entry."""
         rows = [
             row.model_copy()
@@ -128,9 +128,11 @@ class AccountCards:
             if row != self.defaults[account_id]
         ]
 
-        with shell.edit_config(message) as config:
+        def keep_others(config: LatestConfig) -> None:
             kept = [account for account in config.accounts if account.id not in self.rows]
             config.accounts = kept + rows
+
+        await shell.save_config(keep_others, message)
 
 
 async def render(page: Settings) -> None:

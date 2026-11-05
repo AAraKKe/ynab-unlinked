@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from nicegui import ui
 
 from ynab_unlinked.buckets import Bucket
-from ynab_unlinked.config import ClearedStatus, DebtMapping, TrackedAccount
+from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button
@@ -71,7 +71,7 @@ async def render(page: Settings) -> None:
             .mark("cleared")
         )
 
-    def save_net_worth() -> None:
+    async def save_net_worth() -> None:
         payee_name = (payee.value or "").strip()
         if not payee_name:
             shell.notify("The adjustment payee cannot be empty", "warn")
@@ -79,7 +79,7 @@ async def render(page: Settings) -> None:
         new_memo = memo.value or ""
         new_cleared = ClearedStatus(cleared.value)
 
-        with shell.edit_config("Net worth settings saved") as config:
+        def save(config: LatestConfig) -> None:
             # Mappings of debts not listed here (left out, closed) are kept as they are
             config.debt_mappings = [
                 mapping
@@ -93,6 +93,8 @@ async def render(page: Settings) -> None:
             config.adjustments.memo = new_memo
             config.adjustments.payee = payee_name
             config.adjustments.cleared = new_cleared
+
+        await shell.save_config(save, "Net worth settings saved")
 
     with ui.element("div").classes("yul-row").style("justify-content:flex-end;margin-top:12px"):
         button("Save net worth settings", kind="primary", on_click=save_net_worth).mark(

@@ -14,6 +14,7 @@ from ynab import ApiException, TransactionClearedStatus
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers import assets
 from tests.helpers.statements import bbva_sheet, sabadell_statement, write_xls
+from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
@@ -309,6 +310,31 @@ async def test_a_loader_without_an_account_asks_for_one_and_saves_it_on_import(
     assert saved is not None
     assert saved.account_id == MAXIMA
     assert list(created(ynab)) == [MAXIMA]
+
+
+async def test_the_account_picked_while_importing_is_saved_off_the_event_loop(
+    accounts: LatestConfig,
+    ynab: YnabClientStub,
+    user: User,
+    bbva_file: Path,
+    mocker: MockerFixture,
+):
+    accounts.loaders.pop(BBVA)
+    accounts.save()
+    state().reload()
+    threads = record_threads(mocker, LatestConfig, "save")
+
+    await drop(user, bbva_file)
+    await user.should_see(marker="account-select-1", retries=30)
+    select = user.find(marker="account-select-1").elements.pop()
+    assert isinstance(select, ui.select)
+    select.set_value(MAXIMA)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+    await user.should_see("3 transactions imported", retries=30)
+
+    assert off_the_event_loop(threads, calls=1)
 
 
 async def test_a_ynab_failure_is_shown_on_the_row_and_can_be_retried(

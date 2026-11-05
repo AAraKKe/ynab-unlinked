@@ -13,7 +13,7 @@ from ynab_unlinked.web.ynab import fallback_accounts
 
 
 def current_config() -> LatestConfig:
-    """The config as the app holds it, for reading. Changes go through `shell.edit_config`."""
+    """The config as the app holds it, for reading. Changes go through `shell.save_config`."""
     config, _ = state().require()
     return config
 

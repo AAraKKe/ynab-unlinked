@@ -1,5 +1,4 @@
 import datetime as dt
-import threading
 import uuid
 from pathlib import Path
 
@@ -15,6 +14,7 @@ from tests.factories import (
     TransactionDetailFactory,
 )
 from tests.helpers.config import ConfigFiles
+from tests.helpers.web import eventually, off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
@@ -411,14 +411,7 @@ async def test_bank_saves_run_off_the_event_loop(
     user: User, config_v4: LatestConfig, budget_accounts: YnabClientStub, mocker: MockerFixture
 ):
     """The file and the keychain can block: saving must not freeze every open page."""
-    save = LatestConfig.save
-    threads: list[str] = []
-
-    def save_and_record(self: LatestConfig) -> None:
-        threads.append(threading.current_thread().name)
-        save(self)
-
-    mocker.patch.object(LatestConfig, "save", save_and_record)
+    threads = record_threads(mocker, LatestConfig, "save")
     await _open_tab(user, "banks")
     await user.should_see(marker="bank-toggle-sabadell", retries=20)
     toggle = user.find(marker="bank-toggle-sabadell").elements.pop()
@@ -434,8 +427,7 @@ async def test_bank_saves_run_off_the_event_loop(
     user.find(marker="save-bank-bbva").click()
     await user.should_see("BBVA Credit Card saved", retries=20)
 
-    assert len(threads) == 2
-    assert threading.main_thread().name not in threads
+    assert off_the_event_loop(threads, calls=2)
 
 
 async def test_turning_on_a_bank_without_an_account_asks_for_one(
@@ -503,17 +495,16 @@ async def test_accounts_save_every_change_and_drop_entries_back_at_their_default
     ]
 
     user.find(marker=f"by-hand-{CHECKING_ID}").click()
-    await user.should_see("Accounts saved")
-    assert LatestConfig.load().accounts[0].track_balance is True
+    # The toast of the first save may still be on screen: wait for the file itself
+    await eventually(lambda: LatestConfig.load().accounts[0].track_balance)
 
     user.find(marker=f"bucket-{CHECKING_ID}-cash").click()
     await user.should_not_see(marker="bucket-section-savings")
     assert LatestConfig.load().accounts[0].bucket is Bucket.CASH
 
     user.find(marker=f"by-hand-{CHECKING_ID}").click()
-    await user.should_see("Accounts saved")
     # Everything is back at its default, so no entry is needed
-    assert LatestConfig.load().accounts == []
+    await eventually(lambda: LatestConfig.load().accounts == [])
     assert LatestConfig.load().debt_mappings == mapped.debt_mappings
 
 
@@ -557,3 +548,59 @@ async def test_switching_an_account_off_leaves_it_out_of_net_worth(
 )
 def test_deep_link_slugs_name_their_tab(slug: str | None, tab: str):
     assert tab_from_slug(slug) == tab
+
+
+async def test_connection_saves_run_off_the_event_loop(
+    budget_settings: LatestConfig, user: User, ynab_api: YnabClientStub, mocker: MockerFixture
+):
+    other = uuid.UUID(int=77)
+    budget_api = ynab_api.api("budget")
+    budget_api.get_plans.return_value.data.plans = [
+        PlanSummaryFactory(id=uuid.UUID(budget_settings.budget.id), name="My Budget"),
+        PlanSummaryFactory(id=other, name="Other Budget"),
+    ]
+    budget_api.get_plan_by_id.return_value.data.plan = PlanDetailFactory(
+        id=other, name="Other Budget"
+    )
+    threads = record_threads(mocker, LatestConfig, "save")
+    await user.open("/settings")
+
+    user.find(marker="change-token").click()
+    user.find(marker="new-token").type("a-new-token")
+    user.find(marker="save-token").click()
+    await user.should_see("Token updated", retries=20)
+
+    user.find(marker="change-budget").click()
+    await user.should_see(marker=f"budget-{other}", retries=20)
+    user.find(marker=f"budget-{other}").click()
+    await user.should_see("Switch to Other Budget?", retries=20)
+    user.find(marker="confirm-action").click()
+    await user.should_see("Budget switched to Other Budget", retries=20)
+
+    assert off_the_event_loop(threads, calls=2)
+
+
+async def test_account_saves_run_off_the_event_loop(
+    mapped: LatestConfig, user: User, budget_accounts: YnabClientStub, mocker: MockerFixture
+):
+    threads = record_threads(mocker, LatestConfig, "save")
+    await _open_tab(user, "accounts")
+    await user.should_see(marker=f"account-{CHECKING_ID}", retries=20)
+
+    user.find(marker=f"by-hand-{CHECKING_ID}").click()
+    await user.should_see("Accounts saved", retries=20)
+
+    assert off_the_event_loop(threads, calls=1)
+
+
+async def test_net_worth_saves_run_off_the_event_loop(
+    tracked: LatestConfig, user: User, mocker: MockerFixture
+):
+    threads = record_threads(mocker, LatestConfig, "save")
+    await _open_tab(user, "net-worth")
+    await user.should_see(marker="save-networth", retries=20)
+
+    user.find(marker="save-networth").click()
+    await user.should_see("Net worth settings saved", retries=20)
+
+    assert off_the_event_loop(threads, calls=1)

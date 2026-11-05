@@ -21,6 +21,7 @@ from typing import Any
 from nicegui import background_tasks, context, run, ui
 from ynab import TransactionClearedStatus
 
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.detect import Candidate, detect_loaders
 from ynab_unlinked.core.importing import (
@@ -416,7 +417,7 @@ class ImportFlow:
             return
         ready = [item for item in self.ready if item.plan is not None]
         self.committing = True
-        self.save_accounts(ready)
+        await self.save_accounts(ready)
         config, client = state().require()
         cleared = (
             TransactionClearedStatus.RECONCILED
@@ -471,13 +472,15 @@ class ImportFlow:
             state().invalidate()
             shell.notify(f"{plural(created, 'transaction')} created in YNAB")
 
-    def save_accounts(self, items: Sequence[ImportFile]) -> None:
+    async def save_accounts(self, items: Sequence[ImportFile]) -> None:
         if not (chosen := chosen_accounts(items)):
             return
 
-        with shell.edit_config() as config:
+        def set_accounts(config: LatestConfig) -> None:
             for name, account_id in chosen:
                 config.set_entity_account(name, account_id)
+
+        await shell.save_config(set_accounts)
         for item in items:
             item.account_chosen = False
 

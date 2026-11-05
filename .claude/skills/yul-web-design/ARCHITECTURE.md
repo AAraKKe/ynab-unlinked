@@ -413,7 +413,7 @@ class ConfigV4(BaseModel):
 ```python
 # config/core.py, exported from ynab_unlinked.config
 @contextmanager
-def edit_config(fallback: LatestConfig | None = None) -> Iterator[LatestConfig]
+def edit_config(fallback: LatestConfig | None = None) -> Generator[LatestConfig]
 def update_config(change: Callable[[LatestConfig], None], fallback=None) -> LatestConfig
 def switch_budget(config: LatestConfig, budget: Budget) -> None
 ```
@@ -604,7 +604,7 @@ web/
   paths.py             every page's path (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,
                        SETTINGS_PATH, ONBOARDING_PATH), NiceGUI-free for the data modules
   shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay,
-                       edit_config(); re-exports the paths (views use shell.<NAME>_PATH)
+                       save_config(); re-exports the paths (views use shell.<NAME>_PATH)
   theme.py             palette constants, dark/light switch, install() of static/yul.css
   security.py          per run token, TokenGuard middleware, free_port(), entry_url()
   static/              yul.css: the only stylesheet (tokens, base, shared classes, one section
@@ -662,8 +662,8 @@ web/
       common.py        current_config(), kv(key), open_accounts() (open budget accounts, the
                        configured ones when YNAB cannot be reached)
       connection.py    token (reveal, check and save), budget dialog and switch
-      banks.py         bank cards, bank_summary(), shared_account_hint(), save_config(),
-                       toggle_bank(), bank_dialog(), option_control()
+      banks.py         bank cards, bank_summary(), shared_account_hint(), toggle_bank(),
+                       bank_dialog(), option_control()
       accounts.py      AccountCards (the Accounts tab), BY_HAND_HINT
       networth.py      debt mappings (mapping_row) and adjustment settings, CLEARED_LABELS
       privacy.py       Data & privacy: what is kept where, resync, reset; token_wording()
@@ -765,11 +765,9 @@ keeps the store and, for the same budget, `last_sync`; the banks are discovered 
 process), `update_config(change: Callable[[LatestConfig], None]) -> LatestConfig` (every
 config save in the app: `config.update_config` with the app's copy as the fallback, then a
 reload, so what the CLI saved meanwhile is kept; never save `state().config` or a copy of it;
-`edit_config()` is the same as a `with` block yielding the config to change, saved at the
-end of the block, and views use `shell.edit_config(message=None)`, which toasts `message`
-after the save; reading and saving can wait on the disk and the keychain, so Settings › Banks
-saves with `await run.io_bound(state().update_config, change)` and then `shell.notify`,
-through `banks.save_config(change, message)`),
+it blocks on the disk and the keychain, so views never call it on the event loop: they
+`await shell.save_config(change, message=None)`, which runs it through `run.io_bound` and
+then toasts `message` when given),
 `await sync(progress=NullProgress())` (shared by concurrent callers, runs through
 `run.io_bound`), `await resync(progress=NullProgress())` (waits for a running sync, then
 `store.clear(budget)` and a full sync as the shared sync task; the activity log stays),
@@ -947,7 +945,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   after the bank.
 - Continue from Budget sets the step to Banks and awaits `load_budget()` (`client.budget`
   and `client.accounts` through `run.io_bound`); Finish is disabled until it succeeded.
-- Finish: `draft().save()`, `state().reload()`, step Done, then `await
+- Finish: `draft().save()` through `run.io_bound`, `state().reload()`, step Done, then `await
   state().sync(LineProgress(label, client))`, the same shared task the sync chip uses.
   `LineProgress` implements `core.progress.Progress`: the store calls it from the worker
   thread, it hands each message to the event loop (`call_soon_threadsafe`) and sets the
@@ -959,8 +957,8 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
 
 ### 3.3 Other rules
 
-- Views call `core/` and `store/` only. Blocking calls (YNAB, parsing) run through
-  `run.io_bound` so the UI stays responsive.
+- Views call `core/` and `store/` only. Blocking calls (YNAB, parsing, config saves, store
+  writes) run through `run.io_bound` so the UI stays responsive.
 - Uploaded files go to a `TemporaryDirectory` owned by the page; removed on commit or
   discard.
 - Import (`views/import_/`) keeps one `ImportFlow` per tab. Its temporary directory goes
@@ -1039,8 +1037,9 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   `run.io_bound` with `TransactionDetail`s rebuilt from the stored rows
   (`transaction_detail()`), then `last_reconciliation_date = next_reconciliation_date(locked
   dates, dates of the rows still pending in the current scope)`
-  saved through `shell.edit_config()`, `store.log("reconcile", "Reconciled n transactions in m
-  accounts", {"count", "accounts": [{"id", "name", "count"}]})`, `sync_in_background()`.
+  saved through `shell.save_config()`, `store.log("reconcile", "Reconciled n transactions in m
+  accounts", {"count", "accounts": [{"id", "name", "count"}]})` through `run.io_bound`,
+  `sync_in_background()`.
   The store itself is not written by the view. Errors go through
   `wording.ynab_error_message` and leave config, log and rows untouched.
 - Wording: header "4 accounts · 17 transactions not reconciled", card

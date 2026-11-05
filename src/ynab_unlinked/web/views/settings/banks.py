@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from nicegui import run, ui
+from nicegui import ui
 
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
@@ -59,16 +58,6 @@ def shared_account_hint(spec: LoaderSpec, account_id: str | None, config: Latest
         f"{names} also {verb} statements here; a same day, same amount row from both can be "
         "taken for one"
     )
-
-
-async def save_config(change: Callable[[LatestConfig], None], message: str) -> None:
-    """`state().update_config(change)` off the event loop, then toast `message`.
-
-    Reading and saving the config can wait on the disk and the keychain, so it runs through
-    `run.io_bound` like every other blocking call of the app.
-    """
-    await run.io_bound(state().update_config, change)
-    shell.notify(message)
 
 
 async def render(page: Settings) -> None:
@@ -143,7 +132,7 @@ async def toggle_bank(
         if (loader := config.entity(spec.name)) is not None:
             loader.enabled = on
 
-    await save_config(turn, f"{spec.title} turned {'on' if on else 'off'}")
+    await shell.save_config(turn, f"{spec.title} turned {'on' if on else 'off'}")
     draw_bank(spec, card, accounts)
 
 
@@ -210,7 +199,7 @@ async def bank_dialog(spec: LoaderSpec, card: ui.element, accounts: dict[str, st
                 enabled=current.enabled if current else True,
             )
 
-        await save_config(save, f"{spec.title} saved")
+        await shell.save_config(save, f"{spec.title} saved")
         dialog.submit(True)
 
     await run_dialog(dialog)
