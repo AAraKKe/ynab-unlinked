@@ -58,7 +58,10 @@ def test_a_token_gone_from_the_keychain_stops_commands_but_not_config_set(
     result = yul("config set api_key", env=WIDE_TERMINAL)
 
     assert result.exit_code == 0, result.output
-    assert memory_keychain.passwords[(keychain.service_name(), keychain.ACCOUNT)] == "a-brand-new-api-key"
+    assert (
+        memory_keychain.passwords[(keychain.service_name(), keychain.ACCOUNT)]
+        == "a-brand-new-api-key"
+    )
     assert json.loads(config_files.read())["api_key"] == keychain.REFERENCE
 
 

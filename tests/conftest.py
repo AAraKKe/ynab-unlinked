@@ -13,9 +13,9 @@ from tests.helpers.config import ConfigFiles
 from tests.helpers.keychain import MemoryKeyring
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked import keychain
 from ynab_unlinked.cli.context_object import YnabUnlinkedContext
 from ynab_unlinked.cli.utils import split_quoted_string
-from ynab_unlinked import keychain
 from ynab_unlinked.config import ConfigV3, ConfigV4, get_config
 from ynab_unlinked.config.paths import HOME_ENV, web_storage_dir
 from ynab_unlinked.formatter import Formatter
@@ -118,8 +118,9 @@ def config_files(tmp_path: Path, mocker: MockerFixture) -> ConfigFiles:
     Point every config path the app resolves into a scratch directory.
 
     Apart from `YUL_HOME` (which holds the budget copy and the preferences), so a reset
-    lists the config folder and the store as two paths, as on a real install. Nothing exists there until a test, or the `config` fixture, writes it, so tests are free
-    to save, migrate and reset configs without touching the checked in assets.
+    lists the config folder and the store as two paths, as on a real install. Nothing
+    exists there until a test, or the `config` fixture, writes it, so tests are free to
+    save, migrate and reset configs without touching the checked in assets.
     """
     files = ConfigFiles(
         v1=tmp_path / "ynab_unlinked" / "config.json",
