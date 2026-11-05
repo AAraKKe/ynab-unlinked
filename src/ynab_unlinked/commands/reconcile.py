@@ -113,11 +113,14 @@ def reconcile(
         if child.transaction and child.is_selected
     ]
     selected_ids = {transaction.id for transaction in selected_transactions}
+    # Only what the user chose to skip holds the checkpoint back. An uncleared transaction
+    # the app would not let them pick ('Include Uncleared' off) does not, or one old
+    # uncleared row would pin the checkpoint, and so the window fetched, forever
     left_unreconciled = [
-        transaction.var_date
-        for group in overview
-        for transaction in group.transactions
-        if transaction.id not in selected_ids
+        child.transaction.var_date
+        for choice in choices
+        for child in choice.choices
+        if child.transaction and not child.is_selected and not child.is_forced_selected()
     ]
 
     with CliProgress() as progress:

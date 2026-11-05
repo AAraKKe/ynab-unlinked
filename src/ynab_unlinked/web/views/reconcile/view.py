@@ -497,11 +497,14 @@ class ReconcileView:
         locking = {row.transaction.id for _, rows in batches for row in rows}
         next_date = next_reconciliation_date(
             [row.transaction.date for _, rows in batches for row in rows],
+            # Only rows the user chose to skip hold the checkpoint back: an uncleared row they
+            # could not pick ("include uncleared" off) would pin it, and the scope, forever
             [
                 row.transaction.date
                 for group in self.groups
                 for row in group.pending()
                 if row.transaction.id not in locking
+                and (self.include_uncleared or not row.uncleared)
             ],
         )
         # YNAB changed: show it, log it and sync before anything that can still fail

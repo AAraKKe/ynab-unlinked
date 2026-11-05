@@ -260,3 +260,52 @@ def test_reconcile_does_nothing_when_the_confirmed_selection_is_empty(
     assert result.exit_code == 0, result.output
     ynab.transactions().update_transactions.assert_not_called()
     assert LatestConfig.load().last_reconciliation_date is None
+
+
+def _uncleared_left_and_one_locked(ynab: YnabClientStub) -> None:
+    given_ynab_data(
+        ynab,
+        [
+            TransactionDetailFactory(
+                id="waiting", account_id=CHECKING_ID, var_date=dt.date(2025, 5, 2), cleared=UNCLEARED
+            ),
+            TransactionDetailFactory(
+                id="latest", account_id=CHECKING_ID, var_date=dt.date(2025, 5, 20)
+            ),
+        ],
+        [CHECKING],
+    )
+
+
+def test_an_uncleared_transaction_that_could_not_be_picked_does_not_hold_the_checkpoint(
+    yul: CliRunner, ynab: YnabClientStub, stored_config: LatestConfig, tui: TuiStub
+):
+    _uncleared_left_and_one_locked(ynab)
+    tui.selected_ids = {"transaction-latest"}
+
+    result = yul("reconcile")
+
+    assert result.exit_code == 0, result.output
+    assert [update.id for update in updates_sent(ynab)] == ["latest"]
+    assert LatestConfig.load().last_reconciliation_date == dt.date(2025, 5, 20)
+
+
+def test_an_uncleared_transaction_skipped_with_include_uncleared_on_holds_the_checkpoint(
+    yul: CliRunner, ynab: YnabClientStub, stored_config: LatestConfig, tui: TuiStub
+):
+    _uncleared_left_and_one_locked(ynab)
+
+    def include_uncleared_and_pick_latest() -> int:
+        for account in tui.choices:
+            for child in account.choices:
+                child.disable_forced_selected()
+                if child.id == "transaction-latest":
+                    child.select()
+        return 0
+
+    tui.app_class.return_value.run.side_effect = include_uncleared_and_pick_latest
+
+    result = yul("reconcile")
+
+    assert result.exit_code == 0, result.output
+    assert LatestConfig.load().last_reconciliation_date == dt.date(2025, 5, 2)

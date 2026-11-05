@@ -1058,7 +1058,8 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   runs, `store.log("reconcile", "Reconciled n transactions in m accounts", {"count",
   "accounts": [{"id", "name", "count"}]})` through `run.io_bound`, and only then
   `last_reconciliation_date = next_reconciliation_date(locked dates, dates of the rows still
-  pending in the current scope)` is saved through `shell.save_config()`, so a failed save
+  pending in the current scope that the user could pick)` (an uncleared row with "include
+  uncleared" off does not hold it back; `yul reconcile` follows the same rule) is saved through `shell.save_config()`, so a failed save
   (toasted by it) leaves the log and the sync done; `busy` is reset in a `finally`.
   The store itself is not written by the view. Errors go through
   `wording.ynab_error_message` and leave config, log and rows untouched.

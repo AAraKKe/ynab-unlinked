@@ -210,8 +210,9 @@ async def test_lock_all_reconciles_exactly_the_selected_rows(
 
     await user.should_see("2 transactions locked", retries=20)
     assert updated(ynab_api) == {"oro-mercadona": RECONCILED, "oro-glovo": RECONCILED}
-    # Zara (26 Oct) was left unlocked: the next "since" scope must still show it
-    assert LatestConfig.load().last_reconciliation_date == oct_(26)
+    # Payroll (31 Oct, cleared) was skipped: the next "since" scope must still show it. The
+    # uncleared Zara (26 Oct) and gym could not be picked, so they do not hold it back
+    assert LatestConfig.load().last_reconciliation_date == oct_(31)
     activity = Store(store_file).activity(state().require()[0].budget.id, kind="reconcile")
     assert [(a.kind, a.message, a.details) for a in activity] == [
         (
@@ -225,6 +226,27 @@ async def test_lock_all_reconciles_exactly_the_selected_rows(
     await user.should_see(marker="row-oro-glovo")
     assert "locked" in classes(user, "row-oro-glovo")
     assert "locked" not in classes(user, "row-oro-zara")
+
+
+async def test_an_uncleared_row_skipped_with_include_uncleared_on_holds_the_checkpoint(
+    user: User, seed: Seed, ynab_api: YnabClientStub
+):
+    seed()
+    await open_reconcile(user)
+    user.find(marker="include-uncleared").click()
+    await user.should_see("Lock 5 transactions in 2 accounts")
+    user.find(marker=f"toggle-{ORO}").click()
+    await user.should_see(marker="row-oro-zara")
+    user.find(marker="row-oro-zara").click()
+    await user.should_see("Lock 4 transactions in 2 accounts")
+
+    user.find(marker="lock-all").click()
+    await user.should_see(marker="confirm-action", retries=20)
+    user.find(marker="confirm-action").click()
+
+    await user.should_see("4 transactions locked", retries=20)
+    assert "oro-zara" not in updated(ynab_api)
+    assert LatestConfig.load().last_reconciliation_date == oct_(26)
 
 
 async def test_locking_everything_moves_the_checkpoint_to_the_latest_locked_date(

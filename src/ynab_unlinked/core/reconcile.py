@@ -86,7 +86,8 @@ def next_reconciliation_date(
     """Where the next reconciliation starts, None when nothing was locked.
 
     `locked` are the dates just reconciled, `remaining` those of the transactions in scope
-    left unreconciled. With anything left it is the earliest of those, so the next default
+    the user chose to leave unreconciled (not the uncleared ones they could not pick, which
+    would pin the date forever). With anything left it is the earliest of those, so the next default
     scope still shows them; otherwise the latest date locked. No buffer is applied here: the
     scope rewinds from this date once (`yul reconcile --buffer`, the app's "since" pill).
     """
