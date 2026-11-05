@@ -159,3 +159,51 @@ def test_an_amount_that_does_not_parse_is_reported(tmp_path: Path):
         BBVA().parse(input_file)
 
     assert error.value.message == "the row of 02/05/2025 MERCADONA: 'doce euros' is not an amount"
+
+
+def test_an_xlsx_with_typed_date_cells_keeps_every_row(tmp_path: Path):
+    # Saved again from a spreadsheet app, the dates are date cells and read as datetimes
+    input_file = write_xls(
+        tmp_path / "bbva.xlsx",
+        bbva_sheet(
+            [
+                (dt.datetime(2025, 5, 2), "MERCADONA", -12.5),  # type: ignore[list-item]
+                (dt.date(2025, 5, 3), "ZARA", -30.0),  # type: ignore[list-item]
+            ]
+        ),
+    )
+
+    transactions = BBVA().parse(input_file)
+
+    assert [(t.date, t.payee, t.amount) for t in transactions] == [
+        (dt.date(2025, 5, 2), "MERCADONA", -12.5),
+        (dt.date(2025, 5, 3), "ZARA", -30.0),
+    ]
+
+
+@pytest.mark.parametrize(
+    "date",
+    [
+        pytest.param("2025-05-02", id="another-format"),
+        pytest.param("31/02/2025", id="a-day-that-does-not-exist"),
+    ],
+)
+def test_a_row_with_an_amount_and_a_date_that_does_not_parse_is_reported(tmp_path: Path, date: str):
+    input_file = write_xls(
+        tmp_path / "bbva.xlsx",
+        bbva_sheet([("01/05/2025", "ZARA", -30.0), (date, "MERCADONA", -12.5)]),
+    )
+
+    with pytest.raises(ParsingError) as error:
+        BBVA().parse(input_file)
+
+    assert error.value.message == f"the row of MERCADONA -12.5: {date} is not a date"
+
+
+def test_a_row_without_a_date_or_an_amount_is_still_skipped(tmp_path: Path):
+    input_file = write_xls(
+        tmp_path / "bbva.xlsx",
+        [*bbva_sheet([("01/05/2025", "ZARA", -30.0)]), ["", "Total", "", "", -30.0, "€", ""]],
+    )
+
+    assert [t.payee for t in BBVA().parse(input_file)] == ["ZARA"]
