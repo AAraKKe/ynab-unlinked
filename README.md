@@ -44,6 +44,8 @@ yul privacy                                                        # what is sto
 
 The first command runs setup if there is no configuration yet. `yul load` shows every transaction it is about to create and asks once before importing; add `--yes` to run it unattended.
 
+Send each bank to its own YNAB account. yul recognises what it already imported the way YNAB's own file import does, by date, amount and how many times that pair repeats, without the bank. Two banks feeding one account can then take a row of the same day and amount, imported in separate runs, for one already in YNAB and skip it.
+
 ## Privacy
 
 Everything runs on your computer and the only service it talks to is YNAB's API. There is no telemetry. Your token lives in the system keychain (macOS Keychain, Windows Credential Manager, Secret Service or KWallet on Linux). `yul privacy` lists what is stored and where, `yul config reset` deletes all of it, and the [privacy notice](./PRIVACY.md) has the details.

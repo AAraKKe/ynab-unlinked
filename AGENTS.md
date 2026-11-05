@@ -44,6 +44,13 @@ changelog/           Towncrier fragments, one per PR.
 
 ## Adding an entity
 
+Import ids follow YNAB's own file import convention, `YNAB:<milliunits>:<date>:<occurrence>`,
+so YNAB's matching and its own file imports agree with yul. That is deliberate; do not add
+the bank to the id. The id does not name the bank, so one YNAB account should receive
+statements from one bank only: two banks feeding the same account can collide on a row of
+the same day and amount imported in separate runs, and the second one is skipped as already
+imported.
+
 1. Create `src/ynab_unlinked/entities/<name>/` with a parser class implementing the
    `Entity` protocol from `entities/_protocol.py`: `parse()` returns `list[Transaction]`,
    `name()` returns the entity key, `sniff()` returns a `Match` (confidence and a short
