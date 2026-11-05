@@ -5,10 +5,11 @@ from ynab_unlinked.formatter import Formatter
 
 
 @dataclass
-class YnabUnlinkedContext[T]:
+class YnabUnlinkedContext:
+    """The state of one `yul` command line run. The CLI only: parsers never see it."""
+
     config: LatestConfig
     formatter: Formatter
-    extras: T
     show: bool = False
     reconcile: bool = False
     choose_account: bool = False

@@ -1,4 +1,3 @@
-from .command import command
 from .spec import spec
 
-__all__ = ["command", "spec"]
+__all__ = ["spec"]

@@ -16,13 +16,11 @@ import dataclasses
 from collections.abc import Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any
 
 from nicegui import background_tasks, context, run, ui
 from ynab import TransactionClearedStatus
 
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.detect import Candidate, detect_loaders
 from ynab_unlinked.core.importing import (
     ImportPlan,
@@ -116,13 +114,6 @@ class ImportFlow:
             set_class(element, "on", index == step)
             set_class(element, "done", index < step)
 
-    def context(self) -> YnabUnlinkedContext[Any]:
-        current = state()
-        config, _ = current.require()
-        return YnabUnlinkedContext(
-            config=config, formatter=current.require_formatter(), extras=None
-        )
-
     def formatter(self) -> Formatter:
         return state().require_formatter()
 
@@ -177,7 +168,8 @@ class ImportFlow:
 
     async def detect(self, item: ImportFile) -> None:
         try:
-            detections = await run.io_bound(detect_loaders, [item.path], self.context())
+            config, _ = state().require()
+            detections = await run.io_bound(detect_loaders, [item.path], config)
         except Exception as error:
             item.status = Status.UNSUPPORTED
             item.problem = f"Could not be read: {error}"
@@ -229,7 +221,7 @@ class ImportFlow:
         self.refresh(item)
         spec = item.candidate.loader
         try:
-            transactions = await run.io_bound(parse_file, spec, item.path, options, self.context())
+            transactions = await run.io_bound(parse_file, spec, item.path, options)
         except Exception as error:
             if version != item.version:
                 return

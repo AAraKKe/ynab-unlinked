@@ -8,8 +8,7 @@ from tests.helpers import assets
 from tests.helpers.statements import cobee_export
 from tests.helpers.types import CliRunner
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.entities.cobee.cobee import Cobee, CobeeContext, Language, parse_date
+from ynab_unlinked.entities.cobee.cobee import Cobee, Language, parse_date
 
 pytestmark = [pytest.mark.version("V4"), pytest.mark.usefixtures("config")]
 
@@ -27,15 +26,6 @@ LANGUAGES = [pytest.param(language, id=f"in-{language.value}") for language in L
 
 
 @pytest.fixture
-def cobee_context(context_obj: YnabUnlinkedContext):
-    def build(language: Language = Language.ES) -> YnabUnlinkedContext[CobeeContext]:
-        context_obj.extras = CobeeContext(language=language)
-        return context_obj
-
-    return build
-
-
-@pytest.fixture
 def export(tmp_path: Path):
     def build(lines: Iterable[str], **kwargs: Iterable[str]) -> Path:
         input_file = tmp_path / "cobee.html"
@@ -45,8 +35,8 @@ def export(tmp_path: Path):
     return build
 
 
-def test_a_saved_page_becomes_transactions(cobee_context):
-    transactions = Cobee().parse(assets.path(EXPORT), cobee_context())
+def test_a_saved_page_becomes_transactions():
+    transactions = Cobee(Language.ES).parse(assets.path(EXPORT))
 
     assert [(t.date, t.payee, t.amount) for t in transactions] == [
         (dt.date(2025, 5, 15), "Restaurante Botin", -34.80),
@@ -55,21 +45,19 @@ def test_a_saved_page_becomes_transactions(cobee_context):
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
-def test_only_the_lines_below_the_transactions_heading_are_read(
-    export, cobee_context, language: Language
-):
+def test_only_the_lines_below_the_transactions_heading_are_read(export, language: Language):
     heading, *_ = IDENTIFIERS[language]
     # The page shows the available balance above the heading, in the same shape as an amount
     input_file = export([heading, "15 May 2025", "Restaurante Botin", "-34.80 €"])
 
-    transactions = Cobee().parse(input_file, cobee_context(language))
+    transactions = Cobee(language).parse(input_file)
 
     assert [(t.date, t.payee, t.amount) for t in transactions] == [
         (dt.date(2025, 5, 15), "Restaurante Botin", -34.80)
     ]
 
 
-def test_a_date_heading_applies_to_every_transaction_below_it(export, cobee_context):
+def test_a_date_heading_applies_to_every_transaction_below_it(export):
     input_file = export(
         [
             "Transacciones",
@@ -84,7 +72,7 @@ def test_a_date_heading_applies_to_every_transaction_below_it(export, cobee_cont
         ]
     )
 
-    transactions = Cobee().parse(input_file, cobee_context())
+    transactions = Cobee(Language.ES).parse(input_file)
 
     assert [(t.date.day, t.payee) for t in transactions] == [
         (15, "Restaurante Botin"),
@@ -94,7 +82,7 @@ def test_a_date_heading_applies_to_every_transaction_below_it(export, cobee_cont
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
-def test_money_added_to_the_card_is_not_a_transaction(export, cobee_context, language: Language):
+def test_money_added_to_the_card_is_not_a_transaction(export, language: Language):
     """Top ups come from payroll, importing them would count the same money twice."""
     heading, accumulation, *_ = IDENTIFIERS[language]
     input_file = export(
@@ -108,7 +96,7 @@ def test_money_added_to_the_card_is_not_a_transaction(export, cobee_context, lan
         ]
     )
 
-    transactions = Cobee().parse(input_file, cobee_context(language))
+    transactions = Cobee(language).parse(input_file)
 
     assert [t.payee for t in transactions] == ["Restaurante Botin"]
 
@@ -118,9 +106,7 @@ def test_money_added_to_the_card_is_not_a_transaction(export, cobee_context, lan
     "status",
     [pytest.param(2, id="cancelled"), pytest.param(3, id="rejected")],
 )
-def test_a_transaction_that_did_not_go_through_is_dropped(
-    export, cobee_context, language: Language, status: int
-):
+def test_a_transaction_that_did_not_go_through_is_dropped(export, language: Language, status: int):
     heading, *_ = IDENTIFIERS[language]
     input_file = export(
         [
@@ -134,7 +120,7 @@ def test_a_transaction_that_did_not_go_through_is_dropped(
         ]
     )
 
-    transactions = Cobee().parse(input_file, cobee_context(language))
+    transactions = Cobee(language).parse(input_file)
 
     assert [t.payee for t in transactions] == ["Restaurante Botin"]
 
@@ -171,29 +157,29 @@ def test_a_transaction_that_did_not_go_through_is_dropped(
     ],
 )
 def test_a_marker_never_drops_a_transaction_it_does_not_follow(
-    export, cobee_context, lines: list[str], expected_payees: list[str]
+    export, lines: list[str], expected_payees: list[str]
 ):
     """A rejected charge of 0.00 € is skipped as a zero, so its marker has nothing to drop."""
-    transactions = Cobee().parse(export(lines), cobee_context())
+    transactions = Cobee(Language.ES).parse(export(lines))
 
     assert [t.payee for t in transactions] == expected_payees
 
 
-def test_a_zero_amount_is_not_imported(export, cobee_context):
+def test_a_zero_amount_is_not_imported(export):
     input_file = export(
         ["Transacciones", "15 May 2025", "Preautorizacion", "0.00 €", "Mercadona", "-12.05 €"]
     )
 
-    transactions = Cobee().parse(input_file, cobee_context())
+    transactions = Cobee(Language.ES).parse(input_file)
 
     assert [t.payee for t in transactions] == ["Mercadona"]
 
 
-def test_an_amount_before_any_date_is_rejected(export, cobee_context):
+def test_an_amount_before_any_date_is_rejected(export):
     input_file = export(["Transacciones", "Restaurante Botin", "-34.80 €"])
 
     with pytest.raises(ValueError, match="not valid"):
-        Cobee().parse(input_file, cobee_context())
+        Cobee(Language.ES).parse(input_file)
 
 
 @pytest.mark.parametrize(
@@ -203,24 +189,24 @@ def test_an_amount_before_any_date_is_rejected(export, cobee_context):
         pytest.param("-1.234,56 €", id="spanish-separators"),
     ],
 )
-def test_an_amount_over_a_thousand_euros_is_imported(export, cobee_context, raw: str):
+def test_an_amount_over_a_thousand_euros_is_imported(export, raw: str):
     input_file = export(["Transacciones", "15 May 2025", "Guarderia", raw])
 
-    transactions = Cobee().parse(input_file, cobee_context())
+    transactions = Cobee(Language.ES).parse(input_file)
 
     assert [t.amount for t in transactions] == [-1234.56]
 
 
-def test_a_dot_is_the_decimal_separator_on_the_cobee_page(export, cobee_context):
+def test_a_dot_is_the_decimal_separator_on_the_cobee_page(export):
     # Regression: stripping every dot as a thousands separator turned 21.90 into 2190
     input_file = export(["Transacciones", "15 May 2025", "Cafeteria", "-€21.90"])
 
-    transactions = Cobee().parse(input_file, cobee_context())
+    transactions = Cobee(Language.ES).parse(input_file)
 
     assert [t.amount for t in transactions] == [-21.90]
 
 
-def test_the_savings_note_under_a_purchase_is_not_a_transaction(export, cobee_context):
+def test_the_savings_note_under_a_purchase_is_not_a_transaction(export):
     # Regression: every purchase is followed by how it was paid and how much tax it saved.
     # Parsing "Ahorras €9.86" as an amount imported a fake inflow per purchase
     input_file = export(
@@ -238,7 +224,7 @@ def test_the_savings_note_under_a_purchase_is_not_a_transaction(export, cobee_co
         ]
     )
 
-    transactions = Cobee().parse(input_file, cobee_context())
+    transactions = Cobee(Language.ES).parse(input_file)
 
     assert [(t.payee, t.amount) for t in transactions] == [
         ("Glovo 01OCT M1Z4XTCK", -21.90),
@@ -310,3 +296,26 @@ def test_the_load_command_reads_the_language_saved_for_the_bank(
 
     assert result.exit_code == 0, result.output
     assert ("Restaurante Botin" in result.output) is found
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        pytest.param([], id="read-from-the-page"),
+        pytest.param(["--language", "en"], id="the-long-name"),
+        pytest.param(["-l", "en"], id="the-short-name"),
+    ],
+)
+def test_the_load_command_reads_a_page_in_another_language(
+    tmp_path: Path, yul: CliRunner, arguments: list[str]
+):
+    input_file = tmp_path / "cobee.html"
+    input_file.write_text(
+        cobee_export(["Transactions", "15 May 2025", "Restaurante Botin", "-34.80 €"]),
+        encoding="utf-8",
+    )
+
+    result = yul("load", "--show", "cobee", *arguments, str(input_file))
+
+    assert result.exit_code == 0, result.output
+    assert "Restaurante Botin" in result.output

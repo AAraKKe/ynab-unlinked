@@ -6,8 +6,6 @@ pulling ``main`` (avoids import cycles).
 
 from __future__ import annotations
 
-from typing import Any
-
 import typer
 
 from ynab_unlinked.config import ConfigV1, LatestConfig, get_config
@@ -36,10 +34,9 @@ def run_setup() -> LatestConfig:
     return config
 
 
-def _build_context(config: LatestConfig) -> YnabUnlinkedContext[Any]:
+def _build_context(config: LatestConfig) -> YnabUnlinkedContext:
     return YnabUnlinkedContext(
         config=config,
-        extras=None,
         formatter=Formatter(
             date_format=config.budget.date_format,
             currency_format=config.budget.currency_format,
@@ -47,7 +44,7 @@ def _build_context(config: LatestConfig) -> YnabUnlinkedContext[Any]:
     )
 
 
-def load_context() -> YnabUnlinkedContext[Any] | None:
+def load_context() -> YnabUnlinkedContext | None:
     """Load the persisted config and wrap it in a YnabUnlinkedContext.
 
     Returns ``None`` if no config exists; the caller decides whether to prompt setup or bail
@@ -74,7 +71,7 @@ TOKEN_MISSING = (
 
 def ensure_config(
     context: typer.Context, *, interactive: bool = True, require_token: bool = True
-) -> YnabUnlinkedContext[Any]:
+) -> YnabUnlinkedContext:
     """Make sure ``context.obj`` has a valid config, loading it or prompting setup if missing.
 
     The config is only read here, by the commands that need it: `yul privacy` and
@@ -84,7 +81,7 @@ def ensure_config(
     keychain is an error too, unless ``require_token`` is false (what `yul config set
     api_key` passes).
     """
-    obj: YnabUnlinkedContext[Any] | None = context.obj
+    obj: YnabUnlinkedContext | None = context.obj
     if obj is None:
         try:
             obj = load_context()

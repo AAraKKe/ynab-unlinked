@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Any
 
 import typer
 from rich.markup import escape
@@ -58,7 +57,7 @@ def get_or_prompt_account_id(
 def process_transactions(
     entity: Entity,
     input_file: Path,
-    context: YnabUnlinkedContext[Any],
+    context: YnabUnlinkedContext,
 ) -> None:
     """
     Process the transactions from the input file and import them into YNAB.
@@ -76,7 +75,7 @@ def process_transactions(
     config = context.config
 
     try:
-        parsed_input = parse_transactions(entity, input_file, context)
+        parsed_input = parse_transactions(entity, input_file)
     except ParsingError as e:
         display.error(f"Error when parsing {e.input_file}")
         display.console().print(f"  Message: {escape(e.message)}")

@@ -5,6 +5,7 @@ import pytest
 from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.commands import load
+from ynab_unlinked.entities.registry import loaders
 
 pytestmark = pytest.mark.version("V4")
 
@@ -35,3 +36,29 @@ def test_an_unknown_entity_is_rejected(yul: CliRunner):
     result = yul("load unknown-bank")
 
     assert result.exit_code != 0
+
+
+@pytest.mark.parametrize(
+    ("key", "flag"),
+    [
+        pytest.param(spec.key, flag, id=f"{spec.key}{flag}")
+        for spec in loaders()
+        for option in spec.options
+        for flag in option.cli_flags
+    ],
+)
+def test_every_option_of_a_bank_is_an_option_of_its_command(yul: CliRunner, key: str, flag: str):
+    # `yul load <bank>` is generated from the bank's spec, the one place its options live
+    result = yul("load", key, "--help", env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0, result.output
+    assert flag in result.output
+
+
+def test_an_option_that_takes_a_year_rejects_anything_else(yul: CliRunner, tmp_path):
+    statement = tmp_path / "sabadell.txt"
+    statement.write_text("")
+
+    result = yul("load", "--show", "sabadell", "--year", "last", str(statement))
+
+    assert result.exit_code == 2

@@ -8,12 +8,11 @@ decide what to do with ambiguity.
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as dt
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec, loaders
 from ynab_unlinked.exceptions import ParsingError
@@ -22,7 +21,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from ynab_unlinked.config import LatestConfig, LoaderConfig
-    from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.entities import Match
     from ynab_unlinked.models import Transaction
 
@@ -74,15 +72,17 @@ class Detection:
         return self.best is None and len(self._parsed) > 1
 
 
-def detect_loaders(files: Sequence[Path], context: YnabUnlinkedContext[Any]) -> list[Detection]:
-    """One `Detection` per file, in the order given. Unsupported files get no candidates."""
+def detect_loaders(files: Sequence[Path], config: LatestConfig) -> list[Detection]:
+    """
+    One `Detection` per file, in the order given. Unsupported files get no candidates.
+
+    `config` holds the options saved for each bank, which win over the detected ones.
+    """
     specs = loaders()
-    return [_detect(input_file, specs, context) for input_file in files]
+    return [_detect(input_file, specs, config) for input_file in files]
 
 
-def _detect(
-    input_file: Path, specs: Sequence[LoaderSpec], context: YnabUnlinkedContext[Any]
-) -> Detection:
+def _detect(input_file: Path, specs: Sequence[LoaderSpec], config: LatestConfig) -> Detection:
     candidates: list[Candidate] = []
     for spec in specs:
         if not spec.accepts(input_file):
@@ -92,7 +92,7 @@ def _detect(
         if match.confidence < MIN_CONFIDENCE:
             continue
 
-        candidates.append(_trial(spec, match, input_file, context))
+        candidates.append(_trial(spec, match, input_file, config))
 
     candidates.sort(
         key=lambda c: (c.transactions is not None, c.confidence, len(c.transactions or ())),
@@ -111,17 +111,11 @@ def _sniff(spec: LoaderSpec, input_file: Path) -> Match:
         return Match(0.0, f"Could not sniff the file: {_describe(error)}")
 
 
-def _trial(
-    spec: LoaderSpec, match: Match, input_file: Path, context: YnabUnlinkedContext[Any]
-) -> Candidate:
+def _trial(spec: LoaderSpec, match: Match, input_file: Path, config: LatestConfig) -> Candidate:
     options: dict[str, str] = {}
     try:
-        options = preferred_options(
-            resolve_options(spec, match.reason), context.config.entity(spec.name)
-        )
-        entity = spec.build(options)
-        trial_context = dataclasses.replace(context, extras=spec.context_extras(options))
-        transactions = tuple(entity.parse(input_file, trial_context))
+        options = preferred_options(resolve_options(spec, match.reason), config.entity(spec.name))
+        transactions = tuple(spec.build(options).parse(input_file))
     except Exception as error:
         return Candidate(spec, match.confidence, match.reason, options, None, _describe(error))
 
@@ -142,6 +136,22 @@ def saved_options(spec: LoaderSpec, config: LatestConfig) -> dict[str, str]:
     unset = dict.fromkeys((option.key for option in spec.options), AUTO)
     preferred = preferred_options(unset, config.entity(spec.name))
     return {key: value for key, value in preferred.items() if value != AUTO}
+
+
+def options_for_file(
+    spec: LoaderSpec, input_file: Path, given: Mapping[str, str], config: LatestConfig
+) -> dict[str, str]:
+    """
+    The options `yul load <key>` reads `input_file` with.
+
+    A value given on the command line wins, then the one saved for the bank, then what the
+    file tells (`auto`), the way detection resolves it for `yul load auto` and the app.
+    """
+    chosen = {key: value for key, value in given.items() if value != AUTO}
+    preferred = saved_options(spec, config) | chosen
+    if all(option.key in preferred for option in spec.options):
+        return preferred
+    return resolve_options(spec, _sniff(spec, input_file).reason) | preferred
 
 
 def resolve_options(spec: LoaderSpec, reason: str = "") -> dict[str, str]:

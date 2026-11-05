@@ -10,7 +10,6 @@ from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import get_config
-from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities.bbva.bbva import BBVA
 from ynab_unlinked.exceptions import ParsingError
 
@@ -49,17 +48,17 @@ def account_prompt(ynab_api: YnabClientStub):
     ],
 )
 def test_an_xlsx_statement_becomes_transactions(
-    context_obj: YnabUnlinkedContext, position: int, date: dt.date, payee: str, amount: float
+    position: int, date: dt.date, payee: str, amount: float
 ):
-    transactions = BBVA().parse(assets.path(XLSX_STATEMENT), context_obj)
+    transactions = BBVA().parse(assets.path(XLSX_STATEMENT))
 
     assert len(transactions) == 17
     assert (transactions[position].date, transactions[position].payee) == (date, payee)
     assert transactions[position].amount == amount
 
 
-def test_a_pdf_statement_becomes_transactions(context_obj: YnabUnlinkedContext):
-    transactions = BBVA().parse(assets.path(PDF_STATEMENT), context_obj)
+def test_a_pdf_statement_becomes_transactions():
+    transactions = BBVA().parse(assets.path(PDF_STATEMENT))
 
     # The date and the concept carry a second line, the settlement date and the spending
     # category, and neither the header repeated on page two nor the total are transactions
@@ -71,21 +70,21 @@ def test_a_pdf_statement_becomes_transactions(context_obj: YnabUnlinkedContext):
     ]
 
 
-def test_a_pdf_without_a_transaction_table_is_reported(context_obj: YnabUnlinkedContext):
+def test_a_pdf_without_a_transaction_table_is_reported():
     with pytest.raises(ParsingError) as error:
-        BBVA().parse(assets.path("parsers/no_table.pdf"), context_obj)
+        BBVA().parse(assets.path("parsers/no_table.pdf"))
 
     assert "No transaction table" in error.value.message
 
 
-def test_a_pdf_row_with_a_blank_cell_is_not_a_transaction(context_obj: YnabUnlinkedContext):
-    transactions = BBVA().parse(assets.path("bbva/bbva_blank_cell.pdf"), context_obj)
+def test_a_pdf_row_with_a_blank_cell_is_not_a_transaction():
+    transactions = BBVA().parse(assets.path("bbva/bbva_blank_cell.pdf"))
 
     assert [t.payee for t in transactions] == ["Netflix.com"]
 
 
-def test_a_charge_over_a_thousand_euros_is_imported(context_obj: YnabUnlinkedContext):
-    transactions = BBVA().parse(assets.path("bbva/bbva_large_amount.pdf"), context_obj)
+def test_a_charge_over_a_thousand_euros_is_imported():
+    transactions = BBVA().parse(assets.path("bbva/bbva_large_amount.pdf"))
 
     assert [t.amount for t in transactions] == [-1234.56]
 
@@ -98,14 +97,12 @@ def test_a_charge_over_a_thousand_euros_is_imported(context_obj: YnabUnlinkedCon
         pytest.param(".doc", id="a-format-the-tool-knows-nothing-about"),
     ],
 )
-def test_a_file_bbva_cannot_read_is_reported(
-    context_obj: YnabUnlinkedContext, tmp_path: Path, suffix: str
-):
+def test_a_file_bbva_cannot_read_is_reported(tmp_path: Path, suffix: str):
     input_file = tmp_path / f"statement{suffix}"
     input_file.touch()
 
     with pytest.raises(ParsingError) as error:
-        BBVA().parse(input_file, context_obj)
+        BBVA().parse(input_file)
 
     assert "pdf" in error.value.message
     assert "xlsx" in error.value.message
@@ -153,14 +150,12 @@ def test_the_load_command_reports_a_statement_it_cannot_parse(yul: CliRunner, ac
     assert "No transaction table was found" in result.output
 
 
-def test_an_amount_that_does_not_parse_is_reported(
-    context_obj: YnabUnlinkedContext, tmp_path: Path
-):
+def test_an_amount_that_does_not_parse_is_reported(tmp_path: Path):
     input_file = write_xls(
         tmp_path / "bbva.xlsx", bbva_sheet([("02/05/2025", "MERCADONA", "doce euros")])
     )
 
     with pytest.raises(ParsingError) as error:
-        BBVA().parse(input_file, context_obj)
+        BBVA().parse(input_file)
 
     assert error.value.message == "the row of 02/05/2025 MERCADONA: 'doce euros' is not an amount"

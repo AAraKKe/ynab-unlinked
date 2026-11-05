@@ -25,7 +25,7 @@ PURCHASE = Transaction(dt.date(2025, 5, 1), "Mercadona", -12.05)
 
 
 def detect(input_file: Path, context: YnabUnlinkedContext) -> Detection:
-    [detection] = detect_loaders([input_file], context)
+    [detection] = detect_loaders([input_file], context.config)
     return detection
 
 
@@ -174,7 +174,7 @@ def test_a_file_no_loader_recognises_has_no_candidates(
 def test_files_are_detected_in_the_order_given(context_obj: YnabUnlinkedContext):
     files = [assets.path("cobee/transactions.html"), assets.path("bbva/bbva.pdf")]
 
-    detections = detect_loaders(files, context_obj)
+    detections = detect_loaders(files, context_obj.config)
 
     assert [d.input_file for d in detections] == files
     assert [d.best.loader.key for d in detections if d.best] == ["cobee", "bbva"]
@@ -189,7 +189,7 @@ class _Unreadable:
     def sniff(self, input_file: Path) -> Match:
         return Match(1.0, "Claims everything")
 
-    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
+    def parse(self, input_file: Path) -> list[Transaction]:
         raise ParsingError(input_file, "The layout changed")
 
 
@@ -202,7 +202,6 @@ def test_a_loader_that_cannot_parse_the_file_does_not_win(mocker, context_obj: Y
         input_types=sabadell.input_types,
         options=(),
         build=lambda options: _Unreadable(),
-        extras=None,
     )
     mocker.patch("ynab_unlinked.core.detect.loaders", return_value=[unreadable, sabadell])
 

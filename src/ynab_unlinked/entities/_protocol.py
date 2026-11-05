@@ -1,7 +1,6 @@
 from pathlib import Path
-from typing import Any, NamedTuple, Protocol
+from typing import NamedTuple, Protocol
 
-from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.models import Transaction
 
 
@@ -15,7 +14,7 @@ class Match(NamedTuple):
 
 
 class Entity(Protocol):
-    def parse(self, input_file: Path, context: YnabUnlinkedContext[Any]) -> list[Transaction]:
+    def parse(self, input_file: Path) -> list[Transaction]:
         """
         Parse an input file into a list of Transaction objects.
 
@@ -28,6 +27,10 @@ class Entity(Protocol):
 
         `ynab-unlinked` will understand these transactions and enrich them when necesary to
         ensure the best matching when pushing them to YNAB.
+
+        Every option (a language, a year) is bound when the entity is built
+        (`LoaderSpec.build`); parsing reads only the file. A row that cannot be read raises
+        `ParsingError` naming its line or row.
         """
         ...
 

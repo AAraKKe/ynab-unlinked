@@ -1,7 +1,9 @@
 """What every entity package offers as a loader, discovered at runtime.
 
 Each entity package exposes a module level `spec: LoaderSpec`. Frontends list them with
-`loaders()`, show their options, and build the entity with concrete option values.
+`loaders()`, show their options, and build the entity with concrete option values:
+`yul load <key>` is generated from the spec (`commands/load.py`), its options from
+`spec.options`, so adding a bank is one spec and one parser.
 """
 
 from __future__ import annotations
@@ -10,7 +12,7 @@ import importlib
 import pkgutil
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -27,6 +29,16 @@ class LoaderOption:
     label: str
     default: str
     choices: tuple[str, ...] | None = None
+    flags: tuple[str, ...] = ()
+    """Its names on `yul load <key>`. Empty is `--<key>`."""
+    help: str = ""
+    """Its help on `yul load <key>`. Empty is the label."""
+    integer: bool = False
+    """The command line only takes a whole number (a year)."""
+
+    @property
+    def cli_flags(self) -> tuple[str, ...]:
+        return self.flags or (f"--{self.key}",)
 
 
 @dataclass(frozen=True)
@@ -40,17 +52,15 @@ class LoaderSpec:
     input_types: tuple[InputType, ...]
     options: tuple[LoaderOption, ...]
     build: Callable[[Mapping[str, str]], Entity]
-    """Options to entity instance. Raises `ValueError` on a missing, `auto` or invalid value."""
-    extras: Callable[[Mapping[str, str]], Any] | None
-    """Options to `context.extras`, for the entities that read it."""
+    """Options to entity instance, every option bound. Raises `ValueError` on a missing,
+    `auto` or invalid value."""
+    help: str = ""
+    """The help of `yul load <key>`."""
 
     def accepts(self, input_file: Path) -> bool:
         from ynab_unlinked.entities._sniff import suffix
 
         return suffix(input_file) in self.input_types
-
-    def context_extras(self, options: Mapping[str, str]) -> Any:
-        return None if self.extras is None else self.extras(options)
 
 
 def concrete(options: Mapping[str, str], key: str) -> str:

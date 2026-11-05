@@ -18,7 +18,6 @@ from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, LoaderConfig
-from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.detect import resolve_options
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
@@ -66,13 +65,11 @@ def ynab(ynab_api: YnabClientStub) -> YnabClientStub:
     return ynab_api
 
 
-def import_ids(key: str, path: Path, context: YnabUnlinkedContext) -> list[str]:
+def import_ids(key: str, path: Path) -> list[str]:
     """The import ids of a statement, read with the options detection resolves."""
     spec = loader(key)
-    options = resolve_options(spec)
-    entity = spec.build(options)
-    context.extras = spec.context_extras(options)
-    return [pending.import_id for pending in assign_import_ids(entity.parse(path, context))]
+    entity = spec.build(resolve_options(spec))
+    return [pending.import_id for pending in assign_import_ids(entity.parse(path))]
 
 
 def created(ynab: YnabClientStub) -> dict[str, list[Any]]:
@@ -111,12 +108,11 @@ async def test_statements_are_detected_reviewed_and_imported(
     ynab: YnabClientStub,
     user: User,
     bbva_file: Path,
-    context_obj: YnabUnlinkedContext,
     mocker: MockerFixture,
 ):
     invalidate = mocker.patch.object(AppState, "invalidate")
-    sabadell_ids = import_ids("sabadell", SABADELL, context_obj)
-    bbva_ids = import_ids("bbva", bbva_file, context_obj)
+    sabadell_ids = import_ids("sabadell", SABADELL)
+    bbva_ids = import_ids("bbva", bbva_file)
     api = ynab.api("transactions")
 
     def ynab_transactions(plan_id: str, account_id: str, since_date: dt.date) -> MagicMock:
@@ -261,7 +257,6 @@ async def test_an_ambiguous_file_waits_for_the_bank_to_be_chosen(
         input_types=sabadell.input_types,
         options=sabadell.options,
         build=sabadell.build,
-        extras=None,
     )
     mocker.patch("ynab_unlinked.core.detect.loaders", return_value=[sabadell, twin])
 

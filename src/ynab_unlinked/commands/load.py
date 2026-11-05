@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import dataclasses
-import importlib
-import pkgutil
+import inspect
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
-from ynab_unlinked import display, entities
+from ynab_unlinked import display
+from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec, loaders
 from ynab_unlinked.setup import ensure_config
 
 if TYPE_CHECKING:
@@ -114,14 +114,14 @@ def auto(
     from ynab_unlinked.utils import display_import_table, display_transaction_table
     from ynab_unlinked.ynab_api.client import Client
 
-    ctx: YnabUnlinkedContext[Any] = context.obj
+    ctx: YnabUnlinkedContext = context.obj
 
     files, copies = unique_files(files)
     for copy, first in copies:
         display.warning(escape(f"{copy.name}: same file as {first.name}, imported once"))
 
     with display.process("Finding the bank of each file..."):
-        detections = detect_loaders(files, ctx)
+        detections = detect_loaders(files, ctx.config)
 
     display.console().print(_detection_table(detections, ctx))
 
@@ -156,7 +156,7 @@ def auto(
     if ctx.show:
         for input_file, candidate in chosen:
             display.console().rule(f"{input_file.name}: {candidate.loader.title}")
-            display_transaction_table(_parse(input_file, candidate, ctx), ctx.formatter)
+            display_transaction_table(_parse(input_file, candidate), ctx.formatter)
         return
 
     # Every question is asked before anything is written to YNAB, so cancelling imports nothing
@@ -175,7 +175,7 @@ def auto(
 
     plans: list[ImportPlan] = []
     for (input_file, candidate), account_id in zip(chosen, account_ids, strict=True):
-        transactions = _parse(input_file, candidate, ctx)
+        transactions = _parse(input_file, candidate)
         with display.CliProgress() as progress:
             plans.append(
                 build_import_plan(
@@ -248,24 +248,21 @@ def auto(
     )
 
 
-def _parse(
-    input_file: Path, candidate: Candidate, ctx: YnabUnlinkedContext[Any]
-) -> list[Transaction]:
+def _parse(input_file: Path, candidate: Candidate) -> list[Transaction]:
     from rich.markup import escape
 
     from ynab_unlinked.core.importing import parse_transactions
     from ynab_unlinked.exceptions import ParsingError
 
-    context = dataclasses.replace(ctx, extras=candidate.loader.context_extras(candidate.options))
     try:
-        return parse_transactions(candidate.loader.build(candidate.options), input_file, context)
+        return parse_transactions(candidate.loader.build(candidate.options), input_file)
     except ParsingError as e:
         # Detection parsed the file already, so this only happens if it changed meanwhile
         display.error(escape(f"{input_file.name} could not be read: {e.message}"))
         raise typer.Exit(1) from e
 
 
-def _account_name(account_id: str, ctx: YnabUnlinkedContext[Any]) -> str:
+def _account_name(account_id: str, ctx: YnabUnlinkedContext) -> str:
     account = ctx.config.account(account_id)
     return account_id if account is None else account.name
 
@@ -274,7 +271,7 @@ def _plural(count: int) -> str:
     return "" if count == 1 else "s"
 
 
-def _detection_table(detections: list[Detection], ctx: YnabUnlinkedContext[Any]) -> Table:
+def _detection_table(detections: list[Detection], ctx: YnabUnlinkedContext) -> Table:
     from rich import box
     from rich.table import Column, Table
     from rich.text import Text
@@ -307,7 +304,7 @@ def _detection_table(detections: list[Detection], ctx: YnabUnlinkedContext[Any])
     return table
 
 
-def _account(candidate: Candidate, ctx: YnabUnlinkedContext[Any]) -> str:
+def _account(candidate: Candidate, ctx: YnabUnlinkedContext) -> str:
     if ctx.choose_account:
         return "asked on import"
     if (entity := ctx.config.entity(candidate.loader.name)) is None:
@@ -316,8 +313,6 @@ def _account(candidate: Candidate, ctx: YnabUnlinkedContext[Any]) -> str:
 
 
 def _status(detection: Detection) -> str:
-    from ynab_unlinked.entities.registry import loaders
-
     if detection.ambiguous:
         return "ambiguous"
     if detection.candidates:
@@ -328,8 +323,6 @@ def _status(detection: Detection) -> str:
 
 
 def _problem(detection: Detection) -> str | None:
-    from ynab_unlinked.entities.registry import loaders
-
     name = detection.input_file.name
 
     if detection.best is not None:
@@ -354,18 +347,64 @@ def _problem(detection: Detection) -> str | None:
     return f"{name}: no bank exports this kind of file. Supported: {', '.join(supported)}"
 
 
+def bank_command(spec: LoaderSpec) -> Callable[..., None]:
+    """`yul load <key>`: the input file and one option per `spec.options`."""
+
+    def command(context: typer.Context, input_file: Path, **given: str | int | None) -> None:
+        from ynab_unlinked.core.detect import options_for_file
+        from ynab_unlinked.process import process_transactions
+
+        ctx: YnabUnlinkedContext = context.obj
+        options = options_for_file(
+            spec,
+            input_file,
+            {key: str(value) for key, value in given.items() if value is not None},
+            ctx.config,
+        )
+        process_transactions(spec.build(options), input_file, ctx)
+
+    parameters = [
+        inspect.Parameter(
+            "context", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=typer.Context
+        ),
+        inspect.Parameter(
+            "input_file",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            annotation=Annotated[
+                Path, typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True)
+            ],
+        ),
+        *(
+            inspect.Parameter(
+                option.key,
+                inspect.Parameter.KEYWORD_ONLY,
+                default=None,
+                annotation=_option_annotation(option),
+            )
+            for option in spec.options
+        ),
+    ]
+    # Typer reads the parameters from the signature and the annotations
+    command.__signature__ = inspect.Signature(parameters)  # pyright: ignore[reportFunctionMemberAccess]
+    command.__annotations__ = {parameter.name: parameter.annotation for parameter in parameters}
+    command.__doc__ = spec.help
+    return command
+
+
+def _option_annotation(option: LoaderOption) -> Any:
+    from enum import StrEnum
+
+    flags = typer.Option(*option.cli_flags, help=option.help or option.label)
+    if option.integer:
+        return Annotated[int | None, flags]
+    if choices := [choice for choice in option.choices or () if choice != AUTO]:
+        # An enum is what Typer lists as `<es|en|pt>`; left out, the value is read from the file
+        values = StrEnum(option.key.title(), {choice: choice for choice in choices})
+        return Annotated[values | None, flags]  # pyright: ignore[reportInvalidTypeForm]
+    return Annotated[str | None, flags]
+
+
 load.command(name="auto", no_args_is_help=True)(auto)
 
-# Dynamically load all entities commands when present
-for _finder, name, ispkg in pkgutil.iter_modules(entities.__path__):
-    if not ispkg:
-        continue
-
-    module = importlib.import_module(f"{entities.__name__}.{name}")
-    if not hasattr(module, "command"):
-        continue
-
-    command = module.command
-
-    if callable(command):
-        load.command(name=name, no_args_is_help=True)(command)
+for _spec in loaders():
+    load.command(name=_spec.key, no_args_is_help=True)(bank_command(_spec))

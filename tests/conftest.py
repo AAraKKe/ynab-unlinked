@@ -77,7 +77,6 @@ def context_obj(config: str):
             date_format=config_obj.budget.date_format,
             currency_format=config_obj.budget.currency_format,
         ),
-        extras=None,
     )
 
 

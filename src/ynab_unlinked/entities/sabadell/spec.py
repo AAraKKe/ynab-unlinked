@@ -16,7 +16,24 @@ spec = LoaderSpec(
     name="sabadell",
     title="Sabadell",
     input_types=(InputType.TXT, InputType.XLS),
-    options=(LoaderOption(key="year", label="Year of the statement", default=AUTO),),
+    options=(
+        LoaderOption(
+            key="year",
+            label="Year of the statement",
+            default=AUTO,
+            flags=("-y", "--year"),
+            help=(
+                "Year of the transactions to import. Sabadell statements do not include the year in the date, "
+                "so you need to specify it. If not specified, the current year will be used."
+            ),
+            integer=True,
+        ),
+    ),
     build=build,
-    extras=None,
+    help="""
+    Inputs transactions from a Sabadell TXT or XLS file.
+
+    From your Sabadell Credit Card statement, you can download a txt file with the transactions.
+    At the moment only txt format is supported.
+    """,
 )

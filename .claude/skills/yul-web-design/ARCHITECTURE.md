@@ -98,7 +98,7 @@ class ImportResult:
     created: int
     duplicate_import_ids: tuple[str, ...]
 
-def parse_transactions(entity: Entity, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]
+def parse_transactions(entity: Entity, input_file: Path) -> list[Transaction]
     # wraps entity.parse, lets ParsingError propagate
 
 def build_import_plan(
@@ -167,7 +167,11 @@ def next_reconciliation_date(locked: Iterable[dt.date],
 ### 2.4 Loaders and detection (`entities/`, `core/detect.py`)
 
 Every entity package (`entities/bbva`, `entities/sabadell`, `entities/cobee`) exposes a
-module level `spec: LoaderSpec` next to the existing `command`.
+module level `spec: LoaderSpec` and nothing else: `commands/load.py` generates
+`yul load <key>` from it (`bank_command(spec)`: the input file plus one option per
+`LoaderOption`, `cli_flags` and `help`; a choice option lists its non auto choices, an
+`integer` one takes a whole number), resolves the values with `options_for_file` and
+calls `process_transactions(spec.build(options), ...)`. Parsers get no CLI context.
 
 ```python
 # entities/_protocol.py
@@ -177,7 +181,8 @@ class Match(NamedTuple):
 
 class Entity(Protocol):
     def name(self) -> str: ...
-    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]: ...
+    def parse(self, input_file: Path) -> list[Transaction]: ...
+        # options are bound by build; a row it cannot read raises ParsingError("line n: ...")
     def sniff(self, input_file: Path) -> Match: ...
         # cheap, reads at most the first page / first rows / first KB, never raises
 
@@ -188,6 +193,12 @@ class LoaderOption:
     label: str                      # "Year of the statement"
     default: str                    # "auto" allowed where the loader can infer it
     choices: tuple[str, ...] | None = None
+    flags: tuple[str, ...] = ()     # on `yul load <key>`: ("-y", "--year"); empty: --<key>
+    help: str = ""                  # its command line help, else the label
+    integer: bool = False           # the command line takes a whole number
+
+    @property
+    def cli_flags(self) -> tuple[str, ...]: ...
 
 @dataclass(frozen=True)
 class LoaderSpec:
@@ -196,12 +207,11 @@ class LoaderSpec:
     title: str                      # user facing: "BBVA Credit Card", "Sabadell", "Cobee"
     input_types: tuple[InputType, ...]
     options: tuple[LoaderOption, ...]
-    build: Callable[[Mapping[str, str]], Entity]          # options -> entity instance
-    extras: Callable[[Mapping[str, str]], Any] | None     # options -> context.extras (cobee)
+    build: Callable[[Mapping[str, str]], Entity]          # options -> entity, all bound
+    help: str = ""                                        # help of `yul load <key>`
 
     def accepts(self, input_file: Path) -> bool           # lower cased suffix in input_types,
                                                           # same rule as _sniff.extract_type
-    def context_extras(self, options) -> Any              # extras(options), or None
 
 AUTO = "auto"
 def concrete(options: Mapping[str, str], key: str) -> str   # ValueError on missing or "auto"
@@ -209,7 +219,7 @@ def loaders() -> list[LoaderSpec]        # discovered from entity packages, sort
 def loader(key: str) -> LoaderSpec       # KeyError if unknown
 ```
 
-`build` and `extras` take concrete values only: they raise `ValueError` on a missing,
+`build` takes concrete values only: they raise `ValueError` on a missing,
 `"auto"` or invalid value. Resolving `auto` is `core.detect.resolve_options`.
 
 Markers:
@@ -255,17 +265,22 @@ class Detection:
 MIN_CONFIDENCE = 0.5
 CLEAR_LEAD = 0.25
 
-def detect_loaders(files: Sequence[Path], context: YnabUnlinkedContext) -> list[Detection]
+def detect_loaders(files: Sequence[Path], config: LatestConfig) -> list[Detection]
     # for each file: loaders whose input_types accept the suffix -> sniff -> keep
     # confidence >= MIN_CONFIDENCE -> trial parse with resolved options (the bank's saved
-    # options from context.config on top, `preferred_options`) and a copy of the context
-    # carrying the loader extras -> rank by (parsed ok, confidence, transaction count)
+    # options from config on top, `preferred_options`) -> rank by (parsed ok, confidence,
+    # transaction count)
 
 def preferred_options(options: Mapping[str, str], saved: LoaderConfig | None) -> dict[str, str]
     # options with the saved non auto values of the bank on top
 def saved_options(spec: LoaderSpec, config: LatestConfig) -> dict[str, str]
-    # the bank's saved non auto options: `yul load <bank>` uses them for every option not
-    # given on the command line, so both frontends date and number a file the same way
+    # the bank's saved non auto options
+def options_for_file(
+    spec: LoaderSpec, input_file: Path, given: Mapping[str, str], config: LatestConfig
+) -> dict[str, str]
+    # what `yul load <key>` reads the file with: the command line value, else the saved
+    # one, else `resolve_options` from the file's sniff, so both frontends date and number
+    # a file the same way
 
 def resolve_options(spec: LoaderSpec, reason: str = "") -> dict[str, str]
     # every option of spec with a concrete value: a non auto default as is, auto from a

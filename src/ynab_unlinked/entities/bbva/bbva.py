@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from ynab_unlinked.entities import Entity, InputType, Match
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.models import Transaction
 
 
@@ -18,7 +17,7 @@ PDF_DATE = re.compile(r"^\d{2}/\d{2}/\d{4}")
 
 
 class BBVA(Entity):
-    def parse(self, input_file: Path, context: YnabUnlinkedContext[Any]) -> list[Transaction]:
+    def parse(self, input_file: Path) -> list[Transaction]:
         import datetime as dt
 
         from ynab_unlinked.entities._sniff import extract_type

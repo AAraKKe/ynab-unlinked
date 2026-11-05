@@ -11,7 +11,6 @@ from ynab_unlinked.entities import Match
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.models import Transaction
 
 DATE_REGEX = re.compile(r"(\d{1,2}) (\w{3}) (\d{4})")
@@ -43,11 +42,6 @@ class Language(StrEnum):
     ES = "es"
     EN = "en"
     PT = "pt"
-
-
-@dataclass
-class CobeeContext:
-    language: Language
 
 
 @dataclass
@@ -100,9 +94,11 @@ def identifers_by_language(language: Language) -> Identifiers:
 
 
 class Cobee:
-    def parse(
-        self, input_file: Path, context: YnabUnlinkedContext[CobeeContext]
-    ) -> list[Transaction]:
+    def __init__(self, language: Language):
+        self.language = language
+        """The language the page was saved in: its headings and markers are localised."""
+
+    def parse(self, input_file: Path) -> list[Transaction]:
         # Import now the html parser
         import html_text
 
@@ -120,7 +116,7 @@ class Cobee:
         date: dt.date | None = None
         payee: str | None = None
         amount: float | None = None
-        identifiers = identifers_by_language(context.extras.language)
+        identifiers = identifers_by_language(self.language)
 
         for line in text.splitlines():
             line = line.strip()

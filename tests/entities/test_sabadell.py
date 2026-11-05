@@ -1,7 +1,6 @@
 import datetime as dt
 from collections.abc import Iterable
 from pathlib import Path
-from typing import cast
 
 import pytest
 
@@ -9,7 +8,6 @@ from tests.helpers import assets
 from tests.helpers.statements import SABADELL_SHEET, sabadell_statement, write_xls
 from tests.helpers.types import CliRunner
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities.sabadell.sabadell import ANCHOR_LINE, SabadellParser
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.models import Transaction
@@ -34,8 +32,7 @@ def statement(tmp_path: Path):
 def parse(
     input_file: Path, year: int = 2025, today: dt.date = dt.date(2025, 12, 31)
 ) -> list[Transaction]:
-    # The parser does not read anything from the context
-    return SabadellParser(year=year, today=today).parse(input_file, cast(YnabUnlinkedContext, None))
+    return SabadellParser(year=year, today=today).parse(input_file)
 
 
 def test_a_txt_statement_becomes_transactions():

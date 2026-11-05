@@ -17,7 +17,7 @@ from .types import LoadEntityCallback
 class StubEntity(Entity):
     transactions: list[Transaction]
 
-    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
+    def parse(self, input_file: Path) -> list[Transaction]:
         return self.transactions
 
     def name(self) -> str:

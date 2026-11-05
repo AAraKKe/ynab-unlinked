@@ -3,17 +3,11 @@ from collections.abc import Mapping
 from ynab_unlinked.entities import InputType
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec, concrete
 
-from .cobee import Cobee, CobeeContext, Language
-
-
-def extras(options: Mapping[str, str]) -> CobeeContext:
-    return CobeeContext(language=Language(concrete(options, "language")))
+from .cobee import Cobee, Language
 
 
 def build(options: Mapping[str, str]) -> Cobee:
-    # The language only reaches the parser through the context, validate it here as well
-    extras(options)
-    return Cobee()
+    return Cobee(language=Language(concrete(options, "language")))
 
 
 spec = LoaderSpec(
@@ -27,8 +21,17 @@ spec = LoaderSpec(
             label="Language of the saved page",
             default=AUTO,
             choices=(AUTO, *(language.value for language in Language)),
+            flags=("-l", "--lang", "--language"),
+            help="Language used when exporting the HTML webisite",
         ),
     ),
     build=build,
-    extras=extras,
+    help="""
+    Import transactions from a Cobee HTML file.
+
+    Cobee that not support exporting transactions. To use the Cobee entity, form the website,
+    find the list of transactions of the month you want to import into YNAB and save the page as HTML.
+
+    You cando this by Right Click > Save as, and select where you want to save the file.
+    """,
 )

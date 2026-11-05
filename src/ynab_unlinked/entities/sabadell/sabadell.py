@@ -4,14 +4,13 @@ import calendar
 import datetime as dt
 import re
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ynab_unlinked.entities import Match
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.models import Transaction
 
 
@@ -33,7 +32,7 @@ class SabadellParser:
         self.today = today
         """The day rows are compared with to find future ones. None is the day it parses."""
 
-    def parse(self, input_file: Path, context: YnabUnlinkedContext[Any]) -> list[Transaction]:
+    def parse(self, input_file: Path) -> list[Transaction]:
         from ynab_unlinked.entities import InputType
         from ynab_unlinked.entities._sniff import extract_type
 

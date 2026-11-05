@@ -4,7 +4,6 @@ option choices, what is parsed and saved, and the words of the Done step and the
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as dt
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -12,7 +11,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.detect import Candidate, Detection
 from ynab_unlinked.core.importing import ImportPlan, ImportResult, parse_transactions
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
@@ -110,12 +108,9 @@ def option_choices(option: LoaderOption, current: str, today: dt.date) -> list[s
     return [current]
 
 
-def parse_file(
-    spec: LoaderSpec, path: Path, options: dict[str, str], base: YnabUnlinkedContext[Any]
-) -> list[Transaction]:
+def parse_file(spec: LoaderSpec, path: Path, options: dict[str, str]) -> list[Transaction]:
     """Read the file with the bank and these option values. Blocking: run it through io_bound."""
-    context = dataclasses.replace(base, extras=spec.context_extras(options))
-    return parse_transactions(spec.build(options), path, context)
+    return parse_transactions(spec.build(options), path)
 
 
 def chosen_accounts(items: Sequence[ImportFile]) -> list[tuple[str, str]]:

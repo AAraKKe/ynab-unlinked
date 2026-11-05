@@ -17,5 +17,5 @@ spec = LoaderSpec(
     input_types=tuple(InputType(t) for t in VALID_TYPES),
     options=(),
     build=build,
-    extras=None,
+    help="Import transactions from BBVA using a Credit Card PDF report.",
 )

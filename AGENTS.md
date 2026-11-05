@@ -53,14 +53,18 @@ the same day and amount imported in separate runs, and the second one is skipped
 imported.
 
 1. Create `src/ynab_unlinked/entities/<name>/` with a parser class implementing the
-   `Entity` protocol from `entities/_protocol.py`: `parse()` returns `list[Transaction]`,
+   `Entity` protocol from `entities/_protocol.py`: `parse(path)` returns
+   `list[Transaction]` and raises `ParsingError` naming the line or row it cannot read,
    `name()` returns the entity key, `sniff()` returns a `Match` (confidence and a short
-   reason) after reading only the head of the file, and never raises.
-2. Expose a Typer `command` callable and a `spec: LoaderSpec` (`entities/registry.py`:
-   key, title, input types, options, `build`) in the package. `commands/load.py` registers
-   `command` as `yul load <name>`; `yul load auto` and the web app find the loader through
-   `spec`.
-3. The command builds the parser and calls `process_transactions()` from `process.py`.
+   reason) after reading only the head of the file, and never raises. Options (a language,
+   a year) are constructor arguments: the parser never sees the CLI context.
+2. Expose a `spec: LoaderSpec` (`entities/registry.py`: key, title, input types, options,
+   `build`, the command `help`) in the package. `build(options)` binds every option.
+   `commands/load.py` generates `yul load <key>` from the spec, one command line option per
+   `LoaderOption` (`flags`, `help`), and runs `process_transactions()` from `process.py`;
+   `yul load auto` and the web app find the loader through the same `spec`.
+3. A value not given on the command line comes from the bank's saved options (Settings ›
+   Banks), then from the file (`auto`), as `core.detect.options_for_file` resolves it.
 4. Add tests under `tests/entities/`, including `sniff()` on real-looking files and on
    files of the other banks.
 5. Optionally add the bank's logo as `src/ynab_unlinked/web/static/logos/<key>.svg`:
