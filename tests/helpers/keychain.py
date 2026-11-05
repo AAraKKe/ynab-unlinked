@@ -12,11 +12,14 @@ class MemoryKeyring(KeyringBackend):
     def __init__(self) -> None:
         super().__init__()
         self.passwords: dict[tuple[str, str], str] = {}
+        self.stores = 0
+        """How many times a token was written, to tell a rewrite of the same one."""
 
     def get_password(self, service: str, username: str) -> str | None:
         return self.passwords.get((service, username))
 
     def set_password(self, service: str, username: str, password: str) -> None:
+        self.stores += 1
         self.passwords[(service, username)] = password
 
     def delete_password(self, service: str, username: str) -> None:

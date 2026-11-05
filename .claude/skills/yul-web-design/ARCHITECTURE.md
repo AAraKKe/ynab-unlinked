@@ -390,6 +390,7 @@ class LoaderConfig(BaseModel):
 # load means the keychain lost it: the CLI says to run `yul config set api_key`, the web
 # app keeps the config in `state().token_lost` and onboarding asks for the token only.
 # A save while the token is unread writes `REFERENCE` back, never an empty token.
+# A save that keeps the token read from (or stored to) the keychain does not store it again.
 # `save()` writes a 0600 temp file in the same directory (created 0700) and `os.replace`s it.
 # `keychain.read()` returns None when `YUL_NO_KEYCHAIN` is set. The item is
 # `keychain.service_name()`, read at each use: `YUL_KEYCHAIN_SERVICE`, else `ynab-unlinked (<YUL_HOME>)` when

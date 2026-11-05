@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import pytest
 from tests.helpers.config import ConfigFiles
 from tests.helpers.keychain import MemoryKeyring
 from ynab_unlinked import keychain
-from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config import LatestConfig, update_config
 from ynab_unlinked.local_data import delete_local_data
 
 pytestmark = pytest.mark.version("V4")
@@ -79,6 +80,42 @@ def test_deleting_the_local_data_removes_the_token_from_the_keychain(
 
     assert memory_keychain.passwords == {}
     delete_local_data()  # nothing left to remove is not an error
+
+
+def test_a_save_that_keeps_the_token_does_not_write_it_to_the_keychain_again(
+    config: str, memory_keychain: MemoryKeyring
+):
+    LatestConfig.load()
+    assert memory_keychain.stores == 1, "The token in the file moves to the keychain once"
+
+    update_config(lambda saved: setattr(saved, "last_reconciliation_date", dt.date(2025, 5, 10)))
+    LatestConfig.load().save()
+    assert memory_keychain.stores == 1
+
+    update_config(lambda saved: setattr(saved, "api_key", "a-new-token"))
+    assert memory_keychain.stores == 2
+    assert memory_keychain.passwords[item()] == "a-new-token"
+
+
+class RefusingKeyring(MemoryKeyring):
+    """A keychain that is there but refuses to store anything (full, prompt denied)."""
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        raise RuntimeError("The keychain refused the item")
+
+
+def test_a_keychain_that_refuses_the_token_leaves_it_in_the_file(
+    config: str, config_files: ConfigFiles, caplog: pytest.LogCaptureFixture
+):
+    keyring.set_keyring(RefusingKeyring())
+
+    loaded = LatestConfig.load()
+    loaded.api_key = "a-new-token"
+    loaded.save()
+
+    assert on_disk(config_files) == "a-new-token"
+    assert LatestConfig.load().api_key == "a-new-token"
+    assert "the keychain failed: The keychain refused the item" in caplog.text
 
 
 class LockedKeyring(MemoryKeyring):
