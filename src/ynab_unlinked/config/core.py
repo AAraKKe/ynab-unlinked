@@ -89,7 +89,7 @@ def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
     except ValidationError as error:
         # Also what pydantic raises for a file that is not JSON
         raise ConfigError(
-            f"The config file {current_config.path()} is not a valid {version.version} config: "
+            f"The config file {config_path(version.version)} is not a valid {version.version} config: "
             f"{error}"
         ) from error
 
