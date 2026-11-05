@@ -18,18 +18,15 @@ classifiers = [
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
-  # This is mostly because the config is handled. Once updated
-  # should be usable in any OS.
-  # https://github.com/AAraKKe/ynab-unlinked/issues/1
+  # The ones CI runs on; the keychain and the paths come from keyring and platformdirs
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
   "ynab==4.4.1",
   "typer==0.27.3",
-  "rapidfuzz==3.14.6",
-  "unidecode==1.4.0",
   "html-text==0.7.1",
   "pdfplumber==0.11.10",
   "pydantic==2.14.1",
