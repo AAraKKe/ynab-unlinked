@@ -146,12 +146,12 @@ class SabadellParser:
 
     def __sniff(self, input_file: Path) -> Match:
         from ynab_unlinked.entities import InputType
-        from ynab_unlinked.entities._sniff import first_rows, head, wrong_suffix
+        from ynab_unlinked.entities._sniff import first_rows, head, suffix, wrong_suffix
 
         if (mismatch := wrong_suffix(input_file, [InputType.TXT, InputType.XLS])) is not None:
             return mismatch
 
-        if input_file.suffix[1:] == InputType.TXT:
+        if suffix(input_file) == InputType.TXT:
             try:
                 text = head(input_file).decode("cp1252")
             except UnicodeDecodeError:

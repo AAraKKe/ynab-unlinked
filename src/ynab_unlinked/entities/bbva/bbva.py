@@ -94,12 +94,12 @@ class BBVA(Entity):
         return guarded(self.__sniff, input_file)
 
     def __sniff(self, input_file: Path) -> Match:
-        from ynab_unlinked.entities._sniff import first_pdf_table, first_rows, wrong_suffix
+        from ynab_unlinked.entities._sniff import first_pdf_table, first_rows, suffix, wrong_suffix
 
         if (mismatch := wrong_suffix(input_file, VALID_TYPES)) is not None:
             return mismatch
 
-        if input_file.suffix[1:] == InputType.PDF:
+        if suffix(input_file) == InputType.PDF:
             table = first_pdf_table(input_file)
             if not table:
                 return Match(0.0, "No table on the first page")

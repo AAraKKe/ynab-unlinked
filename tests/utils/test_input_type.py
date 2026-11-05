@@ -16,6 +16,8 @@ from ynab_unlinked.utils import extract_type
         pytest.param("file.xls", InputType.XLS, id="xls"),
         pytest.param("file.xlsx", InputType.XLSX, id="xlsx"),
         pytest.param("file.pdf", InputType.PDF, id="pdf"),
+        pytest.param("MOVIMIENTOS.XLS", InputType.XLS, id="upper-case-xls"),
+        pytest.param("Cobee.HTML", InputType.HTML, id="upper-case-html"),
     ],
 )
 def test_valid_input_types(input_file: str, expected_type: InputType):

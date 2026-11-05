@@ -20,9 +20,16 @@ def guarded(sniff: Callable[[Path], Match], input_file: Path) -> Match:
         return Match(0.0, f"Could not read the file: {error}")
 
 
+def suffix(input_file: Path) -> str:
+    """The extension of `input_file` without the dot, lower cased: `MOVIMIENTOS.XLS` is `xls`.
+
+    Every check of a file type goes through this, so detection, `accepts` and `parse` agree.
+    """
+    return input_file.suffix[1:].lower()
+
+
 def wrong_suffix(input_file: Path, accepted: Sequence[str]) -> Match | None:
-    # Same rule as `utils.extract_type`, so a file that sniffs well is one `parse` accepts
-    if input_file.suffix[1:] in accepted:
+    if suffix(input_file) in accepted:
         return None
     return Match(0.0, f"Does not read {input_file.suffix or 'files without extension'} files")
 

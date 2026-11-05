@@ -15,7 +15,7 @@ from tests.helpers.statements import (
 )
 from ynab_unlinked.core.detect import MIN_CONFIDENCE, resolve_options
 from ynab_unlinked.entities import Entity, InputType
-from ynab_unlinked.entities.registry import LoaderSpec, loaders
+from ynab_unlinked.entities.registry import LoaderSpec, loader, loaders
 
 LOADERS = {spec.key: spec.build(resolve_options(spec)) for spec in loaders()}
 
@@ -45,6 +45,18 @@ def recognising(input_file: Path) -> set[str]:
 @pytest.mark.parametrize(("fixture", "expected"), FIXTURES)
 def test_only_the_loader_of_the_bank_recognises_its_statement(fixture: Path, expected: str):
     assert recognising(fixture) == {expected}
+
+
+@pytest.mark.parametrize(("fixture", "expected"), FIXTURES)
+def test_an_upper_case_suffix_is_read_like_a_lower_case_one(
+    tmp_path: Path, fixture: Path, expected: str
+):
+    # Files saved as MOVIMIENTOS.XLS or Cobee.HTML were "not supported"
+    upper = tmp_path / f"{fixture.stem}{fixture.suffix.upper()}"
+    upper.write_bytes(fixture.read_bytes())
+
+    assert loader(expected).accepts(upper)
+    assert recognising(upper) == {expected}
 
 
 def write_text(path: Path, text: str, encoding: str = "utf-8") -> Path:

@@ -45,8 +45,9 @@ class LoaderSpec:
     """Options to `context.extras`, for the entities that read it."""
 
     def accepts(self, input_file: Path) -> bool:
-        # Same rule as `utils.extract_type`: the suffix as written, without the dot
-        return input_file.suffix[1:] in self.input_types
+        from ynab_unlinked.entities._sniff import suffix
+
+        return suffix(input_file) in self.input_types
 
     def context_extras(self, options: Mapping[str, str]) -> Any:
         return None if self.extras is None else self.extras(options)

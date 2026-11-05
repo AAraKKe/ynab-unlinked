@@ -139,6 +139,13 @@ def test_an_xls_statement_becomes_transactions():
     ]
 
 
+def test_an_xls_statement_with_an_upper_case_suffix_is_read(tmp_path: Path):
+    upper = tmp_path / "MOVIMIENTOS.XLS"
+    upper.write_bytes(assets.path(XLS_STATEMENT).read_bytes())
+
+    assert len(parse(upper)) == 3
+
+
 @pytest.mark.parametrize(
     "statement_file",
     [

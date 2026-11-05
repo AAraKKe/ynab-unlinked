@@ -32,7 +32,9 @@ def prompt_for_api_key() -> str:
 
 
 def extract_type(input_file: Path, valid: Sequence[InputType] | None = None) -> InputType:
-    extension = input_file.suffix[1:]
+    from ynab_unlinked.entities._sniff import suffix
+
+    extension = suffix(input_file)
     valid_extensions = [v.value for v in valid] if valid else [v.value for v in InputType]
     supported = ", ".join(valid_extensions)
 
