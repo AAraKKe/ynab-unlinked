@@ -660,8 +660,10 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
 `state()` (`web/state.py`): `config: LatestConfig | None`, `client: Client | None`,
 `store: Store` (opened on first use at `store_path()`), `formatter`, `loaders:
 list[LoaderSpec]`, `last_sync`, `sync_error`, `load_error`, `configured`, `syncing`,
-`require() -> (config, client)` (raises `NotConfiguredError`), `load()` / `reload()`
-(after saving the config), `await sync(progress=NullProgress())` (shared by concurrent
+`require() -> (config, client)` (raises `NotConfiguredError`), `load()` / `reload()`,
+`update_config(change: Callable[[LatestConfig], None]) -> LatestConfig` (every config save
+in the app: reads the file again, applies `change`, saves and reloads, so what the CLI saved
+meanwhile is kept; never save `state().config` or a copy of it), `await sync(progress=NullProgress())` (shared by concurrent
 callers, runs through `run.io_bound`), `sync_in_background()`, `stale` /
 `invalidate()` (call after every write to YNAB: marks the store stale and starts a
 background sync) and `fresh(max_age) -> bool` (synced within `max_age`, not stale, not
@@ -916,7 +918,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
 - Lock (per account or all): `shell.confirm`, then `core.reconcile.reconcile` through
   `run.io_bound` with `TransactionDetail`s rebuilt from the stored rows
   (`transaction_detail()`), then `last_reconciliation_date = next_reconciliation_date(latest)`
-  saved and `state().reload()`, `store.log("reconcile", "Reconciled n transactions in m
+  saved through `state().update_config`, `store.log("reconcile", "Reconciled n transactions in m
   accounts", {"count", "accounts": [{"id", "name", "count"}]})`, `sync_in_background()`.
   The store itself is not written by the view. Errors go through
   `onboarding.ynab_error_message` and leave config, log and rows untouched.

@@ -1,3 +1,4 @@
+import datetime as dt
 import uuid
 from pathlib import Path
 
@@ -239,6 +240,29 @@ async def test_a_bank_is_turned_off_and_on_from_its_card(
 
     await user.should_see("Sabadell turned on")
     assert LatestConfig.load().loaders["sabadell"].enabled is True
+
+
+async def test_a_save_from_the_app_keeps_what_the_cli_saved_meanwhile(
+    user: User, config_v4: LatestConfig, budget_accounts: YnabClientStub
+):
+    await _open_tab(user, "banks")
+    await user.should_see(marker="bank-toggle-sabadell", retries=20)
+    # `yul reconcile` and `yul load` in a terminal while the page is open
+    cli = LatestConfig.load()
+    cli.last_reconciliation_date = dt.date(2025, 5, 10)
+    cli.set_entity_account("cobee", "account-saved-by-the-cli")
+    cli.save()
+
+    toggle = user.find(marker="bank-toggle-sabadell").elements.pop()
+    assert isinstance(toggle, ui.switch)
+    toggle.set_value(False)
+
+    await user.should_see("Sabadell turned off")
+    saved = LatestConfig.load()
+    assert saved.loaders["sabadell"].enabled is False
+    assert saved.last_reconciliation_date == dt.date(2025, 5, 10)
+    assert saved.loaders["cobee"].account_id == "account-saved-by-the-cli"
+    assert state().config == saved
 
 
 async def test_turning_on_a_bank_without_an_account_asks_for_one(

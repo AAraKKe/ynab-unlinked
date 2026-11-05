@@ -214,9 +214,11 @@ class Wizard:
             str(budget.id) == kept.budget.id for budget in budgets
         ):
             # The same budget: the saved config only needs its token back
-            kept.api_key = token
-            kept.save()
-            state().reload()
+
+            def change(config: LatestConfig) -> None:
+                config.api_key = token
+
+            state().update_config(change)
             with client:
                 ui.navigate.to("/")
             return True

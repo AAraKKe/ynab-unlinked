@@ -1,7 +1,7 @@
 """What every page of the app shares: the config, the YNAB client, the store and the loaders.
 
-There is one `AppState` per process, reached through `state()`. Views read from it and call
-`reload()` after they save the config, so the next page sees the change.
+There is one `AppState` per process, reached through `state()`. Views read from it and save
+the config through `update_config()`, which keeps changes another process (the CLI) saved.
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+from collections.abc import Callable
 
 from nicegui import background_tasks, run
 from pydantic import ValidationError
@@ -111,6 +112,23 @@ class AppState:
     def reload(self) -> None:
         """Pick up a config that was just saved."""
         self.load()
+
+    def update_config(self, change: Callable[[LatestConfig], None]) -> LatestConfig:
+        """Apply `change` to the config on disk, save it and reload; returns the saved config.
+
+        The file is read again first, so what the CLI saved while the app was open (a bank's
+        account, the last reconciliation) survives a save from the app.
+        """
+        if LatestConfig.exists():
+            config = LatestConfig.load()
+        elif (current := self.config or self.token_lost) is not None:
+            config = current.model_copy(deep=True)
+        else:
+            raise NotConfiguredError()
+        change(config)
+        config.save()
+        self.reload()
+        return config
 
     async def sync(self, progress: Progress = _NO_PROGRESS) -> SyncResult | None:
         """Bring the store up to date with YNAB. Concurrent callers share the running sync.

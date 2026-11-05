@@ -1,6 +1,7 @@
 """Settings: connection, banks, accounts, net worth and data.
 
-Every save copies the config, changes the copy, saves it, reloads the app state and toasts.
+Every save applies a change to the config on disk (`state().update_config`), which reloads the
+app state, and toasts.
 """
 
 from __future__ import annotations
@@ -57,13 +58,14 @@ def _slug(tab: str) -> str:
 
 
 def _config() -> LatestConfig:
+    """The config as the app holds it, for reading. Changes go through `save`."""
     config, _ = state().require()
-    return config.model_copy(deep=True)
+    return config
 
 
-def save(config: LatestConfig, message: str) -> None:
-    config.save()
-    state().reload()
+def save(change: Callable[[LatestConfig], None], message: str) -> None:
+    """Apply `change` to the config on disk, keeping what another process saved, and toast."""
+    state().update_config(change)
     shell.notify(message)
 
 
@@ -210,14 +212,17 @@ class AccountCards:
 
     def save(self, message: str = "Accounts saved") -> None:
         """Write the rows that differ from their defaults, keeping every other entry."""
-        updated = _config()
-        kept = [account for account in updated.accounts if account.id not in self.rows]
-        updated.accounts = kept + [
+        rows = [
             row.model_copy()
             for account_id, row in self.rows.items()
             if row != self.defaults[account_id]
         ]
-        save(updated, message)
+
+        def change(config: LatestConfig) -> None:
+            kept = [account for account in config.accounts if account.id not in self.rows]
+            config.accounts = kept + rows
+
+        save(change, message)
 
 
 class Settings:
@@ -367,8 +372,11 @@ class Settings:
                         "Use a token of the same YNAB account."
                     ).classes("yul-bad")
                 return
-            config.api_key = token
-            save(config, "Token updated")
+
+            def change(config: LatestConfig) -> None:
+                config.api_key = token
+
+            save(change, "Token updated")
             await self.rerender()
 
         save_button.on("click", check_and_save)
@@ -436,13 +444,14 @@ class Settings:
             shell.notify(ynab_error_message(error), "error")
             return
 
-        updated = _config()
-        updated.budget = budget
-        updated.loaders = {}
-        updated.accounts = []
-        updated.debt_mappings = []
-        updated.last_reconciliation_date = None
-        save(updated, f"Budget switched to {budget.name}")
+        def change(config: LatestConfig) -> None:
+            config.budget = budget
+            config.loaders = {}
+            config.accounts = []
+            config.debt_mappings = []
+            config.last_reconciliation_date = None
+
+        save(change, f"Budget switched to {budget.name}")
         dialog.close()
         state().sync_in_background()
         ui.navigate.reload()
@@ -500,8 +509,7 @@ class Settings:
     async def toggle_bank(
         self, spec: LoaderSpec, on: bool, card: ui.element, accounts: dict[str, str]
     ) -> None:
-        updated = _config()
-        saved = updated.entity(spec.name)
+        saved = _config().entity(spec.name)
         if saved is None:
             # Nothing to turn on yet: the dialog saves the account (and turns the bank on)
             if on:
@@ -511,8 +519,12 @@ class Settings:
             return
         if saved.enabled == on:
             return
-        saved.enabled = on
-        save(updated, f"{spec.title} turned {'on' if on else 'off'}")
+
+        def change(config: LatestConfig) -> None:
+            if (loader := config.entity(spec.name)) is not None:
+                loader.enabled = on
+
+        save(change, f"{spec.title} turned {'on' if on else 'off'}")
         self.draw_bank(spec, card, accounts)
 
     async def bank_dialog(
@@ -560,19 +572,21 @@ class Settings:
             if not account_id:
                 problem.set_text("Pick the account its statements go to.")
                 return
-            updated = _config()
-            current = updated.entity(spec.name)
             non_default = {
                 option.key: values[option.key]
                 for option in spec.options
                 if values[option.key] != option.default
             }
-            updated.loaders[spec.name] = LoaderConfig(
-                account_id=account_id,
-                options=non_default,
-                enabled=current.enabled if current else True,
-            )
-            save(updated, f"{spec.title} saved")
+
+            def change(config: LatestConfig) -> None:
+                current = config.entity(spec.name)
+                config.loaders[spec.name] = LoaderConfig(
+                    account_id=account_id,
+                    options=non_default,
+                    enabled=current.enabled if current else True,
+                )
+
+            save(change, f"{spec.title} saved")
             dialog.submit(True)
 
         dialog.open()
@@ -674,21 +688,25 @@ class Settings:
             if not payee_name:
                 shell.notify("The adjustment payee cannot be empty", "warn")
                 return
-            updated = _config()
-            # Mappings of debts not listed here (left out, closed) are kept as they are
-            updated.debt_mappings = [
-                mapping
-                for mapping in updated.debt_mappings
-                if mapping.debt_account_id not in mappings
-            ] + [
-                DebtMapping(debt_account_id=debt_id, mapped_to=list(targets))
-                for debt_id, targets in mappings.items()
-                if targets
-            ]
-            updated.adjustments.memo = memo.value or ""
-            updated.adjustments.payee = payee_name
-            updated.adjustments.cleared = ClearedStatus(cleared.value)
-            save(updated, "Net worth settings saved")
+            new_memo = memo.value or ""
+            new_cleared = ClearedStatus(cleared.value)
+
+            def change(config: LatestConfig) -> None:
+                # Mappings of debts not listed here (left out, closed) are kept as they are
+                config.debt_mappings = [
+                    mapping
+                    for mapping in config.debt_mappings
+                    if mapping.debt_account_id not in mappings
+                ] + [
+                    DebtMapping(debt_account_id=debt_id, mapped_to=list(targets))
+                    for debt_id, targets in mappings.items()
+                    if targets
+                ]
+                config.adjustments.memo = new_memo
+                config.adjustments.payee = payee_name
+                config.adjustments.cleared = new_cleared
+
+            save(change, "Net worth settings saved")
 
         with ui.element("div").classes("yul-row").style("justify-content:flex-end;margin-top:12px"):
             button("Save net worth settings", kind="primary", on_click=save_net_worth).mark(

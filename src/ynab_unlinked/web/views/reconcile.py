@@ -703,10 +703,12 @@ class ReconcileView:
             return
 
         if latest is not None:
-            updated = config.model_copy(deep=True)
-            updated.last_reconciliation_date = next_reconciliation_date(latest)
-            updated.save()
-            state().reload()
+            next_date = next_reconciliation_date(latest)
+
+            def change(config: LatestConfig) -> None:
+                config.last_reconciliation_date = next_date
+
+            state().update_config(change)
         state().store.log(
             config.budget.id,
             kind="reconcile",

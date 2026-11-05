@@ -23,6 +23,7 @@ from typing import Any
 from nicegui import background_tasks, context, run, ui
 from ynab import TransactionClearedStatus
 
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.detect import Candidate, Detection, detect_loaders
 from ynab_unlinked.core.importing import (
@@ -877,12 +878,12 @@ class ImportFlow:
         ]
         if not chosen:
             return
-        config, _ = state().require()
-        updated = config.model_copy(deep=True)
-        for name, account_id in chosen:
-            updated.set_entity_account(name, account_id)
-        updated.save()
-        state().reload()
+
+        def change(config: LatestConfig) -> None:
+            for name, account_id in chosen:
+                config.set_entity_account(name, account_id)
+
+        state().update_config(change)
         for item in items:
             item.account_chosen = False
 
