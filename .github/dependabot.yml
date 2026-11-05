@@ -13,8 +13,8 @@ updates:
         patterns:
           - "*"
 
-  # 2. Python packages (using pip)
-  - package-ecosystem: "pip"
+  # 2. Python packages: bumps the pins in pyproject.toml and refreshes uv.lock in the same PR
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "daily"

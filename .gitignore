@@ -3,6 +3,7 @@ __pycache__
 dist
 .coverage
 .vscode/
+.venv/
 .nicegui/
 
 # Claude Code scratch worktrees (skills under .claude/skills are tracked)

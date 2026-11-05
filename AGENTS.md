@@ -58,19 +58,20 @@ changelog/           Towncrier fragments, one per PR.
 
 ## Working on the repo
 
-Everything runs through hatch. Environments are created on demand; uv is the installer.
-The `dev` environment installs the `web` extra (run `hatch env prune` after the extras
-change).
+Everything runs through uv. `uv sync` creates `.venv` from `uv.lock` (committed, every
+dependency pinned, transitive ones included) with the `dev` group, which pulls in the `web`
+extra. `uv run` syncs before running, so a pull that changes the lock needs nothing else.
+Tasks are `[tool.poe.tasks]` in `pyproject.toml` (`uv run poe` lists them).
 
 ```bash
-hatch run dev:cov            # tests with coverage, accepts pytest args (-k name)
-hatch run dev:check          # lint + format check + pyright (strict on src)
-hatch run dev:fix            # ruff format + autofix
-hatch run tc:check           # verify a changelog fragment exists for the branch
-hatch run dev:yul app        # run the web app from the checkout
+uv run poe cov               # tests with coverage, accepts pytest args (-k name)
+uv run poe check             # lint + format check + pyright (strict on src)
+uv run poe fix               # ruff format + autofix
+uv run poe tc-check          # verify a changelog fragment exists for the branch
+uv run yul app               # run the web app from the checkout
 ```
 
-CI runs the same four things on every PR. See `tests/AGENTS.md` for test conventions.
+CI runs the same four things on every PR, after `uv sync --locked`. See `tests/AGENTS.md` for test conventions.
 
 ## Web app
 
@@ -82,12 +83,13 @@ shared state from `web.state.state()`. `.claude/skills/yul-web-design/ARCHITECTU
 helpers. Its section 5 lists the frozen rules; the project skill
 `.claude/skills/yul-web-design/SKILL.md` (load it before touching `web/`) repeats them with
 the building blocks, the test routine and how to look at the app on a scratch home
-(`YUL_HOME=/tmp/... YUL_KEYCHAIN_SERVICE=yul-scratch hatch run dev:yul app`, never the
+(`YUL_HOME=/tmp/... YUL_KEYCHAIN_SERVICE=yul-scratch uv run yul app`, never the
 real config).
 
 ## Conventions
 
-- Dependencies are pinned exactly in `pyproject.toml`; dependabot bumps them.
+- Dependencies are pinned exactly in `pyproject.toml` (`uv add 'name==X.Y.Z'`, or `--dev`
+  for the `dev` group) and locked in `uv.lock`; dependabot bumps both in the same PR.
 - Import SDK names from the package root: `from ynab import TransactionDetail`.
 - Every PR needs a changelog fragment in `changelog/` named `<pr-number>.<type>.md`, a single
   line describing the change for users. Use `+<slug>.<type>.md` when the PR number is not
@@ -101,5 +103,7 @@ real config).
   - `doc`: documentation changes.
   - `contrib`: contributor experience (tests, checks, CI, tooling).
   - `misc`: anything that fits nowhere else.
-- Releases: bump `src/ynab_unlinked/__about__.py`, run `hatch run tc:build`, merge, then
-  push a `yul-X.Y.Z` tag. The release workflow validates the version and publishes to PyPI.
+- Releases: `uv version X.Y.Z` (the version lives in `pyproject.toml`; `__about__.py` reads
+  it from the installed metadata), run `uv run poe tc-build`, merge, then push a `yul-X.Y.Z`
+  tag. The release workflow checks the tag against `uv version`, then `uv build` and
+  publishes to PyPI.
