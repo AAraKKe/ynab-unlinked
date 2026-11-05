@@ -2,11 +2,12 @@ from typing import Annotated
 
 import typer
 
-from ynab_unlinked import app, web
-from ynab_unlinked.commands import config_app, load, privacy_command
-from ynab_unlinked.commands.app import app_command
-from ynab_unlinked.display import confirm, info, warning
-from ynab_unlinked.setup import config_exists, run_setup
+from ynab_unlinked import web
+from ynab_unlinked.cli import app
+from ynab_unlinked.cli.commands import config_app, load, privacy_command
+from ynab_unlinked.cli.commands.app import app_command
+from ynab_unlinked.cli.display import confirm, info, warning
+from ynab_unlinked.cli.setup import config_exists, run_setup
 
 app.add_typer(load, name="load")
 app.add_typer(config_app, name="config")

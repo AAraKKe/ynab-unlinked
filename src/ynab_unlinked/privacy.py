@@ -6,8 +6,8 @@ Keep the wording here in sync with the PRIVACY.md document at the repo root.
 from __future__ import annotations
 
 from ynab_unlinked import keychain
+from ynab_unlinked.cli.display import bullet_list, console, info, warning
 from ynab_unlinked.config.paths import config_path, web_storage_dir
-from ynab_unlinked.display import bullet_list, console, info, warning
 from ynab_unlinked.store import store_path
 
 PRIVACY_DOC_URL = "https://github.com/AAraKKe/ynab-unlinked/blob/main/PRIVACY.md"

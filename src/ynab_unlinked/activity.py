@@ -11,7 +11,7 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from ynab_unlinked import display
+from ynab_unlinked.cli import display
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store, store_path
 

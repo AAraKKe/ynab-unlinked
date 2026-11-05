@@ -55,7 +55,7 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
 ## Layout and reuse
 
 - The `tests` tree mirrors `src/ynab_unlinked`: `src/ynab_unlinked/pkg/mod.py` is tested from
-  `tests/pkg/test_mod.py`. When a test file grows large, split it into a subpackage named after
+  `tests/pkg/test_mod.py` (the CLI from `tests/cli/`, its commands from `tests/cli/commands/`). When a test file grows large, split it into a subpackage named after
   the module (`tests/pkg/mod/test_concern.py`) even though `src` has no such package.
 - Reuse what exists before writing anything new: fixtures in `tests/conftest.py` (`yul`, `config`,
   `context_obj`, `today`, `ynab_api`), stubs and readers in `tests/helpers/`, factories in
@@ -84,7 +84,7 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
 - `isolated_migration_registry` (tests/config) gives a test its own `MigrationEngine` registry.
 - `tests/core` has a `client` fixture: a real `Client` whose SDK calls land on `ynab_api`.
 - Textual apps are driven with `asyncio.run()` around `app.run_test()`; see
-  `tests/commands/apps/reconcile/harness.py` for the button and row helpers.
+  `tests/cli/commands/apps/reconcile/harness.py` for the button and row helpers.
 
 ## Web app tests (`tests/web/`)
 

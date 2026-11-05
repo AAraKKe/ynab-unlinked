@@ -6,7 +6,7 @@ from freezegun import freeze_time
 
 from tests.helpers import assets
 from tests.helpers.statements import cobee_export, sabadell_statement
-from ynab_unlinked.context_object import YnabUnlinkedContext
+from ynab_unlinked.cli.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.detect import Candidate, Detection, detect_loaders
 from ynab_unlinked.entities import Match
 from ynab_unlinked.entities.registry import LoaderSpec, loader

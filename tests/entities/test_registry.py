@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import pytest
 
 from ynab_unlinked.core.detect import resolve_options
@@ -33,3 +36,27 @@ def test_an_unknown_loader_is_a_key_error():
 def test_building_a_loader_needs_concrete_options(key: str, options: dict[str, str]):
     with pytest.raises(ValueError):
         loader(key).build(options)
+
+
+@pytest.mark.parametrize(
+    "package",
+    ["ynab_unlinked.entities", "ynab_unlinked.core", "ynab_unlinked.store"],
+)
+def test_the_banks_and_the_shared_services_load_no_terminal_code(package: str):
+    """The web app reads statements and YNAB through these packages: none of them may pull
+    in the CLI (`ynab_unlinked.cli`, Typer, Rich or Textual)."""
+    script = f"""
+import importlib, pkgutil, sys
+import {package} as package
+for module in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
+    importlib.import_module(module.name)
+from ynab_unlinked.entities.registry import loaders
+loaders()
+ui = ("ynab_unlinked.cli", "typer", "rich", "textual")
+print("\\n".join(sorted(m for m in sys.modules if m.split(".")[0] in ui or m.startswith(ui[0]))))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=True
+    )
+
+    assert result.stdout.split() == []

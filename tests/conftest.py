@@ -13,11 +13,11 @@ from tests.helpers.config import ConfigFiles
 from tests.helpers.keychain import MemoryKeyring
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked.cli.context_object import YnabUnlinkedContext
+from ynab_unlinked.cli.utils import split_quoted_string
 from ynab_unlinked.config import ConfigV3, ConfigV4, get_config
-from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.main import app
-from ynab_unlinked.utils import split_quoted_string
 from ynab_unlinked.ynab_api import Client
 
 # Sets a scratch storage path for NiceGUI and provides its simulated `User` (tests/web)

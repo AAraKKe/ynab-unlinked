@@ -9,18 +9,25 @@ through the YNAB API. `yul app` serves the same features as a local web app.
 ```
 src/ynab_unlinked/
   main.py            Typer app entry point (`yul`). Wires the subcommands.
-  cli_errors.py      The `yul` command group: a YNAB or network error from any command is
-                     one line (`ynab_api/errors.py`) and exit code 1, not a traceback.
-  commands/          `load` (incl. `load auto`), `config`, `privacy`, `reconcile`, `app`.
+  cli/               Everything only the terminal uses. `__init__.py` builds the Typer `app`.
+    commands/        `load` (incl. `load auto`), `config`, `privacy`, `reconcile`, `app`.
                      `apps/` holds the Textual TUI.
+    process.py       Pipeline run by every `load <entity>` command.
+    setup.py         First-run setup and loading the `YnabUnlinkedContext` for commands.
+    context_object.py  `YnabUnlinkedContext`, the options every command shares.
+    cli_errors.py    The `yul` command group: a YNAB or network error from any command is
+                     one line (`ynab_api/errors.py`) and exit code 1, not a traceback.
+    display.py       Rich console output, prompts and the `CliProgress` spinner.
+    utils.py         The token and budget prompts and the transaction tables.
+    choices.py       `Choice`, the selectable rows of `yul reconcile`.
   core/              UI independent services shared by the CLI and the web app: importing,
                      reconcile, loader detection, balances and net worth, history.
                      Never imports typer, rich, textual or nicegui.
   entities/          One package per bank (bbva, cobee, sabadell). `registry.py` discovers
                      their `LoaderSpec`s; `_sniff.py` has helpers for `sniff()`.
   parsers/           Shared file readers (xls, pdf) used by entities.
-  process.py         Pipeline run by every `load <entity>` command.
   activity.py        Activity log entries the CLI writes to the store (`import`, `reconcile`).
+  privacy.py         The privacy notice and summary the CLI prints.
   models.py          `Transaction` and import id assignment.
   buckets.py         Net worth `Bucket` and the default bucket of a YNAB account type.
   store/             SQLite copy of the budget's accounts and transactions, synced by
@@ -33,9 +40,9 @@ src/ynab_unlinked/
   config/            Versioned config (`ConfigV1`..`ConfigV4`, use `LatestConfig`) with a
                      migration engine. Save through `update_config` / `edit_config` (read
                      again, change, save), never `save()` on a copy loaded earlier; a budget
-                     change goes through `switch_budget`.
+                     change goes through `switch_budget`. `budget.py` builds the saved
+                     `Budget` from YNAB's answer.
   web/               NiceGUI app behind `yul app`, only importable with the `web` extra.
-  setup.py           First-run setup and loading the `YnabUnlinkedContext` for commands.
 tests/               Mirrors `src`. Fixtures in `tests/assets`, helpers in `tests/helpers`.
 typings/             Local stubs pyright reads for the untyped parts of pyexcel and html_text.
 changelog/           Towncrier fragments, one per PR.
@@ -60,8 +67,8 @@ imported.
    a year) are constructor arguments: the parser never sees the CLI context.
 2. Expose a `spec: LoaderSpec` (`entities/registry.py`: key, title, input types, options,
    `build`, the command `help`) in the package. `build(options)` binds every option.
-   `commands/load.py` generates `yul load <key>` from the spec, one command line option per
-   `LoaderOption` (`flags`, `help`), and runs `process_transactions()` from `process.py`;
+   `cli/commands/load.py` generates `yul load <key>` from the spec, one command line option per
+   `LoaderOption` (`flags`, `help`), and runs `process_transactions()` from `cli/process.py`;
    `yul load auto` and the web app find the loader through the same `spec`.
 3. A value not given on the command line comes from the bank's saved options (Settings ›
    Banks), then from the file (`auto`), as `core.detect.options_for_file` resolves it.

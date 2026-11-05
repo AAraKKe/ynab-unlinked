@@ -12,9 +12,9 @@ from nicegui import run
 from ynab import Account, PlanSummary
 
 from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config.budget import budget_from_plan
 from ynab_unlinked.config.models.v2 import Budget
 from ynab_unlinked.store import StoredAccount
-from ynab_unlinked.utils import budget_from_plan
 from ynab_unlinked.ynab_api import Client
 
 

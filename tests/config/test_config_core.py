@@ -11,6 +11,7 @@ from tests.factories import PlanDetailFactory
 from tests.helpers import assets
 from tests.helpers.config import ConfigFiles
 from ynab_unlinked.buckets import Bucket
+from ynab_unlinked.cli.display import CliProgress
 from ynab_unlinked.config import (
     Adjustments,
     ConfigV4,
@@ -25,7 +26,6 @@ from ynab_unlinked.config import (
 from ynab_unlinked.config.core import ConfigError, lock_path
 from ynab_unlinked.config.lock import file_lock
 from ynab_unlinked.config.models import ConfigV2
-from ynab_unlinked.display import CliProgress
 from ynab_unlinked.ynab_api import Client
 
 

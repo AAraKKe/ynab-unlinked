@@ -22,7 +22,7 @@ BUDGET_ID = UUID("00000000-0000-0000-0000-000000000001")
 def answers(mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch):
     """Stubs YNAB and the API key prompt so the setup flow can run unattended."""
     monkeypatch.setattr("getpass.getpass", lambda *args, **kwargs: "the-api-key")
-    client = mocker.patch("ynab_unlinked.utils.Client")
+    client = mocker.patch("ynab_unlinked.cli.utils.Client")
     client.return_value.budgets.return_value = [PlanSummary(id=BUDGET_ID, name="My Budget")]
     client.return_value.budget.return_value = PlanDetailFactory(id=BUDGET_ID)
     return client

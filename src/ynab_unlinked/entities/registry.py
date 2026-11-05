@@ -2,7 +2,7 @@
 
 Each entity package exposes a module level `spec: LoaderSpec`. Frontends list them with
 `loaders()`, show their options, and build the entity with concrete option values:
-`yul load <key>` is generated from the spec (`commands/load.py`), its options from
+`yul load <key>` is generated from the spec (`cli/commands/load.py`), its options from
 `spec.options`, so adding a bank is one spec and one parser.
 """
 

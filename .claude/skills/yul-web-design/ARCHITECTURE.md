@@ -20,7 +20,7 @@ Decisions taken (2026-11-03):
 src/ynab_unlinked/
   core/                  pure services. May import: config, entities, models, ynab_api,
                          store, parsers. MUST NOT import: typer, rich, textual, nicegui,
-                         ynab_unlinked.display, ynab_unlinked.utils (the rich helpers).
+                         ynab_unlinked.cli (the terminal: display, prompts, tables).
     __init__.py
     progress.py          Progress protocol (see 2.1)
     importing.py         build_import_plan / commit_import_plan (2.2)
@@ -31,7 +31,9 @@ src/ynab_unlinked/
   entities/              parsers, now with sniff() and a LoaderSpec per package (2.4)
   config/                V1..V4, migrations (2.6)
   store/                 SQLite transaction store and sync (2.7)
-  commands/              CLI. Thin: parse args, call core, print.
+  cli/                   the terminal only: the Typer `app`, display, prompts, tables,
+                         process.py (the `yul load <bank>` pipeline), setup.py
+    commands/            CLI. Thin: parse args, call core, print.
   web/                   NiceGUI app, only importable when the `web` extra is installed (3)
   ynab_api/client.py     the only place that talks to the SDK; every request has
                          REQUEST_TIMEOUT (10 s to connect, 60 s per read) unless it names one
@@ -125,11 +127,11 @@ def commit_import_plan(
     # A plan with no new rows returns ImportResult(0, ()) without calling YNAB.
 ```
 
-The `NullProgress()` defaults are `core.progress.NO_PROGRESS` in the code. The CLI passes `display.CliProgress`, a context manager that shows a
-spinner per step and stops it if the core call raises. `utils.display_import_table` takes
+The `NullProgress()` defaults are `core.progress.NO_PROGRESS` in the code. The CLI passes `cli.display.CliProgress`, a context manager that shows a
+spinner per step and stops it if the core call raises. `cli.utils.display_import_table` takes
 `Sequence[ImportRow]`.
 
-`process.process_transactions` keeps its signature and behaviour (tests in `tests/process`
+`cli.process.process_transactions` keeps its signature and behaviour (tests in `tests/cli/process`
 pin it) but is implemented on top of these functions plus the account prompt and the tables.
 
 ### 2.3 Reconcile (`core/reconcile.py`)
@@ -162,12 +164,12 @@ def next_reconciliation_date(locked: Iterable[dt.date],
     # (`yul reconcile --buffer`, default 7, and the app's "since" pill, 7 days)
 ```
 
-`commands/reconcile.py` and the Textual app keep working on top of these.
+`cli/commands/reconcile.py` and the Textual app keep working on top of these.
 
 ### 2.4 Loaders and detection (`entities/`, `core/detect.py`)
 
 Every entity package (`entities/bbva`, `entities/sabadell`, `entities/cobee`) exposes a
-module level `spec: LoaderSpec` and nothing else: `commands/load.py` generates
+module level `spec: LoaderSpec` and nothing else: `cli/commands/load.py` generates
 `yul load <key>` from it (`bank_command(spec)`: the input file plus one option per
 `LoaderOption`, `cli_flags` and `help`; a choice option lists its non auto choices, an
 `integer` one takes a whole number), resolves the values with `options_for_file` and
@@ -707,7 +709,7 @@ web/
 
 ### 3.1 Running and security
 
-- `yul app [--port N] [--no-browser]` (`commands/app.py`) is always registered, hidden from
+- `yul app [--port N] [--no-browser]` (`cli/commands/app.py`) is always registered, hidden from
   `--help` when `web.available()` is False; it then prints
   `Install the web UI with: uv tool install 'ynab-unlinked[web]'` (and the pip line) and
   exits 1. Checking at call time keeps the hint testable.
@@ -1053,7 +1055,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
 - Visual language is DESIGN.md next to this file.
 - `local_data.py` lists and deletes what yul stores (config dirs, store, the web
   preferences directory `web.storage_dir()`); `yul config reset`
-  and Settings "Reset all data" share it. `utils.budget_from_plan` builds a `Budget`.
+  and Settings "Reset all data" share it. `config.budget.budget_from_plan` builds a `Budget`.
 - Tests (`tests/web/`): fixtures `guest` (browser without the session) and `user` (with
   the cookie) build the app through `web.app.build` after the config fixtures, with the YNAB
   client stubbed by `ynab_api`. Request fixtures that change the config before `user`.
