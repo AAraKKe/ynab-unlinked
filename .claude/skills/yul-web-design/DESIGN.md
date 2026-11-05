@@ -146,6 +146,9 @@ scratch", "Reset all data" with confirmation).
   same options show on every file in Import). An on bank's card is live, an off one muted.
   A bank never set up is muted and its line "Pick the YNAB account its statements go to."
   is amber: that is the call to action.
+  When the account picked in the dialog already takes another bank's statements, an amber
+  line under it says so ("Sabadell also sends statements here; a same day, same amount row
+  from both can be taken for one"); Save still works.
 - **Accounts**: one card per open account of the budget, in a grid under one section per
   bucket (Cash, Savings, Assets, Debt, with the bucket's swatch). The lede says every open
   account counts in net worth and a switch leaves one out. Each card: the account name and

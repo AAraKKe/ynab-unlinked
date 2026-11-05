@@ -642,7 +642,8 @@ web/
       common.py        current_config(), kv(key), open_accounts() (open budget accounts, the
                        configured ones when YNAB cannot be reached)
       connection.py    token (reveal, check and save), budget dialog and switch
-      banks.py         bank cards, bank_summary(), toggle_bank(), bank_dialog(), option_control()
+      banks.py         bank cards, bank_summary(), shared_account_hint(), save_config(),
+                       toggle_bank(), bank_dialog(), option_control()
       accounts.py      AccountCards (the Accounts tab), BY_HAND_HINT
       networth.py      debt mappings (mapping_row) and adjustment settings, CLEARED_LABELS
       privacy.py       Data & privacy: what is kept where, resync, reset; token_wording()
@@ -961,8 +962,10 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   bank without an entry in `config.loaders` is muted and its summary ("Pick the YNAB account
   its statements go to.") is in `yul-warn`. The button opens a dialog with the account
   select and `option_control` per option; saving writes `loaders[name]` (non default
-  options only) and turns a bank on the first time. Turning on a bank that has no account
-  opens the dialog. Only the changed card is redrawn. `components.bank_logo(key, title,
+  options only) and turns a bank on the first time. When the chosen account is already the
+  account of other banks in `config.loaders`, `shared_account_hint()` shows a `yul-warn` line
+  under the select (`bank-shared-{key}`, hidden otherwise) naming them; it does not block
+  Save. Turning on a bank that has no account opens the dialog. Only the changed card is redrawn. `components.bank_logo(key, title,
   size)` shows `static/logos/<key>.svg` on a white `size` x `2 * size` tile, or the bank's
   monogram when yul ships no logo for that key. Logos follow the rule in DESIGN.md
   (`viewBox="0 0 120 60"`, padding inside the SVG).

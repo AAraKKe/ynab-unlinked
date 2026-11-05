@@ -37,6 +37,30 @@ def bank_summary(spec: LoaderSpec, saved: LoaderConfig | None, accounts: dict[st
     return " · ".join(parts)
 
 
+def shared_account_hint(spec: LoaderSpec, account_id: str | None, config: LatestConfig) -> str:
+    """Which other banks already send statements to `account_id`, as a hint; "" when none.
+
+    Rows of two banks in one account can look the same to YNAB (same day, same amount), so
+    the user is told, and may still save.
+    """
+    if not account_id:
+        return ""
+    titles = {other.name: other.title for other in state().loaders}
+    others = [
+        titles.get(name, name)
+        for name, loader in config.loaders.items()
+        if name != spec.name and loader.account_id == account_id
+    ]
+    if not others:
+        return ""
+    names = " and ".join([", ".join(others[:-1]), others[-1]] if len(others) > 1 else others)
+    verb = "send" if len(others) > 1 else "sends"
+    return (
+        f"{names} also {verb} statements here; a same day, same amount row from both can be "
+        "taken for one"
+    )
+
+
 async def save_config(change: Callable[[LatestConfig], None], message: str) -> None:
     """`state().update_config(change)` off the event loop, then toast `message`.
 
@@ -148,7 +172,18 @@ async def bank_dialog(spec: LoaderSpec, card: ui.element, accounts: dict[str, st
                 .props("outlined dense")
                 .mark(f"loader-{spec.key}")
             )
-            account.on_value_change(lambda e: chosen.__setitem__(spec.name, e.value))
+            shared = (
+                ui.label(shared_account_hint(spec, chosen[spec.name], config))
+                .classes("yul-warn yul-small")
+                .mark(f"bank-shared-{spec.key}")
+            )
+            shared.bind_visibility_from(shared, "text", backward=bool)
+
+            def pick(account_id: str | None) -> None:
+                chosen[spec.name] = account_id
+                shared.set_text(shared_account_hint(spec, account_id, config))
+
+            account.on_value_change(lambda e: pick(e.value))
             for option in spec.options:
                 option_control(spec, option, values)
         problem = ui.label().classes("yul-bad yul-small yul-inline-state")

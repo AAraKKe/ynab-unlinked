@@ -297,6 +297,52 @@ async def test_a_save_from_the_app_keeps_what_the_cli_saved_meanwhile(
     assert state().config == saved
 
 
+async def test_a_bank_dialog_warns_when_another_bank_sends_to_the_same_account(
+    user: User, config_v4: LatestConfig, budget_accounts: YnabClientStub
+):
+    await _open_tab(user, "banks")
+    await user.should_see(marker="bank-settings-bbva", retries=20)
+    user.find(marker="bank-settings-bbva").click()
+    await user.should_see(marker="loader-bbva")
+    await user.should_not_see(marker="bank-shared-bbva")
+
+    bbva = user.find(marker="loader-bbva").elements.pop()
+    assert isinstance(bbva, ui.select)
+    bbva.set_value("sabadell-account")
+
+    await user.should_see(
+        "Sabadell also sends statements here; a same day, same amount row from both can be "
+        "taken for one",
+        marker="bank-shared-bbva",
+    )
+    bbva.set_value(CARD_ID)
+    await user.should_not_see(marker="bank-shared-bbva")
+
+    # A hint, not a block: the user may still save it
+    bbva.set_value("sabadell-account")
+    user.find(marker="save-bank-bbva").click()
+    await user.should_see("BBVA Credit Card saved", retries=20)
+    assert LatestConfig.load().loaders["BBVA Credit Card"].account_id == "sabadell-account"
+
+
+async def test_a_bank_dialog_names_every_bank_sharing_the_account(
+    user: User, config_v4: LatestConfig, budget_accounts: YnabClientStub
+):
+    config_v4.set_entity_account("cobee", "sabadell-account")
+    config_v4.save()
+    state().reload()
+    await _open_tab(user, "banks")
+    await user.should_see(marker="bank-settings-bbva", retries=20)
+    user.find(marker="bank-settings-bbva").click()
+    await user.should_see(marker="loader-bbva")
+
+    bbva = user.find(marker="loader-bbva").elements.pop()
+    assert isinstance(bbva, ui.select)
+    bbva.set_value("sabadell-account")
+
+    await user.should_see("Sabadell and Cobee also send statements here", marker="bank-shared-bbva")
+
+
 async def test_bank_saves_run_off_the_event_loop(
     user: User, config_v4: LatestConfig, budget_accounts: YnabClientStub, mocker: MockerFixture
 ):
