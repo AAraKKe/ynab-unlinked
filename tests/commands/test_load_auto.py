@@ -316,3 +316,18 @@ def test_the_same_file_given_twice_is_imported_once(
     assert result.exit_code == 0, result.output
     assert "copy.html: same file as transactions.html, imported once" in result.output
     assert created(ynab) == {OTHER_ACCOUNT_ID: ["Restaurante Botin", "Cafeteria Lolina"]}
+
+
+def test_the_options_saved_for_a_bank_are_used(
+    yul: CliRunner, config_files: ConfigFiles, ynab: YnabClientStub, today: dt.datetime
+):
+    # The same file gets the same dates, and so the same import ids, as in the app
+    write_config(
+        config_files.path("V3"),
+        loaders={"sabadell": {"account_id": ACCOUNT_ID, "options": {"year": "2023"}}},
+    )
+
+    result = yul("load", "--show", "auto", SABADELL, env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert "25/04/2023" in result.output

@@ -16,13 +16,13 @@ def command(
         typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True),
     ],
     language: Annotated[
-        Language,
+        Language | None,
         typer.Option(
             "-l",
             "--lang",
             help="Language used when exporting the HTML webisite",
         ),
-    ] = Language.ES,
+    ] = None,
 ):
     """
     Import transactions from a Cobee HTML file.
@@ -33,7 +33,14 @@ def command(
     You cando this by Right Click > Save as, and select where you want to save the file.
     """
 
+    from ynab_unlinked.core.detect import saved_options
+
+    from .spec import spec
+
     ctx: YnabUnlinkedContext[CobeeContext] = context.obj
+    if language is None:
+        # The language saved in Settings › Banks, as `yul load auto` and the app read it
+        language = Language(saved_options(spec, ctx.config).get("language", Language.ES))
     ctx.extras = CobeeContext(language=language)
 
     process_transactions(

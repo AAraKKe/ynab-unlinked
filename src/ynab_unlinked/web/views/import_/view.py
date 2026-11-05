@@ -53,7 +53,6 @@ from ynab_unlinked.web.views.import_.data import (
     chosen_accounts,
     import_log,
     parse_file,
-    preferred_options,
     problem_text,
     same_file,
 )
@@ -201,7 +200,7 @@ class ImportFlow:
             self.refresh(item)
 
     async def use(self, item: ImportFile, candidate: Candidate) -> None:
-        """Take `candidate` for the file: saved options and account, then the plan."""
+        """Take `candidate` for the file (detection applied the saved options): account, then plan."""
         config, _ = state().require()
         saved = config.entity(candidate.loader.name)
         if saved is not None and not saved.enabled:
@@ -217,11 +216,6 @@ class ImportFlow:
             item.account_chosen = False
         if not item.account_chosen:
             item.account_id = saved.account_id if saved else None
-
-        preferred = preferred_options(candidate.options, saved)
-        if preferred != dict(candidate.options):
-            await self.reparse(item, preferred)
-            return
         await self.advance(item)
 
     async def reparse(self, item: ImportFile, options: dict[str, str]) -> None:

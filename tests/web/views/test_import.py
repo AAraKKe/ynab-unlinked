@@ -370,3 +370,16 @@ async def test_changing_the_statement_year_reads_the_file_again(
 
     await user.should_see(f"25/04/{this_year - 1}", retries=30)
     await user.should_not_see(f"25/04/{this_year}")
+
+
+async def test_the_year_saved_for_the_bank_dates_the_statement(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User
+):
+    accounts.loaders["sabadell"].options = {"year": "2023"}
+    accounts.save()
+    state().reload()
+
+    await drop(user, SABADELL)
+
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    await user.should_see("25/04/2023")

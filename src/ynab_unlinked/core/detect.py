@@ -1,8 +1,9 @@
 """Find which loader reads each statement file.
 
 Every loader that accepts the file suffix sniffs the file; the ones that recognise it parse
-it for real with their `auto` options resolved. Nothing here prints or prompts: frontends
-show the `Detection` and decide what to do with ambiguity.
+it for real with their `auto` options resolved and the options saved for the bank (Settings ›
+Banks) on top of them. Nothing here prints or prompts: frontends show the `Detection` and
+decide what to do with ambiguity.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from ynab_unlinked.exceptions import ParsingError
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from ynab_unlinked.config import LatestConfig, LoaderConfig
     from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.entities import Match
     from ynab_unlinked.models import Transaction
@@ -114,7 +116,9 @@ def _trial(
 ) -> Candidate:
     options: dict[str, str] = {}
     try:
-        options = resolve_options(spec, match.reason)
+        options = preferred_options(
+            resolve_options(spec, match.reason), context.config.entity(spec.name)
+        )
         entity = spec.build(options)
         trial_context = dataclasses.replace(context, extras=spec.context_extras(options))
         transactions = tuple(entity.parse(input_file, trial_context))
@@ -122,6 +126,22 @@ def _trial(
         return Candidate(spec, match.confidence, match.reason, options, None, _describe(error))
 
     return Candidate(spec, match.confidence, match.reason, options, transactions, None)
+
+
+def preferred_options(options: Mapping[str, str], saved: LoaderConfig | None) -> dict[str, str]:
+    """`options` with the bank's saved non `auto` values (Settings › Banks) on top of them."""
+    preferred = dict(options)
+    for key, value in (saved.options if saved else {}).items():
+        if key in preferred and value != AUTO:
+            preferred[key] = value
+    return preferred
+
+
+def saved_options(spec: LoaderSpec, config: LatestConfig) -> dict[str, str]:
+    """The options saved for the bank of `spec` with a value other than `auto`."""
+    unset = dict.fromkeys((option.key for option in spec.options), AUTO)
+    preferred = preferred_options(unset, config.entity(spec.name))
+    return {key: value for key, value in preferred.items() if value != AUTO}
 
 
 def resolve_options(spec: LoaderSpec, reason: str = "") -> dict[str, str]:

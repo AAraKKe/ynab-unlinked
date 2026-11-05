@@ -104,6 +104,53 @@ def test_a_december_statement_read_in_january_is_dated_last_year(
 
 
 @pytest.mark.parametrize(
+    ("key", "statement", "saved", "expected"),
+    [
+        pytest.param(
+            "sabadell",
+            sabadell_statement(["02/01|JAN|CITY|10,00EUR"]),
+            {"year": "2023"},
+            {"year": "2023"},
+            id="a-saved-year-wins-over-the-current-one",
+        ),
+        pytest.param(
+            "cobee",
+            cobee_export(["Transacciones", "15 May 2025", "Restaurante Botin", "-34.80 €"]),
+            {"language": "en"},
+            {"language": "en"},
+            id="a-saved-language-wins-over-the-one-on-the-page",
+        ),
+        pytest.param(
+            "cobee",
+            cobee_export(["Transacciones", "15 May 2025", "Restaurante Botin", "-34.80 €"]),
+            {"language": "auto"},
+            {"language": "es"},
+            id="a-saved-auto-reads-the-page",
+        ),
+    ],
+)
+def test_the_options_saved_for_a_bank_win_over_the_detected_ones(
+    tmp_path: Path,
+    context_obj: YnabUnlinkedContext,
+    today: dt.datetime,
+    key: str,
+    statement: str,
+    saved: dict[str, str],
+    expected: dict[str, str],
+):
+    # Settings › Banks saves them, and the CLI and the app must read a file the same way
+    spec = loader(key)
+    input_file = tmp_path / ("cobee.html" if key == "cobee" else "sabadell.txt")
+    input_file.write_text(statement, encoding="cp1252" if key == "sabadell" else "utf-8")
+    context_obj.config.loaders[spec.name].options = saved
+
+    best = detect(input_file, context_obj).best
+
+    assert best is not None
+    assert best.options == expected
+
+
+@pytest.mark.parametrize(
     ("name", "content"),
     [
         pytest.param("notes.doc", b"Fecha|Concepto", id="a-suffix-no-loader-reads"),

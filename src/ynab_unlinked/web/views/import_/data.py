@@ -6,13 +6,12 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as dt
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from ynab_unlinked.config import LoaderConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.detect import Candidate, Detection
 from ynab_unlinked.core.importing import ImportPlan, ImportResult, parse_transactions
@@ -111,15 +110,6 @@ def option_choices(option: LoaderOption, current: str, today: dt.date) -> list[s
     return [current]
 
 
-def preferred_options(options: Mapping[str, str], saved: LoaderConfig | None) -> dict[str, str]:
-    """The detected options with the bank's saved non `auto` values on top of them."""
-    preferred = dict(options)
-    for key, value in (saved.options if saved else {}).items():
-        if key in preferred and value != AUTO:
-            preferred[key] = value
-    return preferred
-
-
 def parse_file(
     spec: LoaderSpec, path: Path, options: dict[str, str], base: YnabUnlinkedContext[Any]
 ) -> list[Transaction]:
@@ -179,7 +169,6 @@ __all__ = [
     "import_log",
     "option_choices",
     "parse_file",
-    "preferred_options",
     "problem_text",
     "same_file",
 ]

@@ -39,7 +39,13 @@ def command(
 
     ctx: YnabUnlinkedContext[Any] = context.obj
 
-    year = dt.date.today().year if year is None else year
+    if year is None:
+        from ynab_unlinked.core.detect import saved_options
+
+        from .spec import spec
+
+        # The year saved in Settings › Banks, as `yul load auto` and the app read it
+        year = int(saved_options(spec, ctx.config).get("year", dt.date.today().year))
 
     process_transactions(
         entity=SabadellParser(year=year),

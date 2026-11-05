@@ -257,8 +257,15 @@ CLEAR_LEAD = 0.25
 
 def detect_loaders(files: Sequence[Path], context: YnabUnlinkedContext) -> list[Detection]
     # for each file: loaders whose input_types accept the suffix -> sniff -> keep
-    # confidence >= MIN_CONFIDENCE -> trial parse with resolved options and a copy of the
-    # context carrying the loader extras -> rank by (parsed ok, confidence, transaction count)
+    # confidence >= MIN_CONFIDENCE -> trial parse with resolved options (the bank's saved
+    # options from context.config on top, `preferred_options`) and a copy of the context
+    # carrying the loader extras -> rank by (parsed ok, confidence, transaction count)
+
+def preferred_options(options: Mapping[str, str], saved: LoaderConfig | None) -> dict[str, str]
+    # options with the saved non auto values of the bank on top
+def saved_options(spec: LoaderSpec, config: LatestConfig) -> dict[str, str]
+    # the bank's saved non auto options: `yul load <bank>` uses them for every option not
+    # given on the command line, so both frontends date and number a file the same way
 
 def resolve_options(spec: LoaderSpec, reason: str = "") -> dict[str, str]
     # every option of spec with a concrete value: a non auto default as is, auto from a
@@ -652,7 +659,7 @@ web/
                        message_markup, Attention, attention_items
       view.py          the page (hero with count_up, spark_options, activity, banner)
     import_/           /import      Files -> Review -> Done on core.detect and core.importing
-      data.py          Status, ImportFile, same_file, problem_text, option_choices, preferred_options,
+      data.py          Status, ImportFile, same_file, problem_text, option_choices,
                        parse_file, chosen_accounts, done_summary, import_log
       view.py          ImportFlow (lifecycle, detection, the three steps, commit) and the view
       rows.py          draw_row(flow, item): a file row of step Files and its body
@@ -986,8 +993,8 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   opened again, or when the client is deleted. A file with the same bytes as one already in
   the flow (`ImportFile.digest`, `data.same_file`) is unsupported with "Already in this
   import as <name>" and never detected. Each file is detected on its own
-  (`detect_loaders([path])` through `io_bound`). A non `auto` option saved for the loader in
-  the config wins over the detected value (the file is parsed again with it). Every option
+  (`detect_loaders([path])` through `io_bound`, which applies the options saved for the
+  bank, as for `yul load auto`). Every option
   of the loader gets a select on the row, starting from the resolved value, so the saved
   defaults can be changed per file. A file of a bank turned off in Settings (`enabled` is
   false) is unsupported with the reason. A loader without an account gets a select of the

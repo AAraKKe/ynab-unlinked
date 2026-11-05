@@ -8,6 +8,7 @@ import pytest
 from tests.helpers import assets
 from tests.helpers.statements import sabadell_statement
 from tests.helpers.types import CliRunner
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities.sabadell.sabadell import ANCHOR_LINE, SabadellParser
 from ynab_unlinked.exceptions import ParsingError
@@ -228,6 +229,36 @@ def test_the_load_command_shows_the_transactions_of_the_statement(yul: CliRunner
 def test_the_load_command_dates_the_statement(
     yul: CliRunner, today: dt.datetime, arguments: list[str], expected_year: str
 ):
+    result = yul(
+        "load",
+        "--show",
+        "sabadell",
+        *arguments,
+        str(assets.path(TXT_STATEMENT)),
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert f"25/04/{expected_year}" in result.output
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_year"),
+    [
+        pytest.param([], "2023", id="the-year-saved-for-the-bank"),
+        pytest.param(["-y", "2024"], "2024", id="the-command-line-wins-over-the-saved-year"),
+    ],
+)
+def test_the_load_command_reads_the_year_saved_for_the_bank(
+    yul: CliRunner,
+    config_v4: LatestConfig,
+    today: dt.datetime,
+    arguments: list[str],
+    expected_year: str,
+):
+    config_v4.loaders["sabadell"].options = {"year": "2023"}
+    config_v4.save()
+
     result = yul(
         "load",
         "--show",

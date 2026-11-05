@@ -7,6 +7,7 @@ import pytest
 from tests.helpers import assets
 from tests.helpers.statements import cobee_export
 from tests.helpers.types import CliRunner
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.entities.cobee.cobee import Cobee, CobeeContext, Language, parse_date
 
@@ -285,3 +286,27 @@ def test_the_load_command_needs_the_language_of_the_export(tmp_path: Path, yul: 
 
     assert result.exit_code == 0, result.output
     assert "Restaurante Botin" not in result.output
+
+
+@pytest.mark.parametrize(
+    ("arguments", "found"),
+    [
+        pytest.param([], True, id="the-language-saved-for-the-bank"),
+        pytest.param(["--lang", "es"], False, id="the-command-line-wins-over-the-saved-one"),
+    ],
+)
+def test_the_load_command_reads_the_language_saved_for_the_bank(
+    tmp_path: Path, yul: CliRunner, config_v4: LatestConfig, arguments: list[str], found: bool
+):
+    config_v4.loaders["cobee"].options = {"language": "en"}
+    config_v4.save()
+    input_file = tmp_path / "cobee.html"
+    input_file.write_text(
+        cobee_export(["Transactions", "15 May 2025", "Restaurante Botin", "-34.80 €"]),
+        encoding="utf-8",
+    )
+
+    result = yul("load", "--show", "cobee", *arguments, str(input_file))
+
+    assert result.exit_code == 0, result.output
+    assert ("Restaurante Botin" in result.output) is found
