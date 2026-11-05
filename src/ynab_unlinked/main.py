@@ -1,9 +1,12 @@
+from typing import Annotated
+
 import typer
 
 from ynab_unlinked import app, web
 from ynab_unlinked.commands import config_app, load, privacy_command
 from ynab_unlinked.commands.app import app_command
-from ynab_unlinked.setup import run_setup
+from ynab_unlinked.display import confirm, info, warning
+from ynab_unlinked.setup import config_exists, run_setup
 
 app.add_typer(load, name="load")
 app.add_typer(config_app, name="config")
@@ -13,8 +16,21 @@ app.command(name="app", hidden=not web.available())(app_command)
 
 
 @app.command(name="setup")
-def setup_command():
+def setup_command(
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Replace an existing config without asking."),
+    ] = False,
+):
     """Setup YNAB Unlinked"""
+    if not yes and config_exists():
+        warning(
+            "yul is already set up. Setting it up again replaces the config: the token, the "
+            "budget, the bank accounts, the account settings and the debt mappings."
+        )
+        if not confirm("Replace the current config?", default=False):
+            info("Nothing changed. `yul config set` changes the token or the budget alone.")
+            return
     run_setup()
 
 

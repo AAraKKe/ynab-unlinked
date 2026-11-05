@@ -49,3 +49,26 @@ def test_a_command_that_needs_a_config_runs_setup_first(yul: CliRunner, config_f
     assert json.loads(config_files.read())["api_key"] == "the-api-key"
     # `config show` masks the token
     assert "the-api-key" not in result.output
+
+
+@pytest.mark.version("V4")
+@pytest.mark.usefixtures("answers")
+@pytest.mark.parametrize(
+    ("command", "answers_given", "replaced"),
+    [
+        ("setup", "n\n", False),
+        ("setup", "y\n1\n", True),
+        ("setup --yes", "1\n", True),
+    ],
+    ids=["declined", "confirmed", "yes-flag"],
+)
+def test_setup_asks_before_replacing_an_existing_config(
+    yul: CliRunner, config_files: ConfigFiles, command: str, answers_given: str, replaced: bool
+):
+    result = yul(command, input=answers_given, env=WIDE_TERMINAL)
+
+    assert result.exit_code == 0, result.output
+    stored = json.loads(config_files.read())
+    assert (stored["api_key"] == "the-api-key") is replaced
+    assert ("sabadell" in stored["loaders"]) is not replaced
+    assert ("Replace the current config?" in result.output) is ("--yes" not in command)

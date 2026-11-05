@@ -10,13 +10,18 @@ from typing import cast
 
 import typer
 
-from ynab_unlinked.config import LatestConfig, get_config
+from ynab_unlinked.config import ConfigV1, LatestConfig, get_config
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.display import CliProgress, bold, error, success
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.privacy import privacy_notice
 from ynab_unlinked.utils import prompt_for_api_key, prompt_for_budget
+
+
+def config_exists() -> bool:
+    """Whether a config of any version is on disk, readable or not."""
+    return LatestConfig.exists() or ConfigV1.exists()
 
 
 def run_setup() -> LatestConfig:
