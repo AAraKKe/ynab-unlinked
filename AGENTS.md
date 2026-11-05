@@ -9,6 +9,8 @@ through the YNAB API. `yul app` serves the same features as a local web app.
 ```
 src/ynab_unlinked/
   main.py            Typer app entry point (`yul`). Wires the subcommands.
+  cli_errors.py      The `yul` command group: a YNAB or network error from any command is
+                     one line (`ynab_api/errors.py`) and exit code 1, not a traceback.
   commands/          `load` (incl. `load auto`), `config`, `privacy`, `reconcile`, `app`.
                      `apps/` holds the Textual TUI.
   core/              UI independent services shared by the CLI and the web app: importing,

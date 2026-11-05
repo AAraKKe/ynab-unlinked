@@ -4,4 +4,6 @@
 
 import typer
 
-app = typer.Typer(no_args_is_help=True)
+from ynab_unlinked.cli_errors import YulGroup
+
+app = typer.Typer(no_args_is_help=True, cls=YulGroup)
