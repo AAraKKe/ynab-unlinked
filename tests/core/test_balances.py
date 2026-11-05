@@ -37,18 +37,20 @@ def balances(accounts) -> dict[str, int]:
 
 
 @pytest.mark.parametrize(
-    ("card_balance", "mapped_to", "expected"),
+    ("card_balance", "mapped_to", "expected", "unnetted"),
     [
         pytest.param(
             -900,
             ("checking", "savings", "house"),
             {"checking": 9_700, "savings": 9_700, "house": 9_700},
+            0,
             id="an even split",
         ),
         pytest.param(
             -1_000,
             ("checking", "savings", "house"),
             {"checking": 9_666, "savings": 9_667, "house": 9_667},
+            0,
             id="the remainder lands on the first mapped account",
         ),
         pytest.param(
@@ -56,29 +58,35 @@ def balances(accounts) -> dict[str, int]:
             ("savings", "checking"),
             # The split truncates toward zero, so the first account takes the extra unit
             {"checking": 9_500, "savings": 9_499, "house": 10_000},
+            0,
             id="an odd split truncates toward zero",
         ),
         pytest.param(
             -1_000,
             (),
             {"checking": 10_000, "savings": 10_000, "house": 10_000},
-            id="an unmapped debt is not subtracted",
+            -1_000,
+            id="an unmapped debt still comes off the total",
         ),
         pytest.param(
             -1_000,
             ("card", "missing", "checking"),
             {"checking": 9_667, "savings": 10_000, "house": 10_000},
-            id="shares for debt or unknown accounts are dropped",
+            # The first share takes the remainder: -334 (card) and -333 (missing)
+            -667,
+            id="shares for debt or unknown accounts still come off the total",
         ),
     ],
 )
 def test_net_worth_nets_each_debt_over_its_mapped_accounts(
-    card_balance: int, mapped_to: tuple[str, ...], expected: dict[str, int]
+    card_balance: int, mapped_to: tuple[str, ...], expected: dict[str, int], unnetted: int
 ):
     result = net_worth(household(card_balance), [DebtNetting("card", mapped_to)])
 
     assert balances(result.accounts) == {**expected, "card": card_balance}
-    assert result.total == sum(expected.values())
+    assert result.unnetted == unnetted
+    # Every debt is in the total exactly once, netted or not
+    assert result.total == sum(expected.values()) + unnetted == 30_000 + card_balance
 
 
 def test_net_worth_ignores_nettings_for_accounts_that_are_not_debt():
@@ -87,7 +95,8 @@ def test_net_worth_ignores_nettings_for_accounts_that_are_not_debt():
     result = net_worth(accounts, [DebtNetting("savings", ("checking",))])
 
     assert balances(result.accounts) == balances(accounts)
-    assert result.total == 30_000
+    # The card has no mapping of its own: not netted, still off the total
+    assert result.total == 29_000
 
 
 def test_by_bucket_totals_the_netted_balances_and_keeps_debt_raw():

@@ -47,7 +47,9 @@ class NetWorth:
     accounts: tuple[AccountBalance, ...]
     """Balances after netting. Debt accounts keep their raw balance."""
     total: int
-    """Cash, savings and assets after netting. Debt is already inside those balances."""
+    """Cash, savings and assets after netting, plus `unnetted`: every debt is in it once."""
+    unnetted: int = 0
+    """Debt not netted against any counted account (no mapping, or a target not counted)."""
 
     def by_bucket(self) -> dict[Bucket, int]:
         totals = dict.fromkeys(Bucket, 0)
@@ -77,30 +79,36 @@ def net_worth(accounts: Sequence[AccountBalance], nettings: Sequence[DebtNetting
     Compute the net worth, subtracting each debt from the accounts it is mapped to.
 
     A debt balance is split evenly over its mapped accounts and the remainder lands on the
-    first one. A debt with no mapping is not subtracted at all.
+    first one. A debt with no mapping, or the share mapped to an account not in `accounts`,
+    is not netted against any account but still comes off the total (`NetWorth.unnetted`).
     """
     mapping = {netting.debt_account_id: netting.mapped_to for netting in reversed(nettings)}
     netted = {a.id: a.balance for a in accounts if a.bucket is not Bucket.DEBT}
+    unnetted = 0
 
     for debt in accounts:
         if debt.bucket is not Bucket.DEBT:
             continue
         targets = mapping.get(debt.id, ())
         if not targets:
+            unnetted += debt.balance
             continue
 
         share = _even_split(debt.balance, len(targets))
         remainder = debt.balance - share * len(targets)
         for position, target in enumerate(targets):
+            amount = share + remainder if position == 0 else share
             if target in netted:
-                netted[target] += share + remainder if position == 0 else share
+                netted[target] += amount
+            else:
+                unnetted += amount
 
     result = tuple(
         account if account.bucket is Bucket.DEBT else replace(account, balance=netted[account.id])
         for account in accounts
     )
-    total = sum(a.balance for a in result if a.bucket is not Bucket.DEBT)
-    return NetWorth(accounts=result, total=total)
+    total = sum(a.balance for a in result if a.bucket is not Bucket.DEBT) + unnetted
+    return NetWorth(accounts=result, total=total, unnetted=unnetted)
 
 
 @dataclass(frozen=True)

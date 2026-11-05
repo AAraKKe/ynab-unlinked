@@ -53,8 +53,8 @@ def net_worth_series(
     """Net worth over time, with debts netted on every day as `core.balances.net_worth` does.
 
     Keys: `"total"`, every `Bucket` value and every account id. Account series hold the
-    balance after netting; debt accounts keep their raw balance and add to the total only
-    through the accounts they are mapped to.
+    balance after netting; debt accounts keep their raw balance and come off the total
+    through the accounts they are mapped to, or directly when they are not netted.
     """
     dates = sample_dates(start, end)
     amounts = store.daily_amounts(budget_id, [account.id for account in accounts])

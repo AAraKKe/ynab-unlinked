@@ -303,13 +303,15 @@ class DebtNetting:
 @dataclass(frozen=True)
 class NetWorth:
     accounts: tuple[AccountBalance, ...]    # after netting; debt accounts keep their raw balance
-    total: int                              # cash + savings + assets after netting
+    total: int                              # cash + savings + assets after netting + unnetted
+    unnetted: int = 0                       # debt netted against no counted account
     def by_bucket(self) -> dict[Bucket, int]
     def share(self, account_id: str) -> float   # balance / total, 0 for debt
 
 def net_worth(accounts: Sequence[AccountBalance], nettings: Sequence[DebtNetting]) -> NetWorth
     # each debt balance is split evenly over mapped_to, remainder on the first; a debt with
-    # no mapping is NOT subtracted
+    # no mapping (or the share mapped to an account not counted) is not netted against any
+    # account but still comes off the total, as `unnetted`: every debt counts exactly once
 
 @dataclass(frozen=True)
 class Adjustment:
@@ -551,8 +553,8 @@ History as built:
 - Transactions dated after `end` are left out of the points but count for the anchor, so a
   past `end` shows the balance on that day, not the live one.
 - `end < start` gives no points (empty lists, keys still present in the net worth dict).
-- `net_worth_series` only uses `accounts`: a debt account missing from it is not netted
-  (as in `net_worth`). Account series hold balances after netting, debt accounts keep their
+- `net_worth_series` only uses `accounts`: a debt account missing from it does not count at
+  all, a counted one with no mapping comes off the total directly (as in `net_worth`). Account series hold balances after netting, debt accounts keep their
   raw balance; the `"debt"` key is the sum of the raw debt balances.
 - History tests fill the store through `Store.sync` with the `ynab_api` stub (`populate`
   fixture in `tests/core/test_history.py`). Web view tests seed it with `tests.helpers.store.upsert` and

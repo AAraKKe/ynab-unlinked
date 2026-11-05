@@ -48,7 +48,8 @@ from the local store; Home never calls YNAB. Before the first sync a quiet banne
 "First sync running…" and the view refreshes when it ends.
 
 - **Hero**: net worth of the counted accounts (every open one unless Settings leaves it out)
-  with debt netted (52px, gradient text, counts up), change since the last
+  with debt netted (52px, gradient text, counts up; a debt mapped to no account still comes
+  off it), change since the last
   reconcile (30 days when there is none) with the counted accounts' history ("▲ €2,140.30
   since 29 Oct · 90 days"), a 90 day sparkline area under it. Clicking opens Net worth.
 - **Import**: section title "Import", then the drop zone card ("Drop bank statements here ·
@@ -120,7 +121,8 @@ without the ceremony.
   limit the others are dimmed with "Remove one to add another". Pick up to N with chips,
   never a capped dropdown: a select that silently refuses the next pick looks broken.
 - **Buckets** row: Assets, Savings, Cash (after debt), Debt as stat tiles with the share,
-  and a thin segmented composition bar beneath.
+  and a thin segmented composition bar beneath. Debt that is "not netted" lowers no tile
+  but still comes off the net worth figure.
 - **Accounts** table grouped by bucket: name, balance, share bar, and a pencil at the
   right end of every row, shown on hover. Accounts marked "by hand" show the pencil
   always, in the accent colour, and an age pill ("by hand · 9 days ago", "stale" when

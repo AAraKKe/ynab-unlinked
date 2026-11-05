@@ -251,8 +251,8 @@ async def test_an_account_left_out_does_not_count(
 
     await open_networth(user)
 
-    # 82,480 without the 12,400 of savings; nothing nets the card
-    assert texts(user, "nw-figure") == "70,080.00€"
+    # 82,180 without the 12,400 of savings; nothing nets the card, its 300 still comes off
+    assert texts(user, "nw-figure") == "69,780.00€"
     await user.should_not_see(marker=f"row-{SAVINGS}")
 
 

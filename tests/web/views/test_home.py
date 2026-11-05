@@ -399,6 +399,24 @@ async def test_without_account_settings_every_open_account_counts(
     await user.should_see(marker="nothing-waiting")
 
 
+async def test_a_debt_netted_from_nothing_still_comes_off_net_worth(
+    store: Store, budget: LatestConfig, user: User
+):
+    upsert(
+        store,
+        budget.budget.id,
+        accounts=[dataclasses.replace(account("card", -200_000), type="creditCard")],
+    )
+    budget.debt_mappings = []
+    budget.save()
+    state().reload()
+
+    await _home(user)
+
+    # 1000 + 500 + 3000 - 200: the card is not netted from an account, but it is still owed
+    await user.should_see("4,300.00€")
+
+
 async def test_recent_activity_is_newest_first_with_counts_in_bold(
     store: Store, budget: LatestConfig, user: User
 ):
