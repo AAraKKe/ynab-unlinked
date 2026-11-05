@@ -178,3 +178,12 @@ def test_the_context_formats_dates_and_amounts_as_the_budget_does():
     assert context is not None
     assert context.formatter.format_date(dt.date(2025, 5, 12)) == "12/05/2025"
     assert context.formatter.format_amount(-1234.5) == "-1,234.50€"
+
+
+@pytest.mark.version("missing")
+def test_help_of_a_bank_command_needs_no_config(unconfigured: Path, yul: CliRunner):
+    result = yul("load", "sabadell", "--help")
+
+    assert result.exit_code == 0, result.output
+    assert "Usage" in result.output
+    assert "setup" not in result.output.lower()

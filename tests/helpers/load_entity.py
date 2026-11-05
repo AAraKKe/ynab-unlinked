@@ -5,7 +5,7 @@ from pathlib import Path
 import typer
 
 from ynab_unlinked.cli.commands import load
-from ynab_unlinked.cli.context_object import YnabUnlinkedContext
+from ynab_unlinked.cli.commands.load import load_context
 from ynab_unlinked.cli.process import process_transactions
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.models import Transaction
@@ -40,7 +40,7 @@ def load_entity() -> LoadEntityCallback:
             ]
 
         def command(context: typer.Context):
-            ctx: YnabUnlinkedContext = context.obj
+            ctx = load_context(context)
 
             process_transactions(
                 StubEntity(transactions=transactions), input_file=Path(), context=ctx

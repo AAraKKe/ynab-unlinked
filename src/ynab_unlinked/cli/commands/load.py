@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -74,13 +75,33 @@ def load_callback(
         display.error("--yes cannot be used with -a/--acount: selecting an account needs a prompt.")
         raise typer.Exit(1)
 
-    obj = ensure_config(context, interactive=not yes)
+    # The config is loaded by the subcommand, not here: `yul load <bank> --help` must print the
+    # usage without running the setup first
+    context.meta[_FLAGS] = _Flags(yes, show, reconcile, account, buffer)
 
-    obj.yes = yes
-    obj.show = show
-    obj.reconcile = reconcile
-    obj.choose_account = account
-    obj.buffer = buffer
+
+_FLAGS = "yul.load.flags"
+
+
+@dataclass(frozen=True)
+class _Flags:
+    yes: bool
+    show: bool
+    reconcile: bool
+    account: bool
+    buffer: int
+
+
+def load_context(context: typer.Context) -> YnabUnlinkedContext:
+    """The config and the `yul load` flags, loading (or setting up) the config now."""
+    flags: _Flags = context.meta[_FLAGS]
+    obj = ensure_config(context, interactive=not flags.yes)
+    obj.yes = flags.yes
+    obj.show = flags.show
+    obj.reconcile = flags.reconcile
+    obj.choose_account = flags.account
+    obj.buffer = flags.buffer
+    return obj
 
 
 def auto(
@@ -115,7 +136,7 @@ def auto(
     from ynab_unlinked.core.importing import build_import_plan, commit_import_plan, unique_files
     from ynab_unlinked.ynab_api.client import Client
 
-    ctx: YnabUnlinkedContext = context.obj
+    ctx = load_context(context)
 
     files, copies = unique_files(files)
     for copy, first in copies:
@@ -350,7 +371,7 @@ def bank_command(spec: LoaderSpec) -> Callable[..., None]:
         from ynab_unlinked.cli.process import process_transactions
         from ynab_unlinked.core.detect import options_for_file
 
-        ctx: YnabUnlinkedContext = context.obj
+        ctx = load_context(context)
         options = options_for_file(
             spec,
             input_file,
