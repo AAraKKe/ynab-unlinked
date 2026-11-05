@@ -63,6 +63,20 @@ class Ynab:
 
 
 @pytest.fixture
+def waiting_for_sync(mocker: MockerFixture) -> asyncio.Event:
+    """Set once a resync or a reset starts waiting for the running sync to end."""
+    entered = asyncio.Event()
+    original = AppState._sync_ended  # pyright: ignore[reportPrivateUsage]
+
+    async def sync_ended(self: AppState) -> None:
+        entered.set()
+        await original(self)
+
+    mocker.patch.object(AppState, "_sync_ended", sync_ended)
+    return entered
+
+
+@pytest.fixture
 def app_state(config_v4: LatestConfig, ynab_api: YnabClientStub, store_file: Path) -> AppState:
     """A loaded state whose store already holds t1 and t2 at knowledge 10."""
     ynab_api.api("transactions").get_transactions.return_value = response(["t1", "t2"], 10)
@@ -79,14 +93,14 @@ def stored_ids(current: AppState) -> list[str]:
 
 
 async def test_a_resync_while_a_sync_runs_waits_for_it_and_loses_no_rows(
-    app_state: AppState, ynab_api: YnabClientStub
+    app_state: AppState, ynab_api: YnabClientStub, waiting_for_sync: asyncio.Event
 ):
     ynab = Ynab(ynab_api, full=["t1", "t2", "t3"], delta=["t3"])
     running = asyncio.ensure_future(app_state.sync())
     await ynab.blocked()
 
     resync = asyncio.ensure_future(app_state.resync())
-    await asyncio.sleep(0.05)
+    await asyncio.wait_for(waiting_for_sync.wait(), 5)
     ynab.release.set()
     await running
     result = await resync
@@ -97,7 +111,11 @@ async def test_a_resync_while_a_sync_runs_waits_for_it_and_loses_no_rows(
 
 
 async def test_a_reset_while_a_sync_runs_waits_for_it_before_deleting(
-    app_state: AppState, ynab_api: YnabClientStub, store_file: Path, mocker: MockerFixture
+    app_state: AppState,
+    ynab_api: YnabClientStub,
+    store_file: Path,
+    mocker: MockerFixture,
+    waiting_for_sync: asyncio.Event,
 ):
     ynab = Ynab(ynab_api, full=[], delta=["t3"])
     running = asyncio.ensure_future(app_state.sync())
@@ -109,7 +127,7 @@ async def test_a_reset_while_a_sync_runs_waits_for_it_before_deleting(
     )
 
     reset = asyncio.ensure_future(app_state.reset([store_file]))
-    await asyncio.sleep(0.05)
+    await asyncio.wait_for(waiting_for_sync.wait(), 5)
     assert not delete.called
     ynab.release.set()
     await running
