@@ -504,13 +504,16 @@ class Store:
             ).fetchone()
         return None if row is None else dt.datetime.fromisoformat(row["synced_at"])
 
-    def clear(self, budget_id: str | None = None) -> None:
-        """Forget everything about a budget, or about every budget when none is given.
+    def clear(self, budget_id: str | None = None, *, activity: bool = False) -> None:
+        """Forget the copy of a budget, or of every budget when none is given.
 
-        The activity log goes too. The next sync of a cleared budget is a full one.
+        The next sync of a cleared budget is a full one. The activity log stays (it is what
+        yul did, not a copy of YNAB) unless `activity` is True.
         """
         with self._connect() as conn:
             self._forget(conn, budget_id)
+            if not activity:
+                return
             if budget_id is None:
                 conn.execute("DELETE FROM activity")
             else:

@@ -757,7 +757,7 @@ class Settings:
 
     def data(self) -> None:
         current = state()
-        config, _ = current.require()
+        current.require()
         path = current.store.path
         size = human_size(path.stat().st_size) if path.is_file() else "not created yet"
         with ui.element("div").classes("yul-kv"):
@@ -788,10 +788,9 @@ class Settings:
         async def resync_now() -> None:
             resync.disable()
             try:
-                state().store.clear(config.budget.id)
-                result = await state().sync()
+                result = await state().resync()
             except Exception as error:
-                shell.notify(f"Sync failed: {error}", "error")
+                shell.notify(f"Sync failed. {ynab_error_message(error)}", "error")
             else:
                 if result is not None:
                     shell.notify(shell.sync_message(result))
@@ -811,8 +810,9 @@ class Settings:
         )
         if not await shell.confirm("Reset all data?", lines, "Delete everything", danger=True):
             return
-        delete_local_data(paths)
-        state().reload()
+        await run.io_bound(delete_local_data, paths)
+        # The budget copy is gone too: load() opens a new one when needed
+        state().load()
         ui.navigate.to(shell.ONBOARDING_PATH)
 
 

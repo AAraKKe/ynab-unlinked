@@ -584,7 +584,8 @@ def test_clearing_a_budget_leaves_the_others_and_forces_a_full_sync(
     assert store.transactions(BUDGET_ID) == []
     assert store.accounts(BUDGET_ID) == []
     assert store.last_sync(BUDGET_ID) is None
-    assert store.activity(BUDGET_ID) == []
+    # What yul did is not a copy of YNAB: it stays
+    assert len(store.activity(BUDGET_ID)) == 1
     assert ids(store.transactions(OTHER_BUDGET_ID)) == ["t2"]
     assert len(store.accounts(OTHER_BUDGET_ID)) == 1
     assert len(store.activity(OTHER_BUDGET_ID)) == 1
@@ -592,11 +593,21 @@ def test_clearing_a_budget_leaves_the_others_and_forces_a_full_sync(
     assert store.sync(client, BUDGET_ID).full
 
 
+def test_clearing_a_budget_with_its_activity_drops_its_log_only(synced: Store):
+    synced.log(BUDGET_ID, "sync", "Synced")
+    synced.log(OTHER_BUDGET_ID, "sync", "Synced")
+
+    synced.clear(BUDGET_ID, activity=True)
+
+    assert synced.activity(BUDGET_ID) == []
+    assert len(synced.activity(OTHER_BUDGET_ID)) == 1
+
+
 def test_clearing_everything_empties_every_budget(synced: Store):
     synced.log(BUDGET_ID, "sync", "Synced")
     synced.log(OTHER_BUDGET_ID, "sync", "Synced")
 
-    synced.clear()
+    synced.clear(activity=True)
 
     assert synced.transactions(BUDGET_ID) == []
     assert synced.last_sync(BUDGET_ID) is None

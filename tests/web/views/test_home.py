@@ -396,7 +396,7 @@ async def test_without_account_settings_every_open_account_counts(
 async def test_recent_activity_is_newest_first_with_counts_in_bold(
     store: Store, budget: LatestConfig, user: User
 ):
-    store.clear(budget.budget.id)
+    store.clear(budget.budget.id, activity=True)
     store.log(
         budget.budget.id,
         "reconcile",
@@ -435,7 +435,7 @@ async def test_recent_activity_is_newest_first_with_counts_in_bold(
 
 
 async def test_recent_activity_has_an_empty_state(store: Store, budget: LatestConfig, user: User):
-    store.clear(budget.budget.id)
+    store.clear(budget.budget.id, activity=True)
 
     await _home(user)
 

@@ -2,6 +2,9 @@
 
 There is one `AppState` per process, reached through `state()`. Views read from it and save
 the config through `update_config()`, which keeps changes another process (the CLI) saved.
+
+Every sync runs as the one shared `_sync_task`: `sync()` joins it, `invalidate()` during it asks
+for one more round when it ends, and `resync()` waits for it before starting from scratch.
 """
 
 from __future__ import annotations
@@ -52,6 +55,8 @@ class AppState:
         """A view wrote to YNAB after the last sync started, so the store lags behind."""
         self._store: Store | None = None
         self._sync_task: asyncio.Task[SyncResult | None] | None = None
+        self._rerun = False
+        """Something was written to YNAB while the running sync was already under way."""
 
     @property
     def store(self) -> Store:
@@ -75,9 +80,26 @@ class AppState:
         return self.config, self.client
 
     def load(self) -> None:
-        """Read the config from disk and rebuild everything that depends on it."""
+        """Read the config from disk and rebuild everything that depends on it.
+
+        Also forgets the open store, for when its file may have been deleted.
+        """
         self._store = None
-        self.loaders = loaders()
+        self._read_config(keep_last_sync=False)
+
+    def reload(self) -> None:
+        """Pick up a config that was just saved.
+
+        Keeps the open store and, for the same budget, the time of the last sync, so a save
+        costs no database work on the event loop.
+        """
+        self._read_config(keep_last_sync=True)
+
+    def _read_config(self, *, keep_last_sync: bool) -> None:
+        previous_budget = None if self.config is None else self.config.budget.id
+        if not self.loaders:
+            # The banks yul knows never change while it runs: discover them once
+            self.loaders = loaders()
         self.load_error = None
         self.token_lost = None
         try:
@@ -103,15 +125,13 @@ class AppState:
             date_format=config.budget.date_format,
             currency_format=config.budget.currency_format,
         )
+        if keep_last_sync and previous_budget == config.budget.id:
+            return
         try:
             self.last_sync = self.store.last_sync(config.budget.id)
         except StoreError as error:
             self.last_sync = None
             self.sync_error = str(error)
-
-    def reload(self) -> None:
-        """Pick up a config that was just saved."""
-        self.load()
 
     def update_config(self, change: Callable[[LatestConfig], None]) -> LatestConfig:
         """Apply `change` to the config on disk, save it and reload; returns the saved config.
@@ -136,8 +156,34 @@ class AppState:
         Returns None when the app is shutting down before YNAB answers.
         """
         if self._sync_task is None or self._sync_task.done():
-            self._sync_task = asyncio.ensure_future(self._sync(progress))
+            self._sync_task = asyncio.ensure_future(self._sync_rounds(progress))
         return await asyncio.shield(self._sync_task)
+
+    async def resync(self, progress: Progress = _NO_PROGRESS) -> SyncResult | None:
+        """Forget the budget's copy (not the activity log) and fetch all of it again.
+
+        Waits for a running sync first, so its delta cannot land in the emptied copy, and
+        then runs as the shared sync task: a `sync()` meanwhile joins it.
+        """
+        self.require()
+        while self._sync_task is not None and not self._sync_task.done():
+            # wait() never raises: how the running sync ended is its callers' business
+            await asyncio.wait({self._sync_task})
+        self._sync_task = asyncio.ensure_future(self._resync(progress))
+        return await asyncio.shield(self._sync_task)
+
+    async def _resync(self, progress: Progress) -> SyncResult | None:
+        config, _ = self.require()
+        await run.io_bound(self.store.clear, config.budget.id)
+        return await self._sync_rounds(progress)
+
+    async def _sync_rounds(self, progress: Progress) -> SyncResult | None:
+        """Sync, and once more each time `invalidate()` was called while syncing."""
+        while True:
+            self._rerun = False
+            result = await self._sync(progress)
+            if not self._rerun:
+                return result
 
     def fresh(self, max_age: dt.timedelta) -> bool:
         """Whether the store can be shown as is: synced within `max_age`, nothing written since."""
@@ -151,6 +197,9 @@ class AppState:
         Starts the sync right away too, so it is usually done before the user gets there.
         """
         self.stale = True
+        if self.syncing:
+            # The running sync may have fetched before the write: run one more after it
+            self._rerun = True
         self.sync_in_background()
 
     async def _sync(self, progress: Progress) -> SyncResult | None:
@@ -163,7 +212,7 @@ class AppState:
             self.sync_error = str(error)
             raise
         self.sync_error = None
-        self.last_sync = self.store.last_sync(config.budget.id)
+        self.last_sync = await run.io_bound(self.store.last_sync, config.budget.id)
         # A sync that brought nothing is not worth a line in the feed (one runs at every start)
         if result is not None and (
             result.full or result.transactions_changed or result.ghosts_removed
@@ -194,7 +243,7 @@ class AppState:
     async def budget_accounts(self) -> list[StoredAccount]:
         """Every account of the budget, from the store once synced, from YNAB before that."""
         config, client = self.require()
-        if stored := self.store.accounts(config.budget.id):
+        if stored := await run.io_bound(self.store.accounts, config.budget.id):
             return stored
 
         accounts = await run.io_bound(client.accounts, config.budget.id) or []

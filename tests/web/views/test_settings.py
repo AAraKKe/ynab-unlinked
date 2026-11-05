@@ -6,7 +6,7 @@ import pytest
 from nicegui import ui
 from nicegui.testing.user import User
 
-from tests.factories import AccountFactory, PlanSummaryFactory
+from tests.factories import AccountFactory, PlanSummaryFactory, TransactionDetailFactory
 from tests.helpers.config import ConfigFiles
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.buckets import Bucket
@@ -154,6 +154,25 @@ async def test_a_new_token_is_saved_only_if_it_sees_the_budget(
 
     await user.should_see(message, retries=20)
     assert LatestConfig.load().api_key == saved_token
+
+
+async def test_resync_rebuilds_the_budget_copy_and_keeps_the_activity(
+    user: User, config_v4: LatestConfig, ynab_api: YnabClientStub, store_file: Path
+):
+    response = ynab_api.api("transactions").get_transactions.return_value
+    response.data.transactions = [TransactionDetailFactory(id="t1")]
+    response.data.server_knowledge = 7
+    ynab_api.api("accounts").get_accounts.return_value.data.accounts = []
+    store = Store(store_file)
+    store.log(config_v4.budget.id, "import", "Imported 3 transactions")
+    await _open_tab(user, "data-privacy")
+    await user.should_see(marker="resync", retries=20)
+
+    user.find(marker="resync").click()
+
+    await user.should_see("1 transaction loaded from YNAB", retries=20)
+    assert [t.id for t in store.transactions(config_v4.budget.id)] == ["t1"]
+    assert "Imported 3 transactions" in [a.message for a in store.activity(config_v4.budget.id)]
 
 
 async def test_reset_all_data_deletes_everything_and_starts_onboarding(

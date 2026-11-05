@@ -462,7 +462,8 @@ class Store:
         # never returns deleted rows; since/until inclusive; oldest first (date, id)
     def unreconciled(self, budget_id: str) -> list[StoredTransaction]   # cleared + uncleared
     def last_sync(self, budget_id: str) -> dt.datetime | None           # aware, UTC
-    def clear(self, budget_id: str | None = None) -> None               # activity log too
+    def clear(self, budget_id: str | None = None, *, activity: bool = False) -> None
+        # forgets the copy (rows, accounts, knowledge); the activity log only with activity=True
     def log(self, budget_id: str, kind: str, message: str,
             details: Mapping[str, Any] | None = None, *, at: dt.datetime | None = None) -> None
         # kinds and their details: section 3.4. `at` (aware) backdates an entry, default now
@@ -673,13 +674,18 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
 `state()` (`web/state.py`): `config: LatestConfig | None`, `client: Client | None`,
 `store: Store` (opened on first use at `store_path()`), `formatter`, `loaders:
 list[LoaderSpec]`, `last_sync`, `sync_error`, `load_error`, `configured`, `syncing`,
-`require() -> (config, client)` (raises `NotConfiguredError`), `load()` / `reload()`,
-`update_config(change: Callable[[LatestConfig], None]) -> LatestConfig` (every config save
-in the app: reads the file again, applies `change`, saves and reloads, so what the CLI saved
-meanwhile is kept; never save `state().config` or a copy of it), `await sync(progress=NullProgress())` (shared by concurrent
-callers, runs through `run.io_bound`), `sync_in_background()`, `stale` /
-`invalidate()` (call after every write to YNAB: marks the store stale and starts a
-background sync) and `fresh(max_age) -> bool` (synced within `max_age`, not stale, not
+`require() -> (config, client)` (raises `NotConfiguredError`), `load()` (reads the config,
+reopens the store: after the local data was deleted) / `reload()` (after saving the config:
+keeps the store and, for the same budget, `last_sync`; the banks are discovered once per
+process), `update_config(change: Callable[[LatestConfig], None]) -> LatestConfig` (every
+config save in the app: reads the file again, applies `change`, saves and reloads, so what
+the CLI saved meanwhile is kept; never save `state().config` or a copy of it),
+`await sync(progress=NullProgress())` (shared by concurrent callers, runs through
+`run.io_bound`), `await resync(progress=NullProgress())` (waits for a running sync, then
+`store.clear(budget)` and a full sync as the shared sync task; the activity log stays),
+`sync_in_background()`, `stale` / `invalidate()` (call after every write to YNAB: marks the
+store stale and starts a background sync; during a sync it asks for one more round when the
+running one ends) and `fresh(max_age) -> bool` (synced within `max_age`, not stale, not
 syncing: what Reconcile checks before showing the store),
 `await budget_accounts() -> list[StoredAccount]` (store once synced, YNAB before).
 `default_bucket(account_type: str) -> Bucket`.
