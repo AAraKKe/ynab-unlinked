@@ -4,7 +4,7 @@ import datetime as dt
 from uuid import UUID
 
 import pytest
-from ynab import TransactionClearedStatus
+from ynab import ApiException, TransactionClearedStatus
 
 from tests.factories import PendingImportFactory, TransactionDetailFactory
 from tests.helpers.ynab_api import YnabClientStub
@@ -253,3 +253,36 @@ def test_update_transactions_patches_each_transaction_by_id(
         ("t-2", TransactionClearedStatus.CLEARED),
     ]
     assert all(t.account_id == UUID(ACCOUNT_ID) for t in updated)
+
+
+def test_account_reads_one_account_by_its_uuid(client: Client, ynab_api: YnabClientStub):
+    api = ynab_api.api("accounts")
+
+    account = client.account(BUDGET_ID, ACCOUNT_ID)
+
+    api.get_account_by_id.assert_called_once_with(plan_id=BUDGET_ID, account_id=UUID(ACCOUNT_ID))
+    assert account is api.get_account_by_id.return_value.data.account
+
+
+@pytest.mark.parametrize(
+    ("answer", "exists"),
+    [
+        pytest.param(None, True, id="found"),
+        pytest.param(ApiException(status=404, reason="Not Found"), False, id="404 means gone"),
+    ],
+)
+def test_transaction_exists_reads_the_transaction_by_id(
+    client: Client, ynab_api: YnabClientStub, answer: ApiException | None, exists: bool
+):
+    api = ynab_api.api("transactions")
+    api.get_transaction_by_id.side_effect = answer
+
+    assert client.transaction_exists(BUDGET_ID, "t-1") is exists
+    api.get_transaction_by_id.assert_called_once_with(plan_id=BUDGET_ID, transaction_id="t-1")
+
+
+def test_transaction_exists_lets_other_errors_through(client: Client, ynab_api: YnabClientStub):
+    ynab_api.api("transactions").get_transaction_by_id.side_effect = ApiException(status=500)
+
+    with pytest.raises(ApiException):
+        client.transaction_exists(BUDGET_ID, "t-1")

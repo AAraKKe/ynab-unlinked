@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from contextlib import nullcontext
 from functools import reduce
 from typing import cast
 
-from ynab_unlinked import display
+from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 
 from .types import Version, Versioned
 
@@ -140,18 +139,26 @@ class MigrationEngine:
 
         raise ValueError(f"No migrations have been registered for {origin_entity!r}")
 
-    def migrate[V: Versioned](self, origin: Versioned, to_type: type[V]) -> V:
+    def migrate[V: Versioned](
+        self, origin: Versioned, to_type: type[V], progress: Progress = NO_PROGRESS
+    ) -> V:
         deltas: Sequence[Delta[Versioned, V]] = self.__prepare_sequence(
             origin.version(), to_type.version()
         )
 
-        process_context = display.process if deltas else lambda *args, **kwargs: nullcontext()
+        # Nothing to report when the origin already is the requested version
+        if not deltas:
+            progress = NO_PROGRESS
 
-        with process_context(
-            f"Migrating {origin.version()} to {to_type.version()}", "Migration done!"
-        ):
+        progress.start(f"Migrating {origin.version()} to {to_type.version()}")
+        try:
             # Use of cast because migrate does not produce the same type as output as its input and reduce expects that
             result = cast(V, reduce(lambda result, delta: delta.migrate(result), deltas, origin))
+        except Exception:
+            # Stop the spinner a frontend may be showing, but do not announce success
+            progress.done()
+            raise
+        progress.done("Migration done!")
 
         if not isinstance(result, to_type):
             raise TypeError(

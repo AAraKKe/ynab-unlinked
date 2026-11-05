@@ -4,6 +4,8 @@ import re
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from ynab_unlinked.entities import Match
+
 if TYPE_CHECKING:
     import datetime as dt
     from pathlib import Path
@@ -15,6 +17,7 @@ if TYPE_CHECKING:
 # Line that triggers the credit operations
 ANCHOR_LINE = "Límite de crédito".encode("cp1252").decode("cp1252")
 XLS_DEBIT_LINE = "MOVIMIENTOS DE DEBITO"
+XLS_HEADER = ["FECHA", "CONCEPTO", "LOCALIDAD"]
 TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|([-]?\d+.*EUR)(\([\d*]\))?$")
 
 
@@ -67,12 +70,10 @@ class SabadellParser:
         from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import xls
 
-        # This is the row after which real transactions appear
-        row_trigger = ["FECHA", "CONCEPTO", "LOCALIDAD"]
-
         transactions = []
 
-        for entry in xls(input_file, read_after_row_like=row_trigger, allow_partial_match=True):
+        # Real transactions appear after the header row
+        for entry in xls(input_file, read_after_row_like=XLS_HEADER, allow_partial_match=True):
             # If we find debit movements, stop reading
             # Debit movements appear at the end of the file
             if entry[0] == XLS_DEBIT_LINE:
@@ -137,3 +138,33 @@ class SabadellParser:
 
     def name(self) -> str:
         return "sabadell"
+
+    def sniff(self, input_file: Path) -> Match:
+        from ynab_unlinked.entities._sniff import guarded
+
+        return guarded(self.__sniff, input_file)
+
+    def __sniff(self, input_file: Path) -> Match:
+        from ynab_unlinked.entities import InputType
+        from ynab_unlinked.entities._sniff import first_rows, head, wrong_suffix
+
+        if (mismatch := wrong_suffix(input_file, [InputType.TXT, InputType.XLS])) is not None:
+            return mismatch
+
+        if input_file.suffix[1:] == InputType.TXT:
+            try:
+                text = head(input_file).decode("cp1252")
+            except UnicodeDecodeError:
+                return Match(0.0, "Not a Sabadell text statement, it is not cp1252 text")
+            if ANCHOR_LINE not in text:
+                return Match(0.0, "No credit limit line found")
+            if any(TRANSACTION_PATTERN.match(line) for line in text.splitlines()):
+                return Match(0.95, "Credit limit line and Sabadell operations found")
+            return Match(0.3, "Credit limit line found but no operation")
+
+        rows = [[str(cell) for cell in row] for row in first_rows(input_file)]
+        if any(row[: len(XLS_HEADER)] == XLS_HEADER for row in rows):
+            return Match(0.9, "Sabadell movements header found")
+        if any(XLS_DEBIT_LINE in row for row in rows):
+            return Match(0.6, "Sabadell debit movements section found")
+        return Match(0.0, "Sabadell movements header not found")

@@ -7,9 +7,10 @@ from ynab import Account, TransactionClearedStatus, TransactionDetail
 from ynab_unlinked import app, display
 from ynab_unlinked.choices import Choice
 from ynab_unlinked.commands.apps.reconcile import Reconcile
-from ynab_unlinked.config import ConfigV3
-from ynab_unlinked.config.constants import TRANSACTION_GRACE_PERIOD_DAYS
-from ynab_unlinked.display import process
+from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.core.reconcile import next_reconciliation_date, reconciliation_overview
+from ynab_unlinked.core.reconcile import reconcile as reconcile_transactions
+from ynab_unlinked.display import CliProgress
 from ynab_unlinked.setup import ensure_config
 from ynab_unlinked.ynab_api import Client
 
@@ -70,7 +71,7 @@ def reconcile(
     """Help reconciling your accounts in one go"""
 
     ctx = ensure_config(context)
-    config: ConfigV3 = ctx.config
+    config: LatestConfig = ctx.config
 
     budget_id = config.budget.id
 
@@ -81,21 +82,19 @@ def reconcile(
 
     client = Client(api_key=config.api_key)
 
-    with process("Getting transactions from YNAB"):
-        transactions_to_reconcile = [
-            transaction
-            for transaction in client.transactions(
-                budget_id=budget_id, since_date=last_reconciliation_date
-            )
-            if transaction.cleared is not TransactionClearedStatus.RECONCILED
-        ]
-        accounts = client.accounts(budget_id=budget_id)
+    with CliProgress() as progress:
+        overview = reconciliation_overview(
+            client, budget_id=budget_id, since=last_reconciliation_date, progress=progress
+        )
 
-    if not transactions_to_reconcile:
+    if not overview:
         display.success("All accounts are already reconciled!")
         return
 
-    choices = build_choices(transactions_to_reconcile, accounts)
+    choices = build_choices(
+        [t for group in overview for t in group.transactions],
+        [group.account for group in overview],
+    )
     return_value = Reconcile(config, choices, formatter=ctx.formatter).run()
 
     if return_value == 2:
@@ -113,18 +112,16 @@ def reconcile(
         if child.transaction and child.is_selected
     ]
 
-    if not selected_transactions:
+    with CliProgress() as progress:
+        latest_date = reconcile_transactions(
+            client, budget_id=budget_id, transactions=selected_transactions, progress=progress
+        )
+
+    if latest_date is None:
         display.info("Nothing to reconcile.\n👋 Bye!")
         return
 
-    for transaction in selected_transactions:
-        transaction.cleared = TransactionClearedStatus.RECONCILED
-
-    with process("Updating transactions"):
-        client.update_transactions(budget_id=budget_id, transactions=selected_transactions)
-
-    latest_date = max(t.var_date for t in selected_transactions)
-    config.last_reconciliation_date = latest_date - dt.timedelta(days=TRANSACTION_GRACE_PERIOD_DAYS)
+    config.last_reconciliation_date = next_reconciliation_date(latest_date)
     config.save()
 
     display.success("🎉 Reconciliation done!")

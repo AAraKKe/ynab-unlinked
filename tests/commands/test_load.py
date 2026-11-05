@@ -6,7 +6,7 @@ from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.commands import load
 
-pytestmark = pytest.mark.version("V3")
+pytestmark = pytest.mark.version("V4")
 
 # Every entity package that ships a `command` is registered as a `yul load` subcommand
 SHIPPED_ENTITIES = {"bbva", "cobee", "sabadell"}

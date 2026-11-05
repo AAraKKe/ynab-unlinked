@@ -1,8 +1,26 @@
+import os
 from pathlib import Path
 
-from platformdirs import user_config_dir
+from platformdirs import user_config_dir, user_data_dir
 
 from .constants import LATEST_VERSION
+
+HOME_ENV = "YUL_HOME"
+"""A folder that holds every file of yul (config, budget copy, web preferences) instead of
+the system locations: for scratch runs that must not touch the real ones."""
+
+
+def yul_home() -> Path | None:
+    """The `YUL_HOME` folder, None when yul uses the system locations."""
+    value = os.environ.get(HOME_ENV)
+    return Path(value).expanduser() if value else None
+
+
+def data_dir() -> Path:
+    """Where the budget copy and the web preferences live."""
+    if (home := yul_home()) is not None:
+        return home
+    return Path(user_data_dir("ynab-unlinked", "committhatline"))
 
 
 def v1_config_path() -> Path:
@@ -14,5 +32,6 @@ def v1_config_path() -> Path:
 def config_path(version: str = LATEST_VERSION.version) -> Path:
     if version == "V1":
         return v1_config_path()
-
+    if (home := yul_home()) is not None:
+        return home / "config.json"
     return Path(user_config_dir("ynab-unlinked", "committhatline")) / "config.json"

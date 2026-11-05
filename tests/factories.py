@@ -4,10 +4,20 @@ import uuid
 
 import factory
 from factory.base import Factory
-from ynab import Account, DateFormat, PlanDetail, TransactionClearedStatus, TransactionDetail
+from ynab import (
+    Account,
+    DateFormat,
+    PlanDetail,
+    PlanSummary,
+    TransactionClearedStatus,
+    TransactionDetail,
+)
 from ynab import CurrencyFormat as SdkCurrencyFormat
 
+from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config.models.v2 import CurrencyFormat
+from ynab_unlinked.core.balances import AccountBalance
+from ynab_unlinked.core.importing import ImportRow
 from ynab_unlinked.models import PendingImport, Transaction
 
 # Matches the `today` fixture so factory built objects line up with frozen time
@@ -58,6 +68,26 @@ class PendingImportFactory(Factory):
         lambda o: f"YNAB:{round(o.transaction.amount * 1000)}:{o.transaction.date:%Y-%m-%d}:1"
     )
     legacy_import_id = "0" * 30
+
+
+class ImportRowFactory(Factory):
+    """A row of an import plan, new to YNAB unless `already_imported` says otherwise."""
+
+    class Meta:
+        model = ImportRow
+
+    class Params:
+        date = DEFAULT_DATE
+        payee = "Mercadona"
+        amount = -10.0
+
+    transaction = factory.LazyAttribute(
+        lambda o: TransactionFactory(date=o.date, payee=o.payee, amount=o.amount)
+    )
+    import_id = factory.LazyAttribute(
+        lambda o: f"YNAB:{round(o.transaction.amount * 1000)}:{o.transaction.date:%Y-%m-%d}:1"
+    )
+    already_imported = False
 
 
 class TransactionDetailFactory(Factory):
@@ -124,3 +154,27 @@ class PlanDetailFactory(Factory):
     name = "My Budget"
     date_format = factory.LazyFunction(lambda: DateFormat(format="DD/MM/YYYY"))
     currency_format = factory.SubFactory(SdkCurrencyFormatFactory)
+
+
+class PlanSummaryFactory(Factory):
+    """A budget as YNAB lists it, with its accounts. Its id matches `PlanDetailFactory`."""
+
+    class Meta:
+        model = PlanSummary
+
+    id = uuid.UUID(int=1)
+    name = "My Budget"
+    currency_format = factory.SubFactory(SdkCurrencyFormatFactory)
+    accounts = factory.LazyFunction(lambda: [AccountFactory()])
+
+
+class AccountBalanceFactory(Factory):
+    """A net worth balance in milliunits. Pass `bucket` for anything but a cash account."""
+
+    class Meta:
+        model = AccountBalance
+
+    id = factory.Sequence(lambda n: f"account-{n}")
+    name = factory.LazyAttribute(lambda o: o.id.title())
+    bucket = Bucket.CASH
+    balance = 0

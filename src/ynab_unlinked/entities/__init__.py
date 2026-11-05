@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from ._protocol import Entity
+from ._protocol import Entity, Match
 
 
 class InputType(StrEnum):
@@ -12,4 +12,4 @@ class InputType(StrEnum):
     PDF = "pdf"
 
 
-__all__ = ["Entity", "InputType"]
+__all__ = ["Entity", "InputType", "Match"]

@@ -1,12 +1,15 @@
 import typer
 
-from ynab_unlinked import app
+from ynab_unlinked import app, web
 from ynab_unlinked.commands import config_app, load, privacy_command
+from ynab_unlinked.commands.app import app_command
 from ynab_unlinked.setup import load_context, run_setup
 
 app.add_typer(load, name="load")
 app.add_typer(config_app, name="config")
 app.command(name="privacy")(privacy_command)
+# Without the `web` extra the command stays out of --help and only explains how to install it
+app.command(name="app", hidden=not web.available())(app_command)
 
 
 @app.command(name="setup")

@@ -1,11 +1,13 @@
 import datetime as dt
-from typing import Literal, TypedDict, overload
+from collections.abc import Sequence
+from typing import Literal, Protocol, TypedDict, overload
 from uuid import UUID
 
 from ynab import (
     Account,
     AccountsApi,
     ApiClient,
+    ApiException,
     Configuration,
     NewTransaction,
     PatchTransactionsWrapper,
@@ -21,6 +23,8 @@ from ynab import (
 
 from ynab_unlinked.models import PendingImport, milliunits
 
+NOT_FOUND_STATUS = 404
+
 
 class ApisType(TypedDict):
     budget: type[PlansApi]
@@ -30,6 +34,16 @@ class ApisType(TypedDict):
 
 SupportedApisType = PlansApi | AccountsApi | TransactionsApi
 SupportedApisNames = Literal["budget", "accounts", "transactions"]
+
+
+class BalanceAdjustment(Protocol):
+    """What the client needs from `core.balances.Adjustment`, without importing core."""
+
+    @property
+    def account_id(self) -> str: ...
+
+    @property
+    def amount(self) -> int: ...
 
 
 class Client:
@@ -149,3 +163,78 @@ class Client:
             plan_id=budget_id,
             data=PatchTransactionsWrapper(transactions=to_update),
         )
+
+    def account(self, budget_id: str, account_id: str) -> Account:
+        api = self.api("accounts")
+        response = api.get_account_by_id(plan_id=budget_id, account_id=UUID(account_id))
+        return response.data.account
+
+    def create_adjustments(
+        self,
+        budget_id: str,
+        adjustments: Sequence[BalanceAdjustment],
+        memo: str,
+        payee: str,
+        cleared: TransactionClearedStatus,
+        date: dt.date,
+    ) -> int:
+        """Create one approved transaction per adjustment and return how many YNAB saved."""
+        if not adjustments:
+            return 0
+
+        api = self.api("transactions")
+
+        # No import id: an adjustment is a user entered transaction
+        transactions = [
+            NewTransaction(
+                account_id=UUID(adjustment.account_id),
+                date=date,
+                amount=adjustment.amount,
+                payee_name=payee,
+                memo=memo,
+                cleared=cleared,
+                approved=True,
+            )
+            for adjustment in adjustments
+        ]
+
+        response = api.create_transaction(
+            budget_id,
+            data=PostTransactionsWrapper(transactions=transactions),
+        )
+
+        return len(response.data.transaction_ids)
+
+    def transactions_with_knowledge(
+        self,
+        budget_id: str,
+        since_date: dt.date | None = None,
+    ) -> tuple[list[TransactionDetail], int]:
+        """Every transaction of the budget plus the server knowledge to ask for deltas later."""
+        api = self.api("transactions")
+        response = api.get_transactions(plan_id=budget_id, since_date=since_date)
+        return response.data.transactions, response.data.server_knowledge
+
+    def transactions_delta(
+        self,
+        budget_id: str,
+        server_knowledge: int,
+    ) -> tuple[list[TransactionDetail], int]:
+        """Transactions changed since `server_knowledge`, deleted ones included, and the new knowledge."""
+        api = self.api("transactions")
+        response = api.get_transactions(
+            plan_id=budget_id,
+            last_knowledge_of_server=server_knowledge,
+        )
+        return response.data.transactions, response.data.server_knowledge
+
+    def transaction_exists(self, budget_id: str, transaction_id: str) -> bool:
+        """Whether YNAB still has the transaction. Errors other than a 404 propagate."""
+        api = self.api("transactions")
+        try:
+            api.get_transaction_by_id(plan_id=budget_id, transaction_id=transaction_id)
+        except ApiException as error:
+            if error.status == NOT_FOUND_STATUS:
+                return False
+            raise
+        return True

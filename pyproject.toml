@@ -39,7 +39,11 @@ dependencies = [
   "pyexcel-xls==0.7.1",
   "pyexcel-xlsx==0.6.1",
   "textual==8.2.8",
+  "keyring==25.7.0",
 ]
+
+[project.optional-dependencies]
+web = ["nicegui==3.19.0"]
 
 [project.scripts]
 yul = "ynab_unlinked.main:main"
@@ -60,12 +64,14 @@ installer = "uv"
 # ------ Development Environment ------
 [tool.hatch.envs.dev]
 installer = "uv"
+features = ["web"]
 extra-dependencies = [
   "ruff==0.15.12",
   "pyright==1.1.409",
   "pytest==9.0.3",
   "pytest-cov==7.1.0",
   "pytest-mock==3.15.1",
+  "pytest-asyncio==1.4.1",
   "factory_boy==3.3.3",
   "freezegun==1.5.5",
 ]
@@ -140,6 +146,9 @@ docstring-code-format = true
 addopts = "-ra"
 testpaths = "tests"
 markers = ["version: used to identify the Config version used in the test"]
+# The web app tests drive NiceGUI's simulated user, which is async
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source_pkgs = ["ynab_unlinked"]

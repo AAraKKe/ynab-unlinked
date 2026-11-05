@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, assert_never
 
+from ynab_unlinked.entities import Match
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -13,6 +15,10 @@ if TYPE_CHECKING:
     from ynab_unlinked.models import Transaction
 
 DATE_REGEX = re.compile(r"(\d{1,2}) (\w{3}) (\d{4})")
+
+# A saved page inlines the styles and scripts of the app before the transaction list, so the
+# sniff reads further into an HTML file than the 64 KB it reads elsewhere
+SNIFF_BYTES = 2 * 1024 * 1024
 
 # Needed to parse the date. Cobee is a Spanish system for work benefits but the
 # dates are in English locale. Parsing dates with something other than numbers
@@ -174,3 +180,43 @@ class Cobee:
 
     def name(self) -> str:
         return "cobee"
+
+    def sniff(self, input_file: Path) -> Match:
+        from ynab_unlinked.entities._sniff import guarded
+
+        return guarded(self.__sniff, input_file)
+
+    def __sniff(self, input_file: Path) -> Match:
+        import html_text
+
+        from ynab_unlinked.entities import InputType
+        from ynab_unlinked.entities._sniff import head, wrong_suffix
+        from ynab_unlinked.parsers import parse_amount
+
+        if (mismatch := wrong_suffix(input_file, [InputType.HTML])) is not None:
+            return mismatch
+
+        raw = head(input_file, SNIFF_BYTES).decode("utf-8", errors="replace")
+        text: str = html_text.extract_text(raw)  # type: ignore
+
+        headings = {
+            language: position
+            for language in Language
+            if (position := text.find(identifers_by_language(language).transactions_line)) >= 0
+        }
+        if not headings:
+            return Match(0.0, "No Cobee transactions heading found")
+
+        # The heading that comes first is the one the parser starts reading from
+        language = min(headings, key=lambda found: headings[found])
+
+        def is_amount(line: str) -> bool:
+            try:
+                parse_amount(line)
+            except ValueError:
+                return False
+            return True
+
+        if any("€" in line and is_amount(line.strip()) for line in text.splitlines()):
+            return Match(0.9, f"Cobee transactions heading and amounts found (language={language})")
+        return Match(0.3, f"Cobee transactions heading found but no amount (language={language})")

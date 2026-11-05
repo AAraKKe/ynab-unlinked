@@ -37,7 +37,7 @@ def test_setup_persists_the_answers_it_collects(yul: CliRunner, config_files: Co
     assert stored["api_key"] == "the-api-key"
     assert stored["budget"]["id"] == str(BUDGET_ID)
     assert stored["budget"]["date_format"] == "DD/MM/YYYY"
-    assert stored["version"] == "V3"
+    assert stored["version"] == "V4"
 
 
 @pytest.mark.usefixtures("answers")
@@ -46,4 +46,6 @@ def test_a_command_that_needs_a_config_runs_setup_first(yul: CliRunner, config_f
 
     assert result.exit_code == 0, result.output
     assert config_files.v2.is_file(), "The command ran without ever storing a config"
-    assert "the-api-key" in result.output
+    assert json.loads(config_files.read())["api_key"] == "the-api-key"
+    # `config show` masks the token
+    assert "the-api-key" not in result.output

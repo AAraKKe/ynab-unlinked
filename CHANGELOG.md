@@ -6,6 +6,33 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.0.0 (2026-11-05)
+
+### Fresh Out of the Feature Oven
+* `yul app` opens a local web app in your browser (install it with the `[web]` extra, e.g. `uv tool install 'ynab-unlinked[web]'`): a first run that connects YNAB, picks the budget and where each bank's statements go, then copies the budget; Home with your net worth, what needs attention and recent activity; Import, where dropped statements are detected and imported after one confirmation; Reconcile, comparing each account's cleared balance with the bank and locking the transactions; Net worth with its history, buckets and inline balance updates for accounts you update by hand; and Settings for the connection, banks, accounts, net worth and local data. It only listens on 127.0.0.1 and needs the link it prints.
+* Add `yul load auto <files...>`, which works out the bank of each statement (and the Cobee language and the Sabadell year) and imports them all in one go.
+* Keep a local copy of your budget's transactions and accounts, plus an activity log, so the web app can work without refetching everything from YNAB.
+* The YNAB token is kept in the system keychain (macOS Keychain, Windows Credential Manager, Secret Service or KWallet on Linux) instead of the config file; an existing token moves there the next time yul runs, and the file keeps plain text only where no keychain exists.
+
+### Polished Until It Shines
+* `yul load auto` shows the transactions of every file first and asks a single confirmation to import them all, then reports how many were created in each account.
+* Every open account now counts in net worth by default; Settings › Accounts lets you leave one out.
+* Home is laid out in three blocks: net worth, an Import section with the drop zone and when each bank was last imported, and a Needs you section with only what is waiting for you.
+* Settings in `yul app`: Banks and Accounts are grids of cards that light up when switched on, Accounts saves every change at once with the bucket as pills and a pencil for balances entered by hand, and every bank logo has the same size.
+* Setup now ends by copying your budget from YNAB while you watch, and no longer asks which accounts to track: every open account counts until you change it in Settings.
+* The config moves to V4 (migrated automatically) and gains account settings, balance adjustment settings and debt mappings.
+
+### Bugs Squashed, Peace Restored
+* Transactions merged by YNAB's matching no longer linger in the local store as "to reconcile".
+
+### Read All About It! (Docs Updates)
+* Document the local web app: the architecture contract and design document kept with the `yul-web-design` project skill, a Web app section in the README and the local web server in the privacy notice.
+* The README is rewritten for 1.0: what yul is, how to install it, and how to use the web app and the command line.
+
+### For the Builders: Dev Experience Upgrades
+* Add the net worth, debt netting and balance adjustment core shared by the CLI and the web app.
+* Move importing and reconciling into UI independent core services shared by the CLI and the web app.
+
 ## ynab-unlinked 0.10.0 (2026-10-31)
 
 ### Fresh Out of the Feature Oven

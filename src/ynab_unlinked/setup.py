@@ -10,7 +10,7 @@ from typing import cast
 
 import typer
 
-from ynab_unlinked.config import ConfigV3, get_config
+from ynab_unlinked.config import LatestConfig, get_config
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.display import bold, error, success
@@ -19,19 +19,19 @@ from ynab_unlinked.privacy import privacy_notice
 from ynab_unlinked.utils import prompt_for_api_key, prompt_for_budget
 
 
-def run_setup() -> ConfigV3:
+def run_setup() -> LatestConfig:
     """Run the interactive setup flow and persist a fresh config."""
     bold("Welcome to ynab-unlinked! Lets setup your connection")
     privacy_notice()
     api_key = prompt_for_api_key()
     budget = prompt_for_budget(api_key)
-    config = ConfigV3(api_key=api_key, budget=budget)
+    config = LatestConfig(api_key=api_key, budget=budget)
     config.save()
     success("All done!")
     return config
 
 
-def _build_context(config: ConfigV3) -> YnabUnlinkedContext:
+def _build_context(config: LatestConfig) -> YnabUnlinkedContext:
     return YnabUnlinkedContext(
         config=config,
         extras=None,
@@ -57,17 +57,29 @@ def load_context() -> YnabUnlinkedContext | None:
     if config is None:
         return None
 
-    return _build_context(cast(ConfigV3, config))
+    return _build_context(cast(LatestConfig, config))
 
 
-def ensure_config(context: typer.Context, *, interactive: bool = True) -> YnabUnlinkedContext:
+TOKEN_MISSING = (
+    "Your YNAB token is no longer in the keychain. Run `yul config set api_key` to enter it "
+    "again; everything else in your config is kept."
+)
+
+
+def ensure_config(
+    context: typer.Context, *, interactive: bool = True, require_token: bool = True
+) -> YnabUnlinkedContext:
     """Make sure ``context.obj`` has a valid config, prompting setup if missing.
 
     With ``interactive=False`` a missing config is an error, because setup needs answers
-    only a person can give.
+    only a person can give. A config whose token left the keychain is an error too, unless
+    ``require_token`` is false (what `yul config set api_key` passes).
     """
     obj: YnabUnlinkedContext | None = context.obj
     if obj is not None:
+        if require_token and not obj.config.api_key:
+            error(TOKEN_MISSING)
+            raise typer.Exit(1)
         return obj
 
     config = get_config()
@@ -80,6 +92,10 @@ def ensure_config(context: typer.Context, *, interactive: bool = True) -> YnabUn
     if config is None:
         raise ConfigError("Unexpected error: config could not be loaded after setup")
 
-    obj = _build_context(cast(ConfigV3, config))
+    if require_token and not config.api_key:
+        error(TOKEN_MISSING)
+        raise typer.Exit(1)
+
+    obj = _build_context(cast(LatestConfig, config))
     context.obj = obj
     return obj

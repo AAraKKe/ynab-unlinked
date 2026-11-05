@@ -18,7 +18,7 @@ from tests.commands.apps.reconcile.harness import (
 )
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.choices import Choice
-from ynab_unlinked.config import ConfigV3
+from ynab_unlinked.config import LatestConfig
 
 __all__ = ["CHECKING_ID", "CLEARED", "RECONCILED", "SAVINGS_ID", "UNCLEARED"]
 
@@ -60,14 +60,14 @@ class TuiStub:
         return self.app_class.call_args.kwargs["formatter"]
 
     @property
-    def config(self) -> ConfigV3:
+    def config(self) -> LatestConfig:
         return self.app_class.call_args.args[0]
 
 
 @pytest.fixture
-def stored_config(config: str) -> ConfigV3:
+def stored_config(config: str) -> LatestConfig:
     """The config the command will load. Changes made here must be saved to reach it."""
-    return ConfigV3.load()
+    return LatestConfig.load()
 
 
 @pytest.fixture

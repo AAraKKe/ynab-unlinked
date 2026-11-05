@@ -9,6 +9,7 @@ from .shared import EntityConfig, EntityConfigV3
 from .v1 import ConfigV1
 from .v2 import Budget, ConfigV2, CurrencyFormat
 from .v3 import ConfigV3
+from .v4 import ConfigV4, LoaderConfig
 
 
 class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
@@ -117,3 +118,41 @@ class DeltaConfigV2ToV3(Delta[ConfigV2, ConfigV3]):
         config_v2.save()
 
         return config_v2
+
+
+class DeltaConfigV3ToV4(Delta[ConfigV3, ConfigV4]):
+    origin = ConfigV3.version()
+    destination = ConfigV4.version()
+
+    def on_migrate(self, origin: ConfigV3) -> ConfigV4:
+        # Account settings, adjustments and debt mappings are new in V4. They start empty: every
+        # open account counts in net worth with its defaults until the settings change it.
+        config_v4 = ConfigV4(
+            api_key=origin.api_key,
+            budget=origin.budget,
+            last_reconciliation_date=origin.last_reconciliation_date,
+            loaders={
+                name: LoaderConfig(account_id=entity.account_id)
+                for name, entity in origin.entities.items()
+            },
+        )
+
+        # V3 and V4 live in the same file, so saving replaces the migrated away config
+        config_v4.save()
+
+        return config_v4
+
+    def on_rollback(self, destination: ConfigV4) -> ConfigV3:
+        config_v3 = ConfigV3(
+            api_key=destination.api_key,
+            budget=destination.budget,
+            last_reconciliation_date=destination.last_reconciliation_date,
+            entities={
+                name: EntityConfigV3(account_id=loader.account_id)
+                for name, loader in destination.loaders.items()
+            },
+        )
+
+        config_v3.save()
+
+        return config_v3

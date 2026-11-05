@@ -6,14 +6,16 @@ from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.style import Style
 from rich.table import Column, Table
+from ynab import PlanDetail
 
 from ynab_unlinked.config import get_config
 from ynab_unlinked.config.models.v2 import Budget, CurrencyFormat
+from ynab_unlinked.core.importing import ImportRow
 from ynab_unlinked.display import console, process, question
 from ynab_unlinked.entities import InputType
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.formatter import Formatter
-from ynab_unlinked.models import PendingImport, Transaction
+from ynab_unlinked.models import Transaction
 from ynab_unlinked.ynab_api.client import Client
 
 IMPORT_HELP_MESSAGE = (
@@ -83,6 +85,11 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
     if budget_details is None:
         raise ValueError(f"Could not find budget with ID {selected_budget.id}")
 
+    return budget_from_plan(budget_details)
+
+
+def budget_from_plan(budget_details: PlanDetail) -> Budget:
+    """The `Budget` yul stores, built from the full budget YNAB returns."""
     if budget_details.currency_format is None:
         raise ValueError(f"Budget {budget_details.name!r} has no currency format")
 
@@ -131,10 +138,8 @@ def display_transaction_table(transactions: list[Transaction], formatter: Format
     console().print(table)
 
 
-def display_import_table(
-    transactions: list[PendingImport], already_imported: set[str], formatter: Formatter
-):
-    if not transactions:
+def display_import_table(rows: Sequence[ImportRow], formatter: Formatter):
+    if not rows:
         return
 
     columns = [
@@ -145,12 +150,12 @@ def display_import_table(
     ]
     table = Table(*columns, title="Transactions to import", box=box.SIMPLE)
 
-    for pending in transactions:
-        inflow, outflow = _flows(pending.transaction.amount, formatter)
-        style = Style(color="gray37" if pending.import_id in already_imported else "green")
+    for row in rows:
+        inflow, outflow = _flows(row.transaction.amount, formatter)
+        style = Style(color="gray37" if row.already_imported else "green")
         table.add_row(
-            formatter.format_date(pending.transaction.date),
-            pending.transaction.payee,
+            formatter.format_date(row.transaction.date),
+            row.transaction.payee,
             inflow,
             outflow,
             style=style,

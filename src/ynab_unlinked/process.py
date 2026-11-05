@@ -1,25 +1,24 @@
-import datetime as dt
 from pathlib import Path
 
 import typer
 from ynab import TransactionClearedStatus
 
 from ynab_unlinked import display
-from ynab_unlinked.config import ConfigV3
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
-from ynab_unlinked.display import bullet_list, confirm, console, info, process, question
+from ynab_unlinked.core.importing import build_import_plan, commit_import_plan, parse_transactions
+from ynab_unlinked.display import CliProgress, bullet_list, confirm, console, info, question
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.exceptions import ParsingError
-from ynab_unlinked.models import assign_import_ids
 from ynab_unlinked.utils import display_import_table, display_transaction_table
 from ynab_unlinked.ynab_api.client import Client
 
 
 def get_or_prompt_account_id(
-    config: ConfigV3, entity_name: str, force_prompt: bool, interactive: bool = True
+    config: LatestConfig, entity_name: str, force_prompt: bool, interactive: bool = True
 ) -> str:
-    if entity_name in config.entities and not force_prompt:
-        return config.entities[entity_name].account_id
+    if (loader := config.entity(entity_name)) is not None and not force_prompt:
+        return loader.account_id
 
     if not interactive:
         display.error(
@@ -76,7 +75,7 @@ def process_transactions(
     )
 
     try:
-        parsed_input = entity.parse(input_file, context)
+        parsed_input = parse_transactions(entity, input_file, context)
     except ParsingError as e:
         display.error(f"Error when parsing {e.input_file}")
         display.console().print(f"  Message: {e.message}")
@@ -90,52 +89,50 @@ def process_transactions(
         info("🎉 All done! Nothing to do.")
         return
 
-    pending = assign_import_ids(parsed_input)
-
     client = Client(config.api_key)
     budget_id = config.budget.id
-    earliest_transaction = min(t.date for t in parsed_input)
 
-    with process("Reading transactions..."):
-        ynab_transactions = client.transactions(
+    with CliProgress() as progress:
+        plan = build_import_plan(
+            client,
             budget_id=budget_id,
             account_id=account_id,
-            since_date=earliest_transaction - dt.timedelta(days=context.buffer),
+            entity_name=entity.name(),
+            input_file=input_file,
+            transactions=parsed_input,
+            buffer_days=context.buffer,
+            progress=progress,
         )
-    display.success("✔ Transactions read")
 
-    known_ids = {t.import_id for t in ynab_transactions if t.import_id is not None}
-    already_imported = {
-        p.import_id for p in pending if p.import_id in known_ids or p.legacy_import_id in known_ids
-    }
+    display_import_table(plan.rows, context.formatter)
 
-    display_import_table(pending, already_imported, context.formatter)
-
-    to_create = [p for p in pending if p.import_id not in already_imported]
-    if not to_create:
+    if not plan.new_rows:
         info("🎉 All done! Nothing to do.")
         return
 
-    display.info(f"Transactions to import:       {len(to_create)}")
+    display.info(f"Transactions to import:       {len(plan.new_rows)}")
 
     if not context.yes and not confirm("Do you want to continue and create the transactions?"):
         return
 
-    with process("Creating transactions..."):
-        duplicates = client.create_transactions(
+    with CliProgress() as progress:
+        result = commit_import_plan(
+            client,
             budget_id=budget_id,
-            account_id=account_id,
-            transactions=to_create,
+            plan=plan,
             cleared=(
                 TransactionClearedStatus.RECONCILED
                 if context.reconcile
                 else TransactionClearedStatus.CLEARED
             ),
+            progress=progress,
         )
 
-    if duplicates:
-        display.warning(f"YNAB rejected {len(duplicates)} of them as already imported:")
-        console().print(bullet_list(duplicates))
+    if result.duplicate_import_ids:
+        display.warning(
+            f"YNAB rejected {len(result.duplicate_import_ids)} of them as already imported:"
+        )
+        console().print(bullet_list(result.duplicate_import_ids))
 
-    created = len(to_create) - len(duplicates)
+    created = result.created
     display.success(f"🎉 All done! {created} transaction{'' if created == 1 else 's'} imported.")

@@ -11,7 +11,7 @@ from tests.helpers.ynab_api import YnabClientStub
 from tests.process.builders import ACCOUNT_ID, THREE_DAYS_AGO, TODAY, YESTERDAY
 from ynab_unlinked.exceptions import ParsingError
 
-pytestmark = pytest.mark.version("V3")
+pytestmark = pytest.mark.version("V4")
 
 COFFEE = {"payee": "Coffee Shop", "amount": -12.34}
 BAKERY = {"payee": "Bakery", "amount": -5.0}

@@ -10,14 +10,41 @@ from typer.testing import CliRunner as TyperRunner
 
 from tests.helpers import assets
 from tests.helpers.config import ConfigFiles
+from tests.helpers.keychain import MemoryKeyring
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
-from ynab_unlinked.config import ConfigV3, get_config
+from ynab_unlinked.config import ConfigV3, ConfigV4, get_config
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.main import app
 from ynab_unlinked.utils import split_quoted_string
 from ynab_unlinked.ynab_api import Client
+
+# Sets a scratch storage path for NiceGUI and provides its simulated `User` (tests/web)
+pytest_plugins = ["nicegui.testing.user_plugin"]
+
+
+@pytest.fixture(autouse=True)
+def no_keychain() -> Generator[None]:
+    """Tests never touch the real keychain: the token stays in the config file as plain text
+    unless the test asks for `memory_keychain`."""
+    import keyring
+    from keyring.backends import fail
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(fail.Keyring())
+    yield
+    keyring.set_keyring(previous)
+
+
+@pytest.fixture
+def memory_keychain() -> MemoryKeyring:
+    """A keychain that forgets everything when the test ends."""
+    import keyring
+
+    backend = MemoryKeyring()
+    keyring.set_keyring(backend)
+    return backend
 
 
 @pytest.fixture
@@ -87,14 +114,44 @@ def config_files(tmp_path: Path, mocker: MockerFixture) -> ConfigFiles:
         "ynab_unlinked.config.models.v1",
         "ynab_unlinked.config.models.v2",
         "ynab_unlinked.config.models.v3",
+        "ynab_unlinked.config.models.v4",
         "ynab_unlinked.privacy",
-        "ynab_unlinked.commands.config",
+        "ynab_unlinked.local_data",
     ):
         mocker.patch(f"{module}.config_path", side_effect=files.path)
     mocker.patch("ynab_unlinked.config.paths.v1_config_path", return_value=files.v1)
-    mocker.patch("ynab_unlinked.commands.config.v1_config_path", return_value=files.v1)
+    mocker.patch("ynab_unlinked.local_data.v1_config_path", return_value=files.v1)
 
     return files
+
+
+@pytest.fixture(autouse=True)
+def store_file(tmp_path: Path, mocker: MockerFixture) -> Path:
+    """
+    Point the local store into a scratch directory, apart from the config one.
+
+    Autouse so that no test, `yul config reset` ones included, can reach the real store.
+    Nothing exists there until a test opens a `Store` on it.
+    """
+    path = tmp_path / "data" / "store.sqlite"
+    for module in (
+        "ynab_unlinked.store",
+        "ynab_unlinked.store.paths",
+        "ynab_unlinked.privacy",
+        "ynab_unlinked.local_data",
+        "ynab_unlinked.web.state",
+    ):
+        mocker.patch(f"{module}.store_path", return_value=path)
+    return path
+
+
+@pytest.fixture(autouse=True)
+def web_storage(tmp_path: Path, mocker: MockerFixture) -> Path:
+    """Point the web app preferences directory into a scratch directory, like `store_file`."""
+    path = tmp_path / "data" / "web"
+    for module in ("ynab_unlinked.local_data", "ynab_unlinked.privacy"):
+        mocker.patch(f"{module}.web_storage_dir", return_value=path)
+    return path
 
 
 @pytest.fixture
@@ -102,7 +159,7 @@ def config(request: pytest.FixtureRequest, config_files: ConfigFiles) -> str:
     """
     Install the config asset for a version and yield that version.
 
-    The version comes from `@pytest.mark.version("V3")` or from indirect parametrization.
+    The version comes from `@pytest.mark.version("V4")` or from indirect parametrization.
     Versions without an asset (such as "missing") leave the scratch directory empty.
     """
     version_marker = request.node.get_closest_marker("version")
@@ -126,6 +183,12 @@ def config(request: pytest.FixtureRequest, config_files: ConfigFiles) -> str:
 
 @pytest.fixture
 def config_v3(config: str) -> ConfigV3:
+    """The stored config read as V3, without migrating it to the latest version."""
+    return ConfigV3.load()
+
+
+@pytest.fixture
+def config_v4(config: str) -> ConfigV4:
     loaded = get_config()
-    assert isinstance(loaded, ConfigV3)
+    assert isinstance(loaded, ConfigV4)
     return loaded

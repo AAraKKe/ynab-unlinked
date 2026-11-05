@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from pytest_mock import MockerFixture
 
-from ynab_unlinked.display import bullet_list, process
+from ynab_unlinked.display import CliProgress, bullet_list, process
 
 
 @pytest.fixture
@@ -40,3 +40,35 @@ def test_process_reports_completion_only_when_asked_to(
         pass
 
     assert printed.call_count == expected_prints
+
+
+@pytest.mark.parametrize(
+    ("report", "expected_prints"),
+    [
+        pytest.param(lambda p: p.done("Transactions read"), ["✔ Transactions read"], id="done"),
+        pytest.param(lambda p: p.done(), [], id="a-silent-done"),
+        pytest.param(lambda p: p.info("3 files found"), ["3 files found"], id="info"),
+        pytest.param(lambda p: p.warn("Skipped a row"), ["Skipped a row"], id="warn"),
+    ],
+)
+def test_cli_progress_prints_each_report_on_the_terminal(
+    printed: MagicMock, report, expected_prints: list[str]
+):
+    with CliProgress() as progress:
+        report(progress)
+
+    messages = [call.args[0] for call in printed.call_args_list]
+    assert len(messages) == len(expected_prints)
+    assert all(
+        expected in message for expected, message in zip(expected_prints, messages, strict=True)
+    )
+
+
+def test_cli_progress_stops_the_spinner_when_the_step_raises(mocker: MockerFixture):
+    status = mocker.patch("ynab_unlinked.display.Status")
+
+    with pytest.raises(RuntimeError), CliProgress() as progress:
+        progress.start("Reading transactions...")
+        raise RuntimeError("YNAB is down")
+
+    status.return_value.__exit__.assert_called_once()

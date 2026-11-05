@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+from types import TracebackType
 
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
@@ -43,6 +44,42 @@ def process(message: str, completed_message: str | None = None):
         yield
     if completed_message:
         success(completed_message)
+
+
+class CliProgress:
+    """Shows the steps of a core call as a spinner per step on the terminal.
+
+    Use it as a context manager so the spinner stops even when the call raises.
+    """
+
+    def __init__(self) -> None:
+        self._step = ExitStack()
+
+    def __enter__(self) -> CliProgress:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self._step.close()
+
+    def start(self, message: str) -> None:
+        self._step.close()
+        self._step.enter_context(process(message))
+
+    def done(self, message: str | None = None) -> None:
+        self._step.close()
+        if message:
+            success(f"✔ {message}")
+
+    def info(self, message: str) -> None:
+        info(message)
+
+    def warn(self, message: str) -> None:
+        warning(message)
 
 
 def question(message: str, **kwargs) -> str:

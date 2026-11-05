@@ -9,9 +9,12 @@ from ynab import DateFormat, PlanSummary
 
 from tests.factories import PlanDetailFactory, SdkCurrencyFormatFactory
 from tests.helpers.config import ConfigFiles
+from tests.helpers.keychain import MemoryKeyring
 from tests.helpers.types import CliRunner
+from ynab_unlinked import keychain
+from ynab_unlinked.config import LatestConfig
 
-pytestmark = pytest.mark.version("V3")
+pytestmark = pytest.mark.version("V4")
 
 # Wide enough that Rich does not wrap the JSON or the stored paths across lines.
 WIDE_TERMINAL = {"COLUMNS": "1000"}
@@ -23,9 +26,10 @@ def test_config_show_prints_the_stored_configuration(yul: CliRunner):
 
     assert result.exit_code == 0, result.output
     shown = json.loads(result.output)
-    assert shown["api_key"] == "my-api-key"
+    # Masked: the token is never printed
+    assert shown["api_key"] == "•" * len("my-api-key")
     assert shown["budget"]["name"] == "My Budget"
-    assert shown["version"] == "V3"
+    assert shown["version"] == "V4"
 
 
 def test_config_set_api_key_replaces_the_key_on_disk(
@@ -37,6 +41,25 @@ def test_config_set_api_key_replaces_the_key_on_disk(
 
     assert result.exit_code == 0, result.output
     assert json.loads(config_files.read())["api_key"] == "a-brand-new-api-key"
+
+
+def test_a_token_gone_from_the_keychain_stops_commands_but_not_config_set(
+    yul: CliRunner, config_files: ConfigFiles, memory_keychain: MemoryKeyring, monkeypatch
+):
+    LatestConfig.load()  # moves the token to the keychain
+    memory_keychain.passwords.clear()
+
+    result = yul("config show", env=WIDE_TERMINAL)
+
+    assert result.exit_code == 1
+    assert "no longer in the keychain" in result.output.replace("\n", "")
+
+    monkeypatch.setattr("getpass.getpass", lambda *args, **kwargs: "a-brand-new-api-key")
+    result = yul("config set api_key", env=WIDE_TERMINAL)
+
+    assert result.exit_code == 0, result.output
+    assert memory_keychain.passwords[(keychain.SERVICE, keychain.ACCOUNT)] == "a-brand-new-api-key"
+    assert json.loads(config_files.read())["api_key"] == keychain.REFERENCE
 
 
 def test_config_set_api_key_warns_where_the_key_will_be_stored(
@@ -74,6 +97,6 @@ def test_config_set_budget_stores_the_budget_picked_by_the_user(
     assert stored_budget["date_format"] == "YYYY-MM-DD"
     assert stored_budget["currency_format"]["iso_code"] == "USD"
     # The rest of the config must survive a budget change
-    assert json.loads(config_files.read())["entities"]["sabadell"]["account_id"] == (
+    assert json.loads(config_files.read())["loaders"]["sabadell"]["account_id"] == (
         "sabadell-account"
     )

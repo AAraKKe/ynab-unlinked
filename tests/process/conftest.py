@@ -12,7 +12,7 @@ from tests.process.builders import write_config
 def config_file(config: str, config_files: ConfigFiles) -> Path:
     """The checked in asset registers the test entity under a non UUID account id, which
     the YNAB client rejects on upload, so these tests start from their own config."""
-    path = config_files.path("V3")
+    path = config_files.path("V4")
     write_config(path)
     return path
 

@@ -3,9 +3,19 @@ from __future__ import annotations
 import json
 from typing import Final
 
+from ynab_unlinked.display import CliProgress
+
 from .constants import LATEST_VERSION
 from .migrations import MigrationEngine, Version
-from .models import ConfigV1, ConfigV2, ConfigV3, DeltaConfigV1ToV2, DeltaConfigV2ToV3
+from .models import (
+    ConfigV1,
+    ConfigV2,
+    ConfigV3,
+    ConfigV4,
+    DeltaConfigV1ToV2,
+    DeltaConfigV2ToV3,
+    DeltaConfigV3ToV4,
+)
 from .paths import config_path
 from .types import Config
 
@@ -13,8 +23,9 @@ VERSION_MAPPING: Final[dict[str, type[Config]]] = {
     "V1": ConfigV1,
     "V2": ConfigV2,
     "V3": ConfigV3,
+    "V4": ConfigV4,
 }
-LATESST_CONFIG_TYPE = ConfigV3
+LATEST_CONFIG_TYPE = ConfigV4
 
 
 class ConfigError(ValueError): ...
@@ -28,7 +39,9 @@ _MIGRATION_ENGINE: MigrationEngine | None = None
 def migration_engine() -> MigrationEngine:
     global _MIGRATION_ENGINE
     if _MIGRATION_ENGINE is None:
-        _MIGRATION_ENGINE = MigrationEngine("Config", DeltaConfigV1ToV2(), DeltaConfigV2ToV3())
+        _MIGRATION_ENGINE = MigrationEngine(
+            "Config", DeltaConfigV1ToV2(), DeltaConfigV2ToV3(), DeltaConfigV3ToV4()
+        )
     return _MIGRATION_ENGINE
 
 
@@ -52,7 +65,7 @@ def config_version() -> Version:
         return Version("Config", content["version"])
 
 
-def get_config() -> LATESST_CONFIG_TYPE | None:
+def get_config() -> LATEST_CONFIG_TYPE | None:
     """Get the latest supported version of the config running any migrations if needed"""
     version = config_version()
 
@@ -62,7 +75,9 @@ def get_config() -> LATESST_CONFIG_TYPE | None:
     if not current_config.exists():
         return None
 
-    if current_config is LATESST_CONFIG_TYPE:
-        return LATESST_CONFIG_TYPE.load()
+    if current_config is LATEST_CONFIG_TYPE:
+        return LATEST_CONFIG_TYPE.load()
 
-    return migration_engine().migrate(current_config.load(), LATESST_CONFIG_TYPE)
+    return migration_engine().migrate(
+        current_config.load(), LATEST_CONFIG_TYPE, progress=CliProgress()
+    )

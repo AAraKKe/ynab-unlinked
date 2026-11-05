@@ -9,7 +9,7 @@ from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
 from tests.process.builders import (
     ACCOUNT_ID,
-    REGISTERED_ENTITY,
+    REGISTERED_LOADER,
     THREE_DAYS_AGO,
     TODAY,
     saved_config,
@@ -17,7 +17,7 @@ from tests.process.builders import (
 )
 from ynab_unlinked.models import assign_import_ids
 
-pytestmark = pytest.mark.version("V3")
+pytestmark = pytest.mark.version("V4")
 
 COFFEE = {"payee": "Coffee Shop", "amount": -12.34}
 
@@ -37,7 +37,7 @@ def test_yes_imports_without_asking(
 def test_yes_keeps_the_year_option_of_sabadell_working(
     config_file: Path, yul: CliRunner, ynab: YnabClientStub, created_transactions
 ):
-    write_config(config_file, entities={"sabadell": {"account_id": ACCOUNT_ID}})
+    write_config(config_file, loaders={"sabadell": {"account_id": ACCOUNT_ID}})
 
     result = yul(
         "load", "--yes", "sabadell", "-y", "2023", str(assets.path("sabadell/movements.txt"))
@@ -52,10 +52,10 @@ def test_yes_keeps_the_year_option_of_sabadell_working(
     [
         pytest.param("load --yes test", {}, "No saved account", id="no saved account"),
         pytest.param(
-            "load --yes --acount test", REGISTERED_ENTITY, "--acount", id="--yes with --acount"
+            "load --yes --acount test", REGISTERED_LOADER, "--acount", id="--yes with --acount"
         ),
         pytest.param(
-            "load --yes --acount --show test", REGISTERED_ENTITY, "--acount", id="even with --show"
+            "load --yes --acount --show test", REGISTERED_LOADER, "--acount", id="even with --show"
         ),
     ],
 )
@@ -70,14 +70,14 @@ def test_yes_refuses_to_pick_an_account(
 ):
     # A single open account must not be taken as the obvious choice
     ynab.api("accounts").get_accounts.return_value.data.accounts = [AccountFactory(id=ACCOUNT_ID)]
-    write_config(config_file, entities=entities)
+    write_config(config_file, loaders=entities)
     load_entity(TODAY, [TransactionFactory(date=THREE_DAYS_AGO, **COFFEE)])
 
     result = yul(command)
 
     assert result.exit_code == 1, result.output
     assert message in result.output
-    assert saved_config(config_file).entities.keys() == entities.keys()
+    assert saved_config(config_file).loaders.keys() == entities.keys()
     ynab.api("transactions").create_transaction.assert_not_called()
 
 

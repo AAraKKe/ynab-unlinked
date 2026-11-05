@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from tests.helpers.config import ConfigFiles
@@ -32,3 +34,13 @@ def test_privacy_command_runs_without_a_config_present(yul: CliRunner, config_fi
     assert result.exit_code == 0, result.output
     assert not config_files.v2.exists()
     assert str(config_files.v2.parent) in _flatten(result.output)
+
+
+def test_privacy_command_lists_the_local_store_and_what_it_holds(yul: CliRunner, store_file: Path):
+    result = yul("privacy", env=WIDE_TERMINAL)
+
+    assert result.exit_code == 0, result.output
+    output = _flatten(result.output)
+    assert str(store_file) in output
+    assert "copy of your budget's transactions and accounts" in output
+    assert "activity log" in output

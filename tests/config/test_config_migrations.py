@@ -12,7 +12,17 @@ from ynab import PlanDetail
 
 from tests.factories import PlanDetailFactory
 from tests.helpers.config import ConfigFiles
-from ynab_unlinked.config import MAX_CONFIG_VERSION, Config, ConfigV1, ConfigV2, ConfigV3
+from ynab_unlinked.buckets import Bucket
+from ynab_unlinked.config import (
+    MAX_CONFIG_VERSION,
+    Config,
+    ConfigV1,
+    ConfigV2,
+    ConfigV3,
+    ConfigV4,
+    DebtMapping,
+    TrackedAccount,
+)
 from ynab_unlinked.config.core import VERSION_MAPPING
 from ynab_unlinked.config.migrations.base import MigrationEngine, Version
 from ynab_unlinked.config.models import DeltaConfigV1ToV2, DeltaConfigV2ToV3
@@ -118,7 +128,7 @@ def test_migrations_on_rollback(
     destination_class = VERSION_MAPPING[destination.version]
 
     # sourcery skip: no-conditionals-in-tests
-    if origin.version == "V3":
+    if origin.version >= "V3" and destination.version < "V3":
         destination_config = losing_what_v3_dropped(destination_config)  # type: ignore[arg-type]
 
     rolled_back_config = migration_engine.rollback(origin_config, destination_class)
@@ -197,3 +207,25 @@ def test_rollback_from_v3_leaves_no_payee_rules_or_checkpoints(
     stored = json.loads(config_files.read("V2"))
     assert stored["payee_rules"] == {}
     assert stored["version"] == "V2"
+
+
+def test_rollback_from_v4_keeps_the_loader_accounts_and_drops_everything_new(
+    load_config: Callable[[str], Config],
+    config_files: ConfigFiles,
+    migration_engine: MigrationEngine,
+):
+    config_v4 = load_config("V4")
+    assert isinstance(config_v4, ConfigV4)
+    config_v4.loaders["sabadell"].options = {"format": "txt"}
+    config_v4.accounts = [
+        TrackedAccount(id="acc", name="Savings", type="savings", bucket=Bucket.SAVINGS)
+    ]
+    config_v4.debt_mappings = [DebtMapping(debt_account_id="card", mapped_to=["acc"])]
+
+    config_v3 = migration_engine.rollback(config_v4, ConfigV3)
+
+    assert config_v3.entities["sabadell"].account_id == "sabadell-account"
+    stored = json.loads(config_files.read("V3"))
+    assert stored["version"] == "V3"
+    assert stored["entities"]["sabadell"] == {"account_id": "sabadell-account"}
+    assert stored.keys() == {"api_key", "budget", "last_reconciliation_date", "entities", "version"}

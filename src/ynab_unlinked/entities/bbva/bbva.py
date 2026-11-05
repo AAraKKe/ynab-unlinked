@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, cast
 
-from ynab_unlinked.entities import Entity, InputType
+from ynab_unlinked.entities import Entity, InputType, Match
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
 
 XLSX_ROW_TO_READ = ["", "Fecha", "Tarjeta", "Concepto", "Importe", "Divisa", ""]
 VALID_TYPES = [InputType.PDF, InputType.XLSX]
+PDF_DATE = re.compile(r"^\d{2}/\d{2}/\d{4}")
 
 
 class BBVA(Entity):
@@ -59,6 +61,13 @@ class BBVA(Entity):
 
         return parse_amount(raw)
 
+    def __is_pdf_transaction(self, row: list[str | None]) -> bool:
+        try:
+            self.__parse_amount(row[2] or "")
+        except ValueError:
+            return False
+        return PDF_DATE.match(row[0] or "") is not None
+
     def __extract_fields_from_pdf_row(self, row: list[str]) -> tuple[str, ...]:
         # PDFs should have three columns
         # - Date with 2 lines for the date the transaction took place and when it was approved
@@ -78,3 +87,28 @@ class BBVA(Entity):
 
     def name(self) -> str:
         return "BBVA Credit Card"
+
+    def sniff(self, input_file: Path) -> Match:
+        from ynab_unlinked.entities._sniff import guarded
+
+        return guarded(self.__sniff, input_file)
+
+    def __sniff(self, input_file: Path) -> Match:
+        from ynab_unlinked.entities._sniff import first_pdf_table, first_rows, wrong_suffix
+
+        if (mismatch := wrong_suffix(input_file, VALID_TYPES)) is not None:
+            return mismatch
+
+        if input_file.suffix[1:] == InputType.PDF:
+            table = first_pdf_table(input_file)
+            if not table:
+                return Match(0.0, "No table on the first page")
+            if all(len(row) == 3 for row in table) and any(
+                self.__is_pdf_transaction(row) for row in table
+            ):
+                return Match(0.8, "Three column table of dated amounts found on the first page")
+            return Match(0.0, "The table on the first page is not a BBVA statement")
+
+        if any([str(cell) for cell in row] == XLSX_ROW_TO_READ for row in first_rows(input_file)):
+            return Match(0.95, "BBVA header row found")
+        return Match(0.0, "BBVA header row not found")

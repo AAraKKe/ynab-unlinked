@@ -1,0 +1,40 @@
+{
+    "api_key": "my-api-key",
+    "budget": {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "name": "My Budget",
+        "date_format": "DD/MM/YYYY",
+        "currency_format": {
+            "iso_code": "EUR",
+            "decimal_digits": 2,
+            "decimal_separator": ".",
+            "symbol_first": false,
+            "group_separator": ",",
+            "currency_symbol": "€",
+            "display_symbol": true
+        }
+    },
+    "last_reconciliation_date": null,
+    "loaders": {
+        "sabadell": {
+            "account_id": "sabadell-account",
+            "options": {}
+        },
+        "cobee": {
+            "account_id": "cobee-account",
+            "options": {}
+        },
+        "test": {
+            "account_id": "TestAccountID",
+            "options": {}
+        }
+    },
+    "accounts": [],
+    "adjustments": {
+        "memo": "Balance adjustment by yul",
+        "payee": "Balance Adjustment",
+        "cleared": "cleared"
+    },
+    "debt_mappings": [],
+    "version": "V4"
+}

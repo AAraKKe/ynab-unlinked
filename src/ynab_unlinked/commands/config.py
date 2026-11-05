@@ -1,13 +1,12 @@
-import shutil
 from enum import StrEnum
-from pathlib import Path
 from typing import Annotated, assert_never
 
 import typer
 
-from ynab_unlinked.config import ConfigV3
-from ynab_unlinked.config.paths import config_path, v1_config_path
+from ynab_unlinked import keychain
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.display import bullet_list, confirm, console, info, success, warning
+from ynab_unlinked.local_data import delete_local_data, local_data_paths
 from ynab_unlinked.privacy import privacy_notice
 from ynab_unlinked.setup import ensure_config
 from ynab_unlinked.utils import prompt_for_api_key, prompt_for_budget
@@ -27,8 +26,8 @@ def set_command(
     key: Annotated[ValidKeys, typer.Argument(help="The config key to set", show_default=False)],
 ):
     """Set configuration options"""
-    ctx = ensure_config(context)
-    config: ConfigV3 = ctx.config
+    ctx = ensure_config(context, require_token=key is not ValidKeys.API_KEY)
+    config: LatestConfig = ctx.config
 
     match key:
         case ValidKeys.API_KEY:
@@ -49,8 +48,9 @@ def set_command(
 @config_app.command(name="show")
 def show(context: typer.Context):
     ctx = ensure_config(context)
-    config: ConfigV3 = ctx.config
-    console().print(config.model_dump_json(indent=2))
+    config: LatestConfig = ctx.config
+    shown = config.model_copy(update={"api_key": keychain.mask_token(config.api_key)})
+    console().print(shown.model_dump_json(indent=2))
 
 
 @config_app.command(name="reset")
@@ -61,29 +61,25 @@ def reset_command(
     ] = False,
 ):
     """Delete all locally stored YNAB Unlinked data, including your YNAB API key."""
-    paths_to_remove: list[Path] = []
-
-    v2_dir = config_path().parent
-    if v2_dir.is_dir():
-        paths_to_remove.append(v2_dir)
-
-    v1_path = v1_config_path()
-    if v1_path.is_file() and v1_path.parent not in paths_to_remove:
-        paths_to_remove.append(v1_path.parent)
+    paths_to_remove = local_data_paths()
 
     if not paths_to_remove:
         info("No YNAB Unlinked data was found on this machine. Nothing to delete.")
         return
 
-    info("The following directories will be permanently deleted:")
+    info("The following will be permanently deleted:")
     info(bullet_list(str(p) for p in paths_to_remove))
-    warning("This will remove your YNAB API key, selected budget and entity accounts.")
+    if (name := keychain.backend_name()) is not None:
+        info(f"Your YNAB token is removed from the {name} too.")
+    warning(
+        "This will remove your YNAB API key, selected budget, entity accounts and the local "
+        "copy of your YNAB transactions."
+    )
 
     if not yes and not confirm("Are you sure you want to continue?", default=False):
         info("Aborted. Nothing was deleted.")
         return
 
-    for path in paths_to_remove:
-        shutil.rmtree(path)
+    delete_local_data(paths_to_remove)
 
     success("🧹 All locally stored YNAB Unlinked data has been deleted.")

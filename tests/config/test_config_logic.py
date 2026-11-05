@@ -3,7 +3,7 @@ import json
 import pytest
 
 from tests.helpers.config import ConfigFiles
-from ynab_unlinked.config import Config, ConfigV3
+from ynab_unlinked.config import Config
 from ynab_unlinked.config.core import VERSION_MAPPING
 
 # This module tests the central logic of the config object. It does not focus on each particular
@@ -61,12 +61,11 @@ def test_set_entity_account_ignores_an_unknown_entity_before_v3(config: str):
     assert config_obj.entity("unknown") is None
 
 
-@pytest.mark.version("V3")
-@pytest.mark.usefixtures("config")
-def test_set_entity_account_creates_an_unknown_entity():
+@pytest.mark.parametrize("config", ["V3", "V4"], indirect=True, ids=["ConfigV3", "ConfigV4"])
+def test_set_entity_account_creates_an_unknown_entity(config: str):
     # The import pipeline upserts the account it just prompted for instead of registering
     # the entity first
-    config_obj = ConfigV3.load()
+    config_obj = VERSION_MAPPING[config].load()
 
     config_obj.set_entity_account("brand-new", "brand-new-account")
 
