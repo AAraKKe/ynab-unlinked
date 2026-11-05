@@ -25,8 +25,10 @@ TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|([-]?\d+.*EUR)(\(
 
 
 class SabadellParser:
-    def __init__(self, year: int):
+    def __init__(self, year: int, today: dt.date | None = None):
         self.year = year
+        self.today = today
+        """The day rows are compared with to find future ones. None is the day it parses."""
 
     def parse(self, input_file: Path, context: YnabUnlinkedContext[Any]) -> list[Transaction]:
         from ynab_unlinked.entities import InputType
@@ -132,7 +134,7 @@ class SabadellParser:
         year is the current one, which YNAB refuses as future dates (and a forced year
         would give other import ids than the right one).
         """
-        latest = dt.date.today() + FUTURE_SLACK
+        latest = (self.today or dt.date.today()) + FUTURE_SLACK
         return [
             replace(t, date=_previous_year(t.date)) if t.date > latest else t for t in transactions
         ]

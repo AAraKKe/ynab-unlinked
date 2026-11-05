@@ -1,5 +1,6 @@
 import datetime as dt
 import uuid
+from functools import partial
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -20,6 +21,7 @@ from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
 from ynab_unlinked.core.detect import resolve_options
 from ynab_unlinked.entities.registry import LoaderSpec, loader
+from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
 from ynab_unlinked.models import assign_import_ids
 from ynab_unlinked.web.state import AppState, state
 
@@ -350,9 +352,14 @@ async def test_a_ynab_failure_is_shown_on_the_row_and_can_be_retried(
 
 
 async def test_changing_the_statement_year_reads_the_file_again(
-    accounts: LatestConfig, ynab: YnabClientStub, user: User
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, mocker: MockerFixture
 ):
     this_year = dt.date.today().year
+    # Read before 22 April, the 25/04 row would be moved back to last year
+    mocker.patch(
+        "ynab_unlinked.entities.sabadell.spec.SabadellParser",
+        partial(SabadellParser, today=dt.date(this_year, 6, 1)),
+    )
     await drop(user, SABADELL)
     await user.should_see("3 new / 3", marker="count-1", retries=30)
     await user.should_see(f"25/04/{this_year}")

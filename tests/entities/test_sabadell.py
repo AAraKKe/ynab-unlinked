@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from freezegun import freeze_time
 
 from tests.helpers import assets
 from tests.helpers.statements import sabadell_statement
@@ -31,9 +30,11 @@ def statement(tmp_path: Path):
     return build
 
 
-def parse(input_file: Path, year: int = 2025) -> list[Transaction]:
+def parse(
+    input_file: Path, year: int = 2025, today: dt.date = dt.date(2025, 12, 31)
+) -> list[Transaction]:
     # The parser does not read anything from the context
-    return SabadellParser(year=year).parse(input_file, cast(YnabUnlinkedContext, None))
+    return SabadellParser(year=year, today=today).parse(input_file, cast(YnabUnlinkedContext, None))
 
 
 def test_a_txt_statement_becomes_transactions():
@@ -147,8 +148,9 @@ def test_a_statement_that_stays_in_one_month_keeps_the_year_it_was_given(stateme
 def test_a_row_the_year_puts_in_the_future_moves_back_a_year(
     statement, line: str, year: int, expected: dt.date
 ):
-    with freeze_time("2026-01-03"):
-        assert [t.date for t in parse(statement([line]), year=year)] == [expected]
+    transactions = parse(statement([line]), year=year, today=dt.date(2026, 1, 3))
+
+    assert [t.date for t in transactions] == [expected]
 
 
 def test_an_xls_statement_becomes_transactions():
