@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 
 from tests.helpers import assets
-from tests.helpers.statements import sabadell_statement
+from tests.helpers.statements import SABADELL_SHEET, sabadell_statement, write_xls
 from tests.helpers.types import CliRunner
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
@@ -270,3 +270,88 @@ def test_the_load_command_reads_the_year_saved_for_the_bank(
 
     assert result.exit_code == 0, result.output
     assert f"25/04/{expected_year}" in result.output
+
+
+@pytest.mark.parametrize(
+    ("year", "expected"),
+    [
+        pytest.param(2024, dt.date(2024, 2, 29), id="a-leap-year"),
+        pytest.param(2025, dt.date(2024, 2, 29), id="read-the-year-after-the-leap-day"),
+    ],
+)
+def test_a_leap_day_is_dated_in_the_leap_year_of_the_statement(
+    statement, year: int, expected: dt.date
+):
+    transactions = parse(statement(["29/02|LEAP|CITY|20,00EUR"]), year=year)
+
+    assert [t.date for t in transactions] == [expected]
+
+
+@pytest.mark.parametrize(
+    ("line", "year", "message"),
+    [
+        pytest.param(
+            "29/02|LEAP|CITY|20,00EUR",
+            2027,
+            "line 11: 29/02 is not a day of 2027",
+            id="a-leap-day-with-no-leap-year-the-year-before",
+        ),
+        pytest.param(
+            "31/04|NOPE|CITY|20,00EUR",
+            2025,
+            "line 11: 31/04 is not a day of 2025",
+            id="no-such-day",
+        ),
+        pytest.param(
+            "25/04|SHOP|CITY|20,00XEUR",
+            2025,
+            "line 11: '20,00XEUR' is not an amount",
+            id="an-amount-that-does-not-parse",
+        ),
+    ],
+)
+def test_a_txt_row_that_cannot_be_read_is_reported_with_its_line(
+    statement, line: str, year: int, message: str
+):
+    with pytest.raises(ParsingError) as error:
+        parse(statement([line]), year=year)
+
+    assert error.value.message.startswith(message)
+
+
+@pytest.mark.parametrize(
+    ("row", "message"),
+    [
+        pytest.param(
+            ["31/06", "SHOP", "CITY", " ", "10,00", "EUR"],
+            "the row of 31/06 SHOP: 31/06 is not a day of 2025",
+            id="no-such-day",
+        ),
+        pytest.param(
+            ["28/06", "SHOP", "CITY", " ", "diez", "EUR"],
+            "the row of 28/06 SHOP: 'diez' is not an amount",
+            id="an-amount-that-does-not-parse",
+        ),
+    ],
+)
+def test_an_xls_operation_that_cannot_be_read_is_reported_not_dropped(
+    tmp_path: Path, row: list[str], message: str
+):
+    # The rows of the statement after the second header, with the broken one first
+    header = SABADELL_SHEET.index(["FECHA", "CONCEPTO", "LOCALIDAD", "IMPORTE", "", ""])
+    sheet = [*SABADELL_SHEET[: header + 1], row, *SABADELL_SHEET[header + 1 :]]
+    input_file = write_xls(tmp_path / "movements.xls", sheet)
+
+    with pytest.raises(ParsingError) as error:
+        parse(input_file)
+
+    assert error.value.message.startswith(message)
+
+
+def test_the_load_command_reports_a_row_it_cannot_read(statement, yul: CliRunner):
+    input_file = statement(["29/02|LEAP [/]|CITY|20,00EUR"])
+
+    result = yul("load", "--show", "sabadell", "-y", "2027", str(input_file))
+
+    assert result.exit_code == 1
+    assert "line 11: 29/02 is not a day of 2027" in result.output

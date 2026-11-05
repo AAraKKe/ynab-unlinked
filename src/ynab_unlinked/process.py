@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from rich.markup import escape
 from ynab import TransactionClearedStatus
 
 from ynab_unlinked import display
@@ -81,7 +82,7 @@ def process_transactions(
         parsed_input = parse_transactions(entity, input_file, context)
     except ParsingError as e:
         display.error(f"Error when parsing {e.input_file}")
-        display.console().print(f"  Message: {e.message}")
+        display.console().print(f"  Message: {escape(e.message)}")
         raise typer.Exit(1) from e
 
     if context.show:

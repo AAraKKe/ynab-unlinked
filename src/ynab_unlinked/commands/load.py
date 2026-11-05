@@ -104,6 +104,7 @@ def auto(
     `yul load <bank>` instead. The transactions of every file are shown first and a single
     confirmation imports them all.
     """
+    from rich.markup import escape
     from ynab import TransactionClearedStatus
 
     from ynab_unlinked.activity import log_import
@@ -117,7 +118,7 @@ def auto(
 
     files, copies = unique_files(files)
     for copy, first in copies:
-        display.warning(f"{copy.name}: same file as {first.name}, imported once")
+        display.warning(escape(f"{copy.name}: same file as {first.name}, imported once"))
 
     with display.process("Finding the bank of each file..."):
         detections = detect_loaders(files, ctx)
@@ -134,7 +135,8 @@ def auto(
     ]
     if problems:
         display.error("Nothing was imported, some files cannot be loaded automatically:")
-        display.console().print(display.bullet_list(problems))
+        # File names and parse errors quote the statement, never markup
+        display.console().print(display.bullet_list(escape(problem) for problem in problems))
         raise typer.Exit(1)
 
     chosen = [(d.input_file, d.best) for d in detections if d.best is not None]
@@ -249,6 +251,8 @@ def auto(
 def _parse(
     input_file: Path, candidate: Candidate, ctx: YnabUnlinkedContext[Any]
 ) -> list[Transaction]:
+    from rich.markup import escape
+
     from ynab_unlinked.core.importing import parse_transactions
     from ynab_unlinked.exceptions import ParsingError
 
@@ -257,7 +261,7 @@ def _parse(
         return parse_transactions(candidate.loader.build(candidate.options), input_file, context)
     except ParsingError as e:
         # Detection parsed the file already, so this only happens if it changed meanwhile
-        display.error(f"{input_file.name} could not be read: {e.message}")
+        display.error(escape(f"{input_file.name} could not be read: {e.message}"))
         raise typer.Exit(1) from e
 
 

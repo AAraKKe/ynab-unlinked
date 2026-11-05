@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 import re
 from dataclasses import replace
@@ -21,6 +22,8 @@ XLS_HEADER = ["FECHA", "CONCEPTO", "LOCALIDAD"]
 FUTURE_SLACK = dt.timedelta(days=3)
 """How far past today a row may be dated before it is taken for one of last year. A few days
 so that a card payment the bank already dates tomorrow (time zones) keeps its year."""
+XLS_DATE = re.compile(r"^\d{2}/\d{2}$")
+"""The date cell of an operation. Totals, notes and the headers of each section have none."""
 TRANSACTION_PATTERN = re.compile(r"^(\d{2}/\d{2})\|(.+?)\|.+?\|([-]?\d+.*EUR)(\([\d*]\))?$")
 
 
@@ -43,12 +46,10 @@ class SabadellParser:
                 return self.__parse_xls(input_file)
 
     def __parse_txt(self, input_file: Path) -> list[Transaction]:
-        from ynab_unlinked.models import Transaction
-
         lines = input_file.read_text(encoding="cp1252").splitlines()
         start = False
         transactions: list[Transaction] = []
-        for line in lines:
+        for number, line in enumerate(lines, start=1):
             if ANCHOR_LINE in line:
                 start = True
                 continue
@@ -62,23 +63,19 @@ class SabadellParser:
                     continue
 
                 transactions.append(
-                    Transaction(
-                        date=self.__parse_date(match[1]),
-                        payee=self.__parse_payee(match[2]),
-                        amount=-self.__parse_amount(match[3]),
-                    )
+                    self.__transaction(input_file, f"line {number}", match[1], match[2], match[3])
                 )
 
         return self._no_future_dates(self._adjust_year_transition(transactions))
 
     def __parse_xls(self, input_file: Path) -> list[Transaction]:
-        from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import xls
 
         transactions: list[Transaction] = []
 
         # Real transactions appear after the header row
-        for entry in xls(input_file, read_after_row_like=XLS_HEADER, allow_partial_match=True):
+        rows = xls(input_file, read_after_row_like=XLS_HEADER, allow_partial_match=True)
+        for entry in rows:
             # If we find debit movements, stop reading
             # Debit movements appear at the end of the file
             if entry[0] == XLS_DEBIT_LINE:
@@ -87,26 +84,46 @@ class SabadellParser:
             # The order is date, payee, x, x, value, EUR
             date, payee, amount, currency = entry[0], entry[1], entry[4], entry[5]
 
+            # Totals, notes and section headers carry no date: they are not operations
+            if not XLS_DATE.match(date.strip()):
+                continue
+
             # If currency ends in (1) is a pending transaction, skip
             if currency.endswith("(1)"):
                 continue
 
-            # If we cannot parse the date, then continue because we might be in an entry that is not a
-            # transaction entry
-            try:
-                parsed_date = self.__parse_date(date)
-            except Exception:
-                continue
-
             transactions.append(
-                Transaction(
-                    date=parsed_date,
-                    payee=self.__parse_payee(payee),
-                    amount=-self.__parse_amount(amount),
+                self.__transaction(
+                    input_file,
+                    f"the row of {date.strip()} {payee.strip()}",
+                    date.strip(),
+                    payee,
+                    amount,
                 )
             )
 
         return self._no_future_dates(self._adjust_year_transition(transactions))
+
+    def __transaction(
+        self, input_file: Path, where: str, date: str, payee: str, amount: str
+    ) -> Transaction:
+        from ynab_unlinked.exceptions import ParsingError
+        from ynab_unlinked.models import Transaction
+
+        try:
+            parsed_date = self.__parse_date(date)
+        except ValueError:
+            raise ParsingError(
+                input_file, f"{where}: {date} is not a day of {self.year}, check the year"
+            ) from None
+        try:
+            parsed_amount = self.__parse_amount(amount)
+        except ValueError:
+            raise ParsingError(
+                input_file, f"{where}: {amount.strip()!r} is not an amount"
+            ) from None
+
+        return Transaction(date=parsed_date, payee=self.__parse_payee(payee), amount=-parsed_amount)
 
     def _adjust_year_transition(self, transactions: list[Transaction]) -> list[Transaction]:
         """
@@ -140,8 +157,15 @@ class SabadellParser:
         ]
 
     def __parse_date(self, raw: str) -> dt.date:
-        current_year = self.year
-        return dt.datetime.strptime(f"{raw}/{current_year}", "%d/%m/%Y").date()
+        day, month = (int(part) for part in raw.split("/"))
+        try:
+            return dt.date(self.year, month, day)
+        except ValueError:
+            if (day, month) == (29, 2) and calendar.isleap(self.year - 1):
+                # Sabadell writes no year: a leap day read with the year after it is last
+                # February's, the one year back the parser already moves rows
+                return dt.date(self.year - 1, 2, 29)
+            raise
 
     def __parse_payee(self, raw: str) -> str:
         return raw.title()

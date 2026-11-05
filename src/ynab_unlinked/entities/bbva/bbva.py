@@ -22,6 +22,7 @@ class BBVA(Entity):
         import datetime as dt
 
         from ynab_unlinked.entities._sniff import extract_type
+        from ynab_unlinked.exceptions import ParsingError
         from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import pdf, xls
 
@@ -46,13 +47,14 @@ class BBVA(Entity):
             except ValueError:
                 continue
 
-            transactions.append(
-                Transaction(
-                    date=parsed_date,
-                    payee=payee,
-                    amount=self.__parse_amount(amount),
-                )
-            )
+            try:
+                parsed_amount = self.__parse_amount(amount)
+            except ValueError:
+                raise ParsingError(
+                    input_file, f"the row of {date} {payee}: {amount!r} is not an amount"
+                ) from None
+
+            transactions.append(Transaction(date=parsed_date, payee=payee, amount=parsed_amount))
 
         return transactions
 

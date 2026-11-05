@@ -6,6 +6,7 @@ import pytest
 
 from tests.factories import AccountFactory
 from tests.helpers import assets
+from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.context_object import YnabUnlinkedContext
@@ -140,3 +141,16 @@ def test_the_load_command_reports_a_statement_it_cannot_parse(yul: CliRunner, ac
 
     assert result.exit_code == 1
     assert "No transaction table was found" in result.output
+
+
+def test_an_amount_that_does_not_parse_is_reported(
+    context_obj: YnabUnlinkedContext, tmp_path: Path
+):
+    input_file = write_xls(
+        tmp_path / "bbva.xlsx", bbva_sheet([("02/05/2025", "MERCADONA", "doce euros")])
+    )
+
+    with pytest.raises(ParsingError) as error:
+        BBVA().parse(input_file, context_obj)
+
+    assert error.value.message == "the row of 02/05/2025 MERCADONA: 'doce euros' is not an amount"
