@@ -503,6 +503,8 @@ class Store:
     def activity(self, budget_id: str, limit: int | None = 20, *,
                  kind: str | None = None) -> list[Activity]
         # newest first; limit None = all; kind keeps one kind only
+    def last_activity(self, budget_id: str, *, other_than: str | None = None) -> dt.datetime | None
+        # when the newest entry was logged, leaving out one kind (`fresh` leaves out "sync")
     def daily_amounts(self, budget_id: str,
                       account_ids: Iterable[str] | None = None) -> dict[str, DailyAmounts]
         # per account: its stored balance and the sum of its non deleted transactions per
@@ -791,7 +793,9 @@ config so no new one starts, `delete_local_data(paths)` through `run.io_bound`, 
 `load()` in a `finally`, also when deleting failed), `sync_in_background()`, `stale` / `invalidate()` (call after every write to YNAB: marks the
 store stale and starts a background sync; during a sync it asks for one more round when the
 running one ends) and `fresh(max_age) -> bool` (synced within `max_age`, not stale, not
-syncing: what Reconcile checks before showing the store),
+syncing, and no activity entry other than a sync logged after `last_sync`, which is how the
+app learns of `yul load` / `yul reconcile`; it reads the store, so Reconcile calls it through
+`run.io_bound` before showing the store),
 `await budget_accounts() -> list[StoredAccount]` (store once synced, YNAB before).
 (`default_bucket(account_type: str) -> Bucket` lives in `web/accounts.py`.)
 

@@ -751,3 +751,15 @@ def test_activity_filters_by_kind_and_orders_backdated_entries_by_time(store: St
     assert [a.message for a in imports] == ["recent", "oldest", "older"]
     assert imports[2].at == dt.datetime(2025, 5, 1, 21, 30, tzinfo=dt.UTC)
     assert [a.message for a in store.activity(BUDGET_ID, limit=1, kind="sync")] == ["not an import"]
+
+
+def test_last_activity_is_the_newest_entry_of_the_budget_leaving_out_a_kind(store: Store):
+    assert store.last_activity(BUDGET_ID) is None
+    store.log(BUDGET_ID, "import", "a file", at=dt.datetime(2025, 5, 1, 10, tzinfo=dt.UTC))
+    store.log(BUDGET_ID, "sync", "a sync", at=dt.datetime(2025, 5, 2, 10, tzinfo=dt.UTC))
+    store.log(OTHER_BUDGET_ID, "import", "elsewhere", at=dt.datetime(2025, 5, 3, tzinfo=dt.UTC))
+
+    assert store.last_activity(BUDGET_ID) == dt.datetime(2025, 5, 2, 10, tzinfo=dt.UTC)
+    assert store.last_activity(BUDGET_ID, other_than="sync") == dt.datetime(
+        2025, 5, 1, 10, tzinfo=dt.UTC
+    )

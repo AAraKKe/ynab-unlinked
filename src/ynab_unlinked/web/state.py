@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 
@@ -220,10 +221,24 @@ class AppState:
                 return result
 
     def fresh(self, max_age: dt.timedelta) -> bool:
-        """Whether the store can be shown as is: synced within `max_age`, nothing written since."""
+        """Whether the store can be shown as is: synced within `max_age`, nothing written since.
+
+        Written since covers the CLI too: `yul load` and `yul reconcile` log an activity entry
+        (`activity.py`) newer than the last sync. That reads the store, so it blocks: call it
+        through `run.io_bound`.
+        """
         if self.stale or self.syncing or self.last_sync is None:
             return False
-        return dt.datetime.now(dt.UTC) - self.last_sync <= max_age
+        if dt.datetime.now(dt.UTC) - self.last_sync > max_age:
+            return False
+        config, _ = self.require()
+        try:
+            # The sync's own entry is logged right after it, so it never counts
+            written = self.store.last_activity(config.budget.id, other_than="sync")
+        except (StoreError, sqlite3.Error) as error:
+            logger.warning("The activity log could not be read: %s", error)
+            return False
+        return written is None or written <= self.last_sync
 
     def invalidate(self) -> None:
         """Call after writing to YNAB: the next view that needs fresh data syncs first.
