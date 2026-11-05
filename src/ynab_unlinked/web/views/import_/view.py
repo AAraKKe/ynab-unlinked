@@ -55,7 +55,7 @@ from ynab_unlinked.web.views.import_.data import (
     same_file,
 )
 from ynab_unlinked.web.views.import_.rows import draw_row
-from ynab_unlinked.web.wording import plural, ynab_error_message
+from ynab_unlinked.web.wording import IMPORT_FAILED, plural, ynab_error_message
 
 _FLOW_KEY = "yul.import_flow"
 
@@ -406,6 +406,17 @@ class ImportFlow:
             return
         ready = [item for item in self.ready if item.plan is not None]
         self.committing = True
+        try:
+            await self.commit_files(ready)
+        except Exception:
+            # The import button that started the commit is gone with the review
+            assert self.content is not None
+            with self.content:
+                shell.notify(IMPORT_FAILED, "error")
+        finally:
+            self.committing = False
+
+    async def commit_files(self, ready: Sequence[ImportFile]) -> None:
         await self.save_accounts(ready)
         config, client = state().require()
         cleared = (
@@ -452,7 +463,6 @@ class ImportFlow:
             card.created(result)
             await self.log(item, plan, result)
 
-        self.committing = False
         self.close()
         with done_area:
             done_card(created, duplicates, skipped, failed, self.reset)

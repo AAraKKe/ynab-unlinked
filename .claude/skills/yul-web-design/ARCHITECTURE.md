@@ -1017,7 +1017,9 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   row, whether or not it has settings); the choice is saved
   to the config when the import is confirmed. Files with nothing new are shown in Done but
   not committed or logged. Files dropped during Review restart the flow, and files dropped
-  during the commit are turned away with a toast.
+  during the commit are turned away with a toast. Whatever fails during the commit, the
+  flow accepts drops again afterwards; a failure outside one file's YNAB call is toasted
+  as `wording.IMPORT_FAILED`.
 - Settings "Banks" (`views/settings/banks.py`): one card per `LoaderSpec` (`bank_logo`, a switch
   for `LoaderConfig.enabled`, the summary line from `bank_summary()`, a "Settings" button).
   The card is `live` when the bank is on and `off` (muted) otherwise, with no status pill; a

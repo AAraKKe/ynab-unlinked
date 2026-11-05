@@ -22,7 +22,9 @@ from ynab_unlinked.core.detect import resolve_options
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
 from ynab_unlinked.models import assign_import_ids
+from ynab_unlinked.web import shell
 from ynab_unlinked.web.state import AppState, state
+from ynab_unlinked.web.wording import IMPORT_FAILED
 
 pytestmark = pytest.mark.version("V4")
 
@@ -378,3 +380,35 @@ async def test_the_year_saved_for_the_bank_dates_the_statement(
 
     await user.should_see("3 new / 3", marker="count-1", retries=30)
     await user.should_see("25/04/2023")
+
+
+@pytest.mark.parametrize(
+    "fail",
+    [
+        pytest.param("ynab", id="the YNAB call raises"),
+        pytest.param("log", id="something after the YNAB call raises"),
+    ],
+)
+async def test_a_failed_commit_leaves_the_flow_open_to_new_drops(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, mocker: MockerFixture, fail: str
+):
+    if fail == "ynab":
+        ynab.api("transactions").create_transaction.side_effect = ApiException(
+            status=500, reason="Internal Server Error"
+        )
+    else:
+        mocker.patch(
+            "ynab_unlinked.web.views.import_.view.import_log", side_effect=RuntimeError("boom")
+        )
+    notify = mocker.spy(shell, "notify")
+
+    await drop(user, SABADELL)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+    expected = "YNAB answered 500" if fail == "ynab" else IMPORT_FAILED
+    await user.should_see(expected, retries=30)
+
+    await drop(user, SABADELL)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    assert all("Wait for the import" not in str(call.args[0]) for call in notify.call_args_list)

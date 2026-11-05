@@ -17,6 +17,7 @@ COPY_TITLE = "Copying your budget from YNAB"
 COPY_NOTE = "The first time can take a minute."
 COPY_FAILED = "Could not copy your budget from YNAB. Check your connection and try again."
 SAVE_FAILED = "Your settings could not be saved on this computer. Try again."
+IMPORT_FAILED = "The import stopped before it finished. Check the account in YNAB, then try again."
 YNAB_TIMED_OUT = "YNAB did not answer in time. Check your connection and try again."
 
 _NUMBER = re.compile(r"\d{4,}")
@@ -85,6 +86,7 @@ __all__ = [
     "COPY_FAILED",
     "COPY_NOTE",
     "COPY_TITLE",
+    "IMPORT_FAILED",
     "SAVE_FAILED",
     "YNAB_TIMED_OUT",
     "budget_caption",
