@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from nicegui import ui
+from nicegui import run, ui
 
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
@@ -34,6 +35,16 @@ def bank_summary(spec: LoaderSpec, saved: LoaderConfig | None, accounts: dict[st
         for option in spec.options
     ]
     return " · ".join(parts)
+
+
+async def save_config(change: Callable[[LatestConfig], None], message: str) -> None:
+    """`state().update_config(change)` off the event loop, then toast `message`.
+
+    Reading and saving the config can wait on the disk and the keychain, so it runs through
+    `run.io_bound` like every other blocking call of the app.
+    """
+    await run.io_bound(state().update_config, change)
+    shell.notify(message)
 
 
 async def render(page: Settings) -> None:
@@ -104,9 +115,11 @@ async def toggle_bank(
     if saved.enabled == on:
         return
 
-    with shell.edit_config(f"{spec.title} turned {'on' if on else 'off'}") as config:
+    def turn(config: LatestConfig) -> None:
         if (loader := config.entity(spec.name)) is not None:
             loader.enabled = on
+
+    await save_config(turn, f"{spec.title} turned {'on' if on else 'off'}")
     draw_bank(spec, card, accounts)
 
 
@@ -143,7 +156,7 @@ async def bank_dialog(spec: LoaderSpec, card: ui.element, accounts: dict[str, st
         button("Cancel", kind="ghost", on_click=dialog.close)
         button("Save", kind="primary", on_click=lambda: save_bank()).mark(f"save-bank-{spec.key}")
 
-    def save_bank() -> None:
+    async def save_bank() -> None:
         account_id = chosen[spec.name]
         if not account_id:
             problem.set_text("Pick the account its statements go to.")
@@ -154,13 +167,15 @@ async def bank_dialog(spec: LoaderSpec, card: ui.element, accounts: dict[str, st
             if values[option.key] != option.default
         }
 
-        with shell.edit_config(f"{spec.title} saved") as config:
+        def save(config: LatestConfig) -> None:
             current = config.entity(spec.name)
             config.loaders[spec.name] = LoaderConfig(
                 account_id=account_id,
                 options=non_default,
                 enabled=current.enabled if current else True,
             )
+
+        await save_config(save, f"{spec.title} saved")
         dialog.submit(True)
 
     await run_dialog(dialog)

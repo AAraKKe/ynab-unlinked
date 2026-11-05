@@ -742,7 +742,9 @@ config save in the app: reads the file again, applies `change`, saves and reload
 the CLI saved meanwhile is kept; never save `state().config` or a copy of it;
 `edit_config()` is the same as a `with` block yielding the config to change, saved at the
 end of the block, and views use `shell.edit_config(message=None)`, which toasts `message`
-after the save),
+after the save; reading and saving can wait on the disk and the keychain, so Settings › Banks
+saves with `await run.io_bound(state().update_config, change)` and then `shell.notify`,
+through `banks.save_config(change, message)`),
 `await sync(progress=NullProgress())` (shared by concurrent callers, runs through
 `run.io_bound`), `await resync(progress=NullProgress())` (waits for a running sync, then
 `store.clear(budget)` and a full sync as the shared sync task; the activity log stays),

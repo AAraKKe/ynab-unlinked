@@ -1,10 +1,12 @@
 import datetime as dt
+import threading
 import uuid
 from pathlib import Path
 
 import pytest
 from nicegui import ui
 from nicegui.testing.user import User
+from pytest_mock import MockerFixture
 
 from tests.factories import AccountFactory, PlanSummaryFactory, TransactionDetailFactory
 from tests.helpers.config import ConfigFiles
@@ -293,6 +295,37 @@ async def test_a_save_from_the_app_keeps_what_the_cli_saved_meanwhile(
     assert saved.last_reconciliation_date == dt.date(2025, 5, 10)
     assert saved.loaders["cobee"].account_id == "account-saved-by-the-cli"
     assert state().config == saved
+
+
+async def test_bank_saves_run_off_the_event_loop(
+    user: User, config_v4: LatestConfig, budget_accounts: YnabClientStub, mocker: MockerFixture
+):
+    """The file and the keychain can block: saving must not freeze every open page."""
+    save = LatestConfig.save
+    threads: list[str] = []
+
+    def save_and_record(self: LatestConfig) -> None:
+        threads.append(threading.current_thread().name)
+        save(self)
+
+    mocker.patch.object(LatestConfig, "save", save_and_record)
+    await _open_tab(user, "banks")
+    await user.should_see(marker="bank-toggle-sabadell", retries=20)
+    toggle = user.find(marker="bank-toggle-sabadell").elements.pop()
+    assert isinstance(toggle, ui.switch)
+    toggle.set_value(False)
+    await user.should_see("Sabadell turned off", retries=20)
+
+    user.find(marker="bank-settings-bbva").click()
+    await user.should_see(marker="loader-bbva")
+    bbva = user.find(marker="loader-bbva").elements.pop()
+    assert isinstance(bbva, ui.select)
+    bbva.set_value(CARD_ID)
+    user.find(marker="save-bank-bbva").click()
+    await user.should_see("BBVA Credit Card saved", retries=20)
+
+    assert len(threads) == 2
+    assert threading.main_thread().name not in threads
 
 
 async def test_turning_on_a_bank_without_an_account_asks_for_one(
