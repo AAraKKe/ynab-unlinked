@@ -10,6 +10,7 @@ import typer
 
 from ynab_unlinked.cli import display
 from ynab_unlinked.cli.setup import ensure_config
+from ynab_unlinked.core.importing import IMPORT_BUFFER_DAYS
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec, loaders
 from ynab_unlinked.text import plural
 
@@ -58,7 +59,7 @@ def load_callback(
             ),
             show_default=True,
         ),
-    ] = 15,
+    ] = IMPORT_BUFFER_DAYS,
     yes: Annotated[
         bool,
         typer.Option(

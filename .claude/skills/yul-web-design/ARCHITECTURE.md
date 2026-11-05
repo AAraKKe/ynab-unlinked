@@ -105,9 +105,11 @@ class ImportResult:
 def parse_transactions(entity: Entity, input_file: Path) -> list[Transaction]
     # wraps entity.parse, lets ParsingError propagate
 
+IMPORT_BUFFER_DAYS = 15     # also the `yul load --buffer` default and YnabUnlinkedContext's
+
 def build_import_plan(
     client: Client, budget_id: str, account_id: str, entity_name: str,
-    input_file: Path, transactions: list[Transaction], buffer_days: int = 15,
+    input_file: Path, transactions: list[Transaction], buffer_days: int = IMPORT_BUFFER_DAYS,
     progress: Progress = NullProgress(),
 ) -> ImportPlan
     # assigns import ids (models.assign_import_ids), fetches YNAB transactions for the
@@ -173,10 +175,16 @@ def next_reconciliation_date(locked: Iterable[dt.date],
                              remaining: Iterable[dt.date] = ()) -> dt.date | None
     # None when nothing was locked; the earliest date left unreconciled in scope when
     # anything was, else the latest locked date. No buffer: the scope rewinds once from it
-    # (`yul reconcile --buffer`, default 7, and the app's "since" pill, 7 days)
+    # (`yul reconcile --buffer` and the app's "since" pill, both RECONCILE_BUFFER_DAYS)
+
+RECONCILE_BUFFER_DAYS = 7
 ```
 
-`cli/commands/reconcile.py` and the Textual app keep working on top of these.
+`cli/commands/reconcile.py` and the Textual app keep working on top of these. The two
+frontends read from different places on purpose: `yul reconcile` asks YNAB live
+(`reconciliation_overview`), the app reads the budget copy (`Store.unreconciled`, synced
+first when older than 10 minutes or after a write, 3.5). Both use the same scope rule and
+`reconcile()`, so they differ only by what YNAB changed since the last sync.
 
 ### 2.4 Loaders and detection (`entities/`, `core/detect.py`)
 
@@ -1104,7 +1112,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   cards in the store's name order, rows newest first. Before rendering it awaits
   `state().sync()` when `state().last_sync` is None or older than 10 minutes; a failed sync
   toasts and shows what the store has (an error empty state if the store was never synced).
-- Scope pills: "since {last_reconciliation_date - 7 days}" (the `yul reconcile -b` default,
+- Scope pills: "since {last_reconciliation_date - RECONCILE_BUFFER_DAYS}" (7, the `yul reconcile -b` default,
   only offered when the config has a date) and "all time". Rows locked in this visit stay
   hidden when the scope changes, even before the background sync catches up.
 - Bank balance: `parse_amount_to_milliunits` with the budget's separators. "find the gap"

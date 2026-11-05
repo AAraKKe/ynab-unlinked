@@ -12,6 +12,7 @@ from ynab_unlinked.cli.display import CliProgress
 from ynab_unlinked.cli.setup import ensure_config
 from ynab_unlinked.config import LatestConfig, update_config
 from ynab_unlinked.core.reconcile import (
+    RECONCILE_BUFFER_DAYS,
     RowToLock,
     next_reconciliation_date,
     reconciliation_overview,
@@ -71,7 +72,7 @@ def reconcile(
             ),
             show_default=True,
         ),
-    ] = 7,
+    ] = RECONCILE_BUFFER_DAYS,
 ):
     """Help reconciling your accounts in one go"""
 

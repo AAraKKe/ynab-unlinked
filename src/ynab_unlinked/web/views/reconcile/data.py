@@ -16,13 +16,11 @@ from ynab import TransactionClearedStatus
 
 from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.core.balances import parse_amount_to_milliunits
-from ynab_unlinked.core.reconcile import next_reconciliation_date
+from ynab_unlinked.core.reconcile import RECONCILE_BUFFER_DAYS, next_reconciliation_date
 from ynab_unlinked.store import Store, StoredAccount, StoredTransaction
 from ynab_unlinked.web.wording import plural
 
 SYNC_MAX_AGE = dt.timedelta(minutes=10)
-SCOPE_BUFFER_DAYS = 7
-"""How far before the last reconciliation the "since" scope starts, as `yul reconcile -b`."""
 
 SINCE = "since"
 ALL_TIME = "all"
@@ -37,7 +35,7 @@ def scope_start(last_reconciliation: dt.date | None) -> dt.date | None:
     """Where the "since" scope starts, or None when yul never reconciled this budget."""
     if last_reconciliation is None:
         return None
-    return last_reconciliation - dt.timedelta(days=SCOPE_BUFFER_DAYS)
+    return last_reconciliation - dt.timedelta(days=RECONCILE_BUFFER_DAYS)
 
 
 def gap_candidates(transactions: Sequence[StoredTransaction], difference: int) -> set[str]:
@@ -189,7 +187,6 @@ def pending_title(accounts: int, transactions: int, any_account: bool) -> str:
 __all__ = [
     "ALL_TIME",
     "LOCK_TIMED_OUT",
-    "SCOPE_BUFFER_DAYS",
     "SINCE",
     "SYNC_MAX_AGE",
     "UNCLEARED_SKIPPED",

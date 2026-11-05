@@ -15,6 +15,10 @@ from ynab_unlinked.entities import Entity
 from ynab_unlinked.models import PendingImport, Transaction, assign_import_ids
 from ynab_unlinked.ynab_api.client import Client
 
+IMPORT_BUFFER_DAYS = 15
+"""Days before the earliest transaction of a file that YNAB is read from to spot the rows it
+already has (`yul load --buffer`, the app's import)."""
+
 
 @dataclass(frozen=True)
 class ImportRow:
@@ -82,7 +86,7 @@ def build_import_plan(
     entity_name: str,
     input_file: Path,
     transactions: list[Transaction],
-    buffer_days: int = 15,
+    buffer_days: int = IMPORT_BUFFER_DAYS,
     progress: Progress = NO_PROGRESS,
 ) -> ImportPlan:
     """

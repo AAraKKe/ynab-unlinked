@@ -12,6 +12,10 @@ from ynab import Account, TransactionClearedStatus, TransactionDetail
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 from ynab_unlinked.ynab_api.client import FULL_SYNC_SINCE, Client
 
+RECONCILE_BUFFER_DAYS = 7
+"""Days before the last reconciliation the default scope starts (`yul reconcile --buffer`,
+the app's "since" pill), to catch transactions that cleared late."""
+
 
 @dataclass(frozen=True)
 class AccountToReconcile:
