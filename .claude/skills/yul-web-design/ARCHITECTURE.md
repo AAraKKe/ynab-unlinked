@@ -536,6 +536,8 @@ class Store:
                  kind: str | None = None) -> list[Activity]
         # newest first; limit None = all; kind keeps one kind only
     def last_activity(self, budget_id: str, *, other_than: str | None = None) -> dt.datetime | None
+    def last_import_per_loader(self, budget_id: str) -> dict[str, dt.datetime]
+        # newest `import` entry per `details.loader`, one GROUP BY query (Home's last imports)
         # when the newest entry was logged, leaving out one kind (`fresh` leaves out "sync")
     def daily_amounts(self, budget_id: str,
                       account_ids: Iterable[str] | None = None) -> dict[str, DailyAmounts]
@@ -910,7 +912,7 @@ class LoaderDue:            # one bank of the last imports line
     name: str               # config key (LoaderSpec.name)
     key: str                # loader key, for the logo
     title: str              # LoaderSpec.title
-    last: date | None       # newest import from the app, None if never
+    last: date | None       # newest import (Store.last_import_per_loader), None if never
 
 @dataclass(frozen=True)
 class HomeData:

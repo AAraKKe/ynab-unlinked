@@ -120,11 +120,9 @@ def load_home(
         if latest is None or (today - latest.date).days > STALE_AFTER_DAYS:
             stale.append(account.name)
 
-    last_import: dict[str, dt.date] = {}
-    for entry in store.activity(budget_id, limit=None, kind="import"):
-        loader = entry.details.get("loader")
-        if isinstance(loader, str) and loader not in last_import:
-            last_import[loader] = _local_day(entry.at)
+    last_import = {
+        loader: _local_day(at) for loader, at in store.last_import_per_loader(budget_id).items()
+    }
     last_imports = [
         LoaderDue(spec.name, spec.key, spec.title, last_import.get(spec.name))
         for spec in loaders

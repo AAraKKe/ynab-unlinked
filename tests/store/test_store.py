@@ -814,3 +814,31 @@ def test_last_activity_is_the_newest_entry_of_the_budget_leaving_out_a_kind(stor
     assert store.last_activity(BUDGET_ID, other_than="sync") == dt.datetime(
         2025, 5, 1, 10, tzinfo=dt.UTC
     )
+
+
+def test_last_import_per_loader_is_the_newest_import_of_each_bank_in_the_budget(store: Store):
+    def at(day: int, hour: int = 10) -> dt.datetime:
+        return dt.datetime(2025, 5, day, hour, tzinfo=dt.UTC)
+
+    madrid = dt.timezone(dt.timedelta(hours=2))
+    store.log(BUDGET_ID, "import", "newest", {"loader": "sabadell"}, at=at(3))
+    store.log(BUDGET_ID, "import", "older", {"loader": "sabadell"}, at=at(1))
+    # 23:30 in Madrid on the 3rd is 21:30 UTC, after 10:00 UTC
+    store.log(
+        BUDGET_ID,
+        "import",
+        "backdated",
+        {"loader": "cobee"},
+        at=dt.datetime(2025, 5, 3, 23, 30, tzinfo=madrid),
+    )
+    store.log(BUDGET_ID, "import", "", {"loader": "cobee"}, at=at(2))
+    store.log(BUDGET_ID, "reconcile", "not an import", {"loader": "bbva"}, at=at(4))
+    store.log(BUDGET_ID, "import", "no bank", {"loader": 3}, at=at(4))
+    store.log(BUDGET_ID, "import", "no details", at=at(4))
+    store.log(OTHER_BUDGET_ID, "import", "elsewhere", {"loader": "sabadell"}, at=at(5))
+
+    assert store.last_import_per_loader(BUDGET_ID) == {
+        "sabadell": at(3),
+        "cobee": at(3, 21) + dt.timedelta(minutes=30),
+    }
+    assert store.last_import_per_loader("unknown") == {}

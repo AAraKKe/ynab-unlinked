@@ -561,6 +561,21 @@ class Store:
             row = conn.execute(query, params).fetchone()
         return None if row["at"] is None else dt.datetime.fromisoformat(row["at"])
 
+    def last_import_per_loader(self, budget_id: str) -> dict[str, dt.datetime]:
+        """When each bank last imported, keyed by the `loader` of the `import` entries.
+
+        One grouped query, so the log is never read whole. Entries without a `loader`
+        string are left out.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT json_extract(details, '$.loader') AS loader, max(at) AS at "
+                "FROM activity WHERE budget_id = ? AND kind = 'import' "
+                "AND json_type(details, '$.loader') = 'text' GROUP BY loader",
+                (budget_id,),
+            ).fetchall()
+        return {row["loader"]: dt.datetime.fromisoformat(row["at"]) for row in rows}
+
     def activity(
         self, budget_id: str, limit: int | None = 20, *, kind: str | None = None
     ) -> list[Activity]:
