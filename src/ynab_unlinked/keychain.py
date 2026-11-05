@@ -12,10 +12,28 @@ import logging
 import os
 from typing import Any
 
+from ynab_unlinked.config.paths import yul_home
+
 SERVICE_ENV = "YUL_KEYCHAIN_SERVICE"
-"""Names the keychain item instead of `ynab-unlinked`: for a scratch run (`YUL_HOME=/tmp/...
-yul app`) that should go through the real keychain without touching the item of the real config."""
-SERVICE = os.environ.get(SERVICE_ENV) or "ynab-unlinked"
+"""Names the keychain item instead of the default one."""
+DEFAULT_SERVICE = "ynab-unlinked"
+
+
+def service_name() -> str:
+    """The keychain item for this run.
+
+    `YUL_KEYCHAIN_SERVICE` when set. Otherwise a run with `YUL_HOME` (a scratch run) gets
+    an item of its own, `ynab-unlinked (<YUL_HOME>)`, so it can never overwrite the token of
+    the real config; without either it is `ynab-unlinked`.
+    """
+    if name := os.environ.get(SERVICE_ENV):
+        return name
+    if (home := yul_home()) is not None:
+        return f"{DEFAULT_SERVICE} ({home.resolve()})"
+    return DEFAULT_SERVICE
+
+
+SERVICE = service_name()
 """The keychain item: what the user sees in Keychain Access or the Credential Manager."""
 ACCOUNT = "YNAB Personal Access Token"
 REFERENCE = "@keychain"
@@ -47,8 +65,7 @@ def _backend() -> Any:
 
 
 NO_KEYCHAIN_ENV = "YUL_NO_KEYCHAIN"
-"""Set to any value to keep the token in the config file: for scratch runs against a test
-config (`YUL_HOME=/tmp/... yul app`), which would otherwise overwrite the real keychain item."""
+"""Set to any value to keep the token in the config file, out of any keychain."""
 
 
 def available() -> bool:

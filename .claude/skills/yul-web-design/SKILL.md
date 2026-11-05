@@ -103,18 +103,21 @@ in the same change. Never update a document to describe something you did not bu
 ## Looking at it
 
 Never run against the user's real config. Point yul at a scratch folder with `YUL_HOME`
-(config, budget copy and web preferences go there) and name a separate keychain item with
-`YUL_KEYCHAIN_SERVICE`, so a config save never touches the real token. Do not change `HOME`:
-on macOS that hides the login keychain and the system shows a "Keychain Not Found" dialog.
+(config, budget copy and web preferences go there). That is enough: with `YUL_HOME` set,
+the token goes to a keychain item of its own, `ynab-unlinked (<YUL_HOME path>)`, so a config
+save never touches the real token (`YUL_KEYCHAIN_SERVICE` names the item instead). Do not
+change `HOME`: on macOS that hides the login keychain and the system shows a "Keychain Not
+Found" dialog.
 
 ```sh
 mkdir -p /tmp/yulhome
 cp tests/assets/config_V4/config.json /tmp/yulhome/
-YUL_HOME=/tmp/yulhome YUL_KEYCHAIN_SERVICE=yul-scratch hatch run dev:yul app --no-browser --port 8771
+YUL_HOME=/tmp/yulhome hatch run dev:yul app --no-browser --port 8771
 ```
 
 For a first run (onboarding) leave the folder empty. `YUL_NO_KEYCHAIN=1` instead keeps the
-token in the file, as the tests do. Delete the scratch folder afterwards: it may hold a token.
+token in the file, as the tests do. Delete the scratch folder afterwards: it may hold a token
+(and the scratch item may hold one in the keychain).
 
 The printed link carries the session token. Check both themes (toggle in the top bar) and
 a narrow window (under 1000px Home becomes one column).

@@ -87,8 +87,8 @@ shared state from `web.state.state()`. `.claude/skills/yul-web-design/ARCHITECTU
 helpers. Its section 5 lists the frozen rules; the project skill
 `.claude/skills/yul-web-design/SKILL.md` (load it before touching `web/`) repeats them with
 the building blocks, the test routine and how to look at the app on a scratch home
-(`YUL_HOME=/tmp/... YUL_KEYCHAIN_SERVICE=yul-scratch hatch run dev:yul app`, never the
-real config).
+(`YUL_HOME=/tmp/... hatch run dev:yul app`, never the real config; with `YUL_HOME` set the
+token goes to a keychain item named after that folder, never the real one).
 
 ## Conventions
 

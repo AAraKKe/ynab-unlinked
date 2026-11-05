@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import keyring
 import pytest
@@ -132,3 +133,25 @@ def test_no_keychain_never_reads_the_keychain(
 )
 def test_mask_token(token: str, masked: str):
     assert keychain.mask_token(token) == masked
+
+
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        ({}, "ynab-unlinked"),
+        ({"YUL_HOME": "{home}"}, "ynab-unlinked ({home})"),
+        ({"YUL_HOME": "{home}", "YUL_KEYCHAIN_SERVICE": "yul-scratch"}, "yul-scratch"),
+        ({"YUL_KEYCHAIN_SERVICE": "yul-scratch"}, "yul-scratch"),
+    ],
+    ids=["real", "scratch-home", "named-wins", "named"],
+)
+def test_a_scratch_home_never_shares_the_real_keychain_item(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env: dict[str, str], expected: str
+):
+    monkeypatch.delenv("YUL_HOME", raising=False)
+    monkeypatch.delenv(keychain.SERVICE_ENV, raising=False)
+    home = tmp_path.resolve()
+    for name, value in env.items():
+        monkeypatch.setenv(name, value.format(home=home))
+
+    assert keychain.service_name() == expected.format(home=home)
