@@ -535,6 +535,9 @@ transfer_account_id, PRIMARY KEY(budget_id, id))` with an index on `(budget_id, 
 date)`, `sync_state(budget_id PRIMARY KEY, server_knowledge, synced_at)`,
 `activity(budget_id, at, kind, message, details)` (details is a JSON object). The schema
 version lives in `PRAGMA user_version`; `store/migrations/NNNN_*.sql` are the steps, one file each (`store.migrations.MIGRATIONS`).
+`migrations.apply` runs each step as `BEGIN IMMEDIATE`, reads the version again inside that
+transaction (another process may have applied the step while this one waited) and only then
+runs the script's statements one by one (`migrations.statements`), so no step runs twice.
 
 `ynab_api.Client` gains `transactions_delta(budget_id, server_knowledge) -> tuple[list[TransactionDetail], int]`
 and `transactions_with_knowledge(budget_id, since_date=None) -> tuple[list[TransactionDetail], int]`,

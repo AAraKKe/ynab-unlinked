@@ -66,6 +66,23 @@ def version_of(conn: sqlite3.Connection) -> int:
     return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
 
+def statements(sql: str) -> list[str]:
+    """Split a script into its statements, so each one runs inside the open transaction.
+
+    `executescript` would commit first, so the version could not be read again inside the
+    same transaction. A `;` inside a string or a trigger body does not end a statement.
+    """
+    found: list[str] = []
+    buffer = ""
+    for piece in sql.split(";"):
+        buffer += piece + ";"
+        if sqlite3.complete_statement(buffer):
+            if buffer.strip(" \t\r\n;"):
+                found.append(buffer.strip())
+            buffer = ""
+    return found
+
+
 def apply(
     conn: sqlite3.Connection,
     migrations: Sequence[Migration] | None = None,
@@ -74,7 +91,8 @@ def apply(
     """Run the scripts the store has not seen yet, one transaction each. Returns the version.
 
     `BEGIN IMMEDIATE` makes a second process (the app open while the CLI runs) wait for the
-    lock; when it gets it the step may already be done, so the version is read again.
+    lock; when it gets it the step may already be done, so the version is read again inside
+    the transaction and a step another process applied is skipped, never run twice.
     """
     if migrations is None:
         migrations = MIGRATIONS
@@ -82,14 +100,14 @@ def apply(
     for migration in migrations[version:]:
         progress.info(f"Updating the local store ({migration.file})")
         try:
-            conn.executescript(
-                f"BEGIN IMMEDIATE; {migration.sql}; "
-                f"PRAGMA user_version = {migration.number}; COMMIT;"
-            )
+            conn.execute("BEGIN IMMEDIATE")
+            if version_of(conn) < migration.number:
+                for statement in statements(migration.sql):
+                    conn.execute(statement)
+                conn.execute(f"PRAGMA user_version = {migration.number}")
+            conn.execute("COMMIT")
         except sqlite3.Error as error:
             if conn.in_transaction:
                 conn.execute("ROLLBACK")
-            if version_of(conn) >= migration.number:
-                continue  # another process applied it first
             raise MigrationError(f"{migration.file}: {error}") from error
     return version_of(conn)

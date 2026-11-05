@@ -1,7 +1,12 @@
 import sqlite3
+import threading
+from collections.abc import Generator
+from contextlib import closing
 from pathlib import Path
 
 import pytest
+
+from ynab_unlinked.core.progress import NullProgress
 
 from ynab_unlinked.store import Store, StoreError
 from ynab_unlinked.store.migrations import (
@@ -12,8 +17,15 @@ from ynab_unlinked.store.migrations import (
     MigrationFilesError,
     apply,
     load,
+    statements,
     version_of,
 )
+
+
+@pytest.fixture
+def conn() -> Generator[sqlite3.Connection]:
+    with closing(sqlite3.connect(":memory:")) as connection:
+        yield connection
 
 
 def test_the_scripts_are_numbered_from_one_without_gaps():
@@ -21,15 +33,12 @@ def test_the_scripts_are_numbered_from_one_without_gaps():
     assert all(migration.sql.strip() for migration in MIGRATIONS)
 
 
-def test_each_script_applies_on_top_of_the_previous_one():
-    conn = sqlite3.connect(":memory:")
-
+def test_each_script_applies_on_top_of_the_previous_one(conn: sqlite3.Connection):
     assert apply(conn) == SCHEMA_VERSION
     assert version_of(conn) == SCHEMA_VERSION
 
 
-def test_only_the_scripts_the_store_has_not_seen_run():
-    conn = sqlite3.connect(":memory:")
+def test_only_the_scripts_the_store_has_not_seen_run(conn: sqlite3.Connection):
     scripts = (
         Migration(1, "0001_a.sql", "CREATE TABLE a (id INTEGER);"),
         Migration(2, "0002_b.sql", "CREATE TABLE b (id INTEGER);"),
@@ -42,8 +51,7 @@ def test_only_the_scripts_the_store_has_not_seen_run():
     assert conn.execute("SELECT count(*) FROM b").fetchone()[0] == 0
 
 
-def test_a_failing_script_rolls_back_and_leaves_the_version_alone():
-    conn = sqlite3.connect(":memory:")
+def test_a_failing_script_rolls_back_and_leaves_the_version_alone(conn: sqlite3.Connection):
     scripts = (Migration(1, "0001_bad.sql", "CREATE TABLE a (id INTEGER); CREATE TABLE a (x);"),)
 
     with pytest.raises(MigrationError, match="0001_bad.sql"):
@@ -51,6 +59,60 @@ def test_a_failing_script_rolls_back_and_leaves_the_version_alone():
 
     assert version_of(conn) == 0
     assert conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0] == 0
+
+
+def test_a_script_runs_once_when_another_connection_applied_it_while_this_one_waited(
+    tmp_path: Path,
+):
+    path = tmp_path / "store.sqlite"
+    scripts = (
+        Migration(
+            1,
+            "0001_refill.sql",
+            "CREATE TABLE IF NOT EXISTS a (id INTEGER); DELETE FROM a; INSERT INTO a VALUES (1);"
+            " INSERT INTO a VALUES (2);",
+        ),
+    )
+    waiting = threading.Event()
+
+    class Waiting(NullProgress):
+        def info(self, message: str) -> None:
+            waiting.set()
+
+    def second() -> None:
+        with closing(sqlite3.connect(path, timeout=10)) as other:
+            apply(other, scripts, progress=Waiting())
+
+    with closing(sqlite3.connect(path)) as first:
+        # The first connection holds the write lock: the second read version 0 and waits
+        first.execute("BEGIN IMMEDIATE")
+        thread = threading.Thread(target=second)
+        thread.start()
+        assert waiting.wait(5)
+        first.execute("CREATE TABLE a (id INTEGER)")
+        first.execute("INSERT INTO a VALUES (10)")
+        first.execute("PRAGMA user_version = 1")
+        first.execute("COMMIT")
+        thread.join(10)
+
+        assert not thread.is_alive()
+        assert first.execute("SELECT id FROM a").fetchall() == [(10,)]
+        assert version_of(first) == 1
+
+
+def test_a_script_is_split_into_its_statements():
+    sql = (
+        "-- a comment; with a semicolon\n"
+        "CREATE TABLE a (id TEXT);\n"
+        "INSERT INTO a VALUES ('x;y');\n"
+        "CREATE TRIGGER t AFTER INSERT ON a BEGIN DELETE FROM a WHERE id = 'z'; END;\n"
+    )
+
+    found = statements(sql)
+
+    assert len(found) == 3
+    assert found[1] == "INSERT INTO a VALUES ('x;y');"
+    assert found[2].startswith("CREATE TRIGGER") and found[2].endswith("END;")
 
 
 def test_a_failing_script_surfaces_as_a_store_error(
