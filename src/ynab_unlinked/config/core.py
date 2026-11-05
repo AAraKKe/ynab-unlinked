@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Final, cast
 
 from pydantic import ValidationError
@@ -10,6 +12,7 @@ from pydantic import ValidationError
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 
 from .constants import LATEST_VERSION
+from .lock import file_lock
 from .migrations import MigrationEngine, Version
 from .models import (
     ConfigV1,
@@ -31,6 +34,9 @@ VERSION_MAPPING: Final[dict[str, type[Config]]] = {
     "V4": ConfigV4,
 }
 LATEST_CONFIG_TYPE = ConfigV4
+
+_edit_lock = threading.Lock()
+"""One `edit_config` at a time in this process (the app saves from a pool of threads)."""
 
 
 class ConfigError(ValueError):
@@ -110,16 +116,27 @@ def edit_config(fallback: LATEST_CONFIG_TYPE | None = None) -> Generator[LATEST_
     The file is read again first, so what another process (the CLI or the app) saved since
     this one loaded its copy is kept: each writer only changes what its block touches.
     `fallback` is changed instead when there is no file yet. Nothing is saved when the block
-    raises. There is no lock: two saves in the same instant still race, the last one wins.
+    raises.
+
+    The read, the change and the save hold a lock, in this process and on `config.json.lock`
+    next to the file, so two saves at once (two threads of the app, or the app and the CLI)
+    take turns and each keeps what the other changed. Do not nest it.
     """
-    if LATEST_CONFIG_TYPE.exists():
-        config = LATEST_CONFIG_TYPE.load()
-    elif fallback is not None:
-        config = fallback.model_copy(deep=True)
-    else:
-        raise ConfigError("There is no config to change yet. Run `yul setup` first.")
-    yield config
-    config.save()
+    with _edit_lock, file_lock(lock_path()):
+        if LATEST_CONFIG_TYPE.exists():
+            config = LATEST_CONFIG_TYPE.load()
+        elif fallback is not None:
+            config = fallback.model_copy(deep=True)
+        else:
+            raise ConfigError("There is no config to change yet. Run `yul setup` first.")
+        yield config
+        config.save()
+
+
+def lock_path() -> Path:
+    """The file `edit_config` locks, next to the config."""
+    path = config_path()
+    return path.with_name(f"{path.name}.lock")
 
 
 def update_config(

@@ -1,5 +1,7 @@
 import datetime as dt
+import threading
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -20,7 +22,7 @@ from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
 from ynab_unlinked.keychain import mask_token
 from ynab_unlinked.store import Store
-from ynab_unlinked.web.state import state
+from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views.settings import tab_from_slug
 
 pytestmark = pytest.mark.version("V4")
@@ -604,3 +606,46 @@ async def test_net_worth_saves_run_off_the_event_loop(
     await user.should_see("Net worth settings saved", retries=20)
 
     assert off_the_event_loop(threads, calls=1)
+
+
+@pytest.fixture
+def slow_save(mocker: MockerFixture) -> threading.Event:
+    """Saves wait until the returned event is set."""
+    release = threading.Event()
+    original = AppState.update_config
+
+    def slow(self: AppState, change: Callable[[LatestConfig], None]) -> LatestConfig:
+        release.wait(5)
+        return original(self, change)
+
+    mocker.patch.object(AppState, "update_config", slow)
+    return release
+
+
+@pytest.mark.parametrize(
+    ("tab", "marker", "toast"),
+    [
+        ("banks", "bank-toggle-sabadell", "Sabadell turned off"),
+        ("accounts", f"account-{CHECKING_ID}", "Left out of net worth"),
+    ],
+)
+async def test_a_card_switch_waits_for_its_save_before_it_can_be_flipped_again(
+    mapped: LatestConfig,
+    user: User,
+    budget_accounts: YnabClientStub,
+    slow_save: threading.Event,
+    tab: str,
+    marker: str,
+    toast: str,
+):
+    await _open_tab(user, tab)
+    await user.should_see(marker=marker, retries=20)
+    toggle = user.find(marker=marker).elements.pop()
+    assert isinstance(toggle, ui.switch)
+
+    toggle.set_value(False)
+
+    await eventually(lambda: not toggle.enabled)
+    slow_save.set()
+    await user.should_see(toast, retries=20)
+    await eventually(lambda: all(switch.enabled for switch in user.find(marker=marker).elements))

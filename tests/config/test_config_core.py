@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import threading
 
 import pytest
 from pytest_mock import MockerFixture
@@ -21,7 +22,8 @@ from ynab_unlinked.config import (
     switch_budget,
     update_config,
 )
-from ynab_unlinked.config.core import ConfigError
+from ynab_unlinked.config.core import ConfigError, lock_path
+from ynab_unlinked.config.lock import file_lock
 from ynab_unlinked.config.models import ConfigV2
 from ynab_unlinked.display import CliProgress
 from ynab_unlinked.ynab_api import Client
@@ -163,6 +165,51 @@ def test_two_writers_keep_each_others_changes(config: str):
     on_disk = ConfigV4.load()
     assert on_disk.last_reconciliation_date == dt.date(2025, 5, 10)
     assert on_disk.loaders["cobee"].enabled is False, "The CLI undid what the app saved"
+
+
+@pytest.mark.version("V4")
+def test_two_saves_at_once_keep_both_changes(config: str):
+    # Two switches of the app toggled quickly: each save runs in its own thread
+    second_read = threading.Event()
+
+    def first_change(saved: ConfigV4) -> None:
+        saved.loaders["cobee"].enabled = False
+        # Without the lock the second save reads the file now and saves after this one
+        second_read.wait(0.2)
+
+    def second_change(saved: ConfigV4) -> None:
+        second_read.set()
+        saved.last_reconciliation_date = dt.date(2025, 5, 10)
+
+    first = threading.Thread(target=update_config, args=(first_change,))
+    first.start()
+    second = threading.Thread(target=update_config, args=(second_change,))
+    second.start()
+    first.join(5)
+    second.join(5)
+
+    on_disk = ConfigV4.load()
+    assert on_disk.loaders["cobee"].enabled is False, "The second save undid the first"
+    assert on_disk.last_reconciliation_date == dt.date(2025, 5, 10)
+
+
+@pytest.mark.version("V4")
+def test_a_save_waits_for_another_process_holding_the_lock_file(config: str):
+    saving = threading.Thread(
+        target=update_config,
+        args=(lambda saved: setattr(saved, "last_reconciliation_date", dt.date(2025, 5, 10)),),
+    )
+
+    # Another process (the CLI) is in the middle of its save
+    with file_lock(lock_path()):
+        saving.start()
+        saving.join(0.2)
+        assert saving.is_alive(), "The save did not wait for the lock"
+        assert ConfigV4.load().last_reconciliation_date != dt.date(2025, 5, 10)
+    saving.join(5)
+
+    assert lock_path().name == "config.json.lock"
+    assert ConfigV4.load().last_reconciliation_date == dt.date(2025, 5, 10)
 
 
 @pytest.mark.version("V4")

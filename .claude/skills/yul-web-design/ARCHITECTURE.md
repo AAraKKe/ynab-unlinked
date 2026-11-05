@@ -422,8 +422,12 @@ def switch_budget(config: LatestConfig, budget: Budget) -> None
   the file is read again, the change applied and the result saved, so each writer only
   changes what it touches and what another process saved meanwhile is kept. With no file,
   `fallback` is changed instead (the app passes its copy); without one it raises
-  `ConfigError`. Nothing is saved when the block raises. No file lock: two saves in the
-  same instant still race. Only `yul setup` writes a whole new config.
+  `ConfigError`. Nothing is saved when the block raises. The read, change and save hold a
+  process wide `threading.Lock` and an advisory lock on `config.json.lock` next to the file
+  (`config.lock.file_lock`: `fcntl.flock` on POSIX, `msvcrt.locking` on Windows;
+  `config.core.lock_path()`), so two threads of the app or the app and the CLI take turns
+  and neither loses the other's change. Do not nest it. Only `yul setup` writes a whole new
+  config.
 - `switch_budget` is the one rule for a budget change (`yul config set budget` and
   Settings › Connection): another budget clears `loaders`, `accounts`, `debt_mappings` and
   `last_reconciliation_date`; the token and `adjustments` stay. The same budget again only
@@ -620,7 +624,8 @@ web/
                        tabindex, click and Enter), loading(text) / show_state(box, kind, text)
                        (loading, error, ok lines), section_title(text, swatch=None),
                        card_switch(card, on, marker, title, on_change, aria_label=None) (the
-                       live/off flip and the ui.switch of rule 3, marker on the switch),
+                       live/off flip and the ui.switch of rule 3, marker on the switch; disabled
+                       until `on_change` returns, so a save in flight cannot be raced),
                        dialog_box(title=None, lede=None, classes="") -> DialogBox(dialog, card,
                        body, actions) and run_dialog(dialog) (open, await, delete),
                        budget_tiles(budgets, selected, on_pick) -> (grid, tiles by id)

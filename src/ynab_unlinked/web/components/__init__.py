@@ -6,6 +6,7 @@ can be used inline (`pill("by hand", "acc")`) or as a container (`with glass_car
 
 from __future__ import annotations
 
+import inspect
 import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -311,14 +312,26 @@ def card_switch(
     """The switch in the header of a card that can be turned on (DESIGN rule 3).
 
     Makes the card `live` when on and `off` (muted) when off, and draws the `ui.switch`, marked
-    `marker`, where it is called. `on_change` gets the new value.
+    `marker`, where it is called. `on_change` gets the new value; the switch is disabled until
+    it returns (a save in flight), so a second flip cannot start a save racing the first.
     """
     card.classes(add="live" if on else "off", remove="off" if on else "live")
     switch = ui.switch(value=on).props("dense").mark(marker)
     switch.props["title"] = title
     if aria_label is not None:
         switch.props["aria-label"] = aria_label
-    switch.on_value_change(lambda e: on_change(bool(e.value)))
+
+    async def changed(value: bool) -> None:
+        switch.disable()
+        try:
+            if inspect.isawaitable(result := on_change(value)):
+                await result
+        finally:
+            # The handler usually draws the card again, with a new switch
+            if not switch.is_deleted:
+                switch.enable()
+
+    switch.on_value_change(lambda e: changed(bool(e.value)))
     return switch
 
 
