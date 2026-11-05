@@ -37,7 +37,8 @@ def fresh_nicegui() -> Iterator[None]:
 
 async def eventually(check: Callable[[], bool]) -> None:
     """Wait for a background handler (a click that reads the store or saves) to finish."""
-    for _ in range(100):
+    # Up to 10 s: a busy CI runner can take seconds to run a handler off the loop
+    for _ in range(500):
         if check():
             return
         await asyncio.sleep(0.02)
