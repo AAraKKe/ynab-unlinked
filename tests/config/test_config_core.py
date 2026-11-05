@@ -10,6 +10,7 @@ from tests.factories import PlanDetailFactory
 from tests.helpers import assets
 from tests.helpers.config import ConfigFiles
 from ynab_unlinked.config import Adjustments, ConfigV4, LoaderConfig, get_config
+from ynab_unlinked.config.models import ConfigV2
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.ynab_api import Client
 
@@ -49,6 +50,21 @@ def test_a_v1_config_is_migrated_and_replaced_by_the_current_version(
     assert config.loaders["sabadell"].account_id == "sabadell-account"
     assert not config_files.v1.exists(), "The migrated away V1 config was left behind"
     assert config_files.v2.is_file(), "The migration result was not persisted"
+
+
+@pytest.mark.usefixtures("isolated_migration_registry")
+def test_a_failed_save_of_the_migrated_v1_config_keeps_the_v1_config(
+    config_files: ConfigFiles,
+    mocker: MockerFixture,
+):
+    config_files.write_asset("V1")
+    mocker.patch.object(Client, "budget", return_value=PlanDetailFactory())
+    mocker.patch.object(ConfigV2, "save", side_effect=OSError("disk full"))
+
+    with pytest.raises(OSError, match="disk full"):
+        get_config()
+
+    assert config_files.v1.is_file(), "The V1 config was deleted before V2 was saved"
 
 
 @pytest.mark.usefixtures("isolated_migration_registry")

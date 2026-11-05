@@ -57,10 +57,10 @@ class DeltaConfigV1ToV2(Delta[ConfigV1, ConfigV2]):
             payee_rules=origin.payee_rules,
         )
 
-        # Now we delete v1 and save v2
+        # Save v2 before deleting v1, so a failed save leaves the old config in place.
         # This is special because v1 is stored in a different path than any other versions
-        shutil.rmtree(ConfigV1.path().parent)
         config_v2.save()
+        shutil.rmtree(ConfigV1.path().parent)
 
         return config_v2
 
