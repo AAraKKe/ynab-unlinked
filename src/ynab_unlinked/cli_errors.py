@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import click
+import typer
 from typer.core import TyperGroup
 
 
@@ -12,7 +12,7 @@ class YulGroup(TyperGroup):
     """The `yul` command group. Every subcommand runs inside `invoke`, so errors from YNAB
     or the network that reach it are reported here."""
 
-    def invoke(self, ctx: click.Context) -> Any:
+    def invoke(self, ctx: Any) -> Any:  # the Context of the click copy Typer bundles
         # Imported here: `ynab_unlinked/__init__.py` builds the app with this class
         from ynab_unlinked.display import error
         from ynab_unlinked.ynab_api.errors import YNAB_ERRORS, ynab_error_message
@@ -21,4 +21,4 @@ class YulGroup(TyperGroup):
             return super().invoke(ctx)
         except YNAB_ERRORS as failure:
             error(ynab_error_message(failure))
-            raise click.exceptions.Exit(1) from failure
+            raise typer.Exit(1) from failure
