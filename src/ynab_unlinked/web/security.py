@@ -129,9 +129,7 @@ class TokenGuard:
 
         connection = HTTPConnection(scope)
         if self._trusted(scope, connection):
-            if scope["type"] == "http" and self._matches(
-                connection.query_params.get(TOKEN_PARAM)
-            ):
+            if scope["type"] == "http" and self._matches(connection.query_params.get(TOKEN_PARAM)):
                 bounce = _bounce(_without_token(connection.url), self.token, self.cookie)
                 await bounce(scope, receive, send)
                 return

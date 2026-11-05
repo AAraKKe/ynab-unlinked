@@ -124,7 +124,10 @@ def serve_live(ynab_api: YnabClientStub, balances: dict[str, int]) -> None:
         return AccountResponse(
             data=AccountResponseData(
                 account=AccountFactory(
-                    id=account_id, name=NAMES[account], type=TYPES[account], balance=balances[account]
+                    id=account_id,
+                    name=NAMES[account],
+                    type=TYPES[account],
+                    balance=balances[account],
                 )
             )
         )

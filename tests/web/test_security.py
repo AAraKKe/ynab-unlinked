@@ -139,9 +139,7 @@ async def test_a_get_from_another_origin_is_still_served(user: User):
     [f"127.0.0.1:{PORT + 1}", f"localhost:{PORT}", f"evil.example:{PORT}", "127.0.0.1"],
     ids=["other-port", "localhost", "rebound-name", "no-port"],
 )
-async def test_a_request_for_another_host_is_forbidden_even_with_the_cookie(
-    user: User, host: str
-):
+async def test_a_request_for_another_host_is_forbidden_even_with_the_cookie(user: User, host: str):
     response = await user.http_client.get("/settings", headers={"Host": host})
 
     assert response.status_code == 403

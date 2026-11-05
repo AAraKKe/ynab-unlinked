@@ -153,9 +153,7 @@ def test_banks_are_discovered_once(app_state: AppState, mocker: MockerFixture):
     discover.assert_called_once()
 
 
-def test_a_reload_for_the_same_budget_reads_no_database(
-    app_state: AppState, mocker: MockerFixture
-):
+def test_a_reload_for_the_same_budget_reads_no_database(app_state: AppState, mocker: MockerFixture):
     last_sync = mocker.spy(Store, "last_sync")
 
     app_state.reload()
