@@ -6,7 +6,7 @@ pulling ``main`` (avoids import cycles).
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 import typer
 
@@ -59,7 +59,7 @@ def load_context() -> YnabUnlinkedContext[Any] | None:
     if config is None:
         return None
 
-    return _build_context(cast(LatestConfig, config))
+    return _build_context(config)
 
 
 CONFIG_UNREADABLE = (

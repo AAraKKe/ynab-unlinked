@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Annotated, assert_never
+from typing import Annotated
 
 import typer
 
@@ -46,8 +46,6 @@ def set_command(
             switch_budget(config, budget)
             update_config(lambda saved: switch_budget(saved, budget))
             success("🎉 The budget has been updated")
-        case never:
-            assert_never(never)
 
 
 @config_app.command(name="show")

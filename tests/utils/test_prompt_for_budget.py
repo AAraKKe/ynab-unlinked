@@ -103,7 +103,6 @@ def test_no_api_key_and_no_config_is_an_error(client, answer):
 @pytest.mark.parametrize(
     "budget_details, expected_message",
     [
-        pytest.param(None, "Could not find budget with ID", id="budget_missing"),
         pytest.param(
             plan_detail(currency_format=None),
             "has no currency format",
@@ -113,7 +112,7 @@ def test_no_api_key_and_no_config_is_an_error(client, answer):
     ],
 )
 def test_incomplete_budget_details_are_rejected(
-    client, answer, budget_details: PlanDetail | None, expected_message: str
+    client, answer, budget_details: PlanDetail, expected_message: str
 ):
     client.return_value.budget.return_value = budget_details
     answer("1")

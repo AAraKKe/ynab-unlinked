@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import assert_never
 
 from ynab import AccountType
 
@@ -36,5 +35,3 @@ def bucket_for(account_type: AccountType) -> Bucket:
             return Bucket.DEBT
         case AccountType.OTHERASSET:
             return Bucket.ASSETS
-        case never:
-            assert_never(never)

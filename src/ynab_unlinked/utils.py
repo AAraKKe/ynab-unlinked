@@ -59,9 +59,6 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
     # Get the full budget to get all the required fields
     budget_details = client.budget(str(selected_budget.id))
 
-    if budget_details is None:
-        raise ValueError(f"Could not find budget with ID {selected_budget.id}")
-
     return budget_from_plan(budget_details)
 
 
@@ -178,10 +175,10 @@ def split_quoted_string(input_string: str) -> list[str]:
     pattern = re.compile(r"'[^']*'|\"[^\"]*\"|`[^`]*`|\S+")
 
     # re.findall finds all non-overlapping matches of the pattern in the string.
-    matches = pattern.findall(input_string)
+    matches: list[str] = pattern.findall(input_string)
 
     # Post-process: remove the surrounding quotes from the matched substrings
-    result = []
+    result: list[str] = []
     for single_match in matches:
         # Check if the match starts and ends with any of the recognized quote types
         if (

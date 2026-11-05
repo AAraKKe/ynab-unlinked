@@ -82,12 +82,28 @@ class CliProgress:
         warning(message)
 
 
-def question(message: str, **kwargs) -> str:
-    return Prompt.ask(f"[bold cyan]{message}[/bold cyan]", console=console(), **kwargs)
+def question(
+    message: str,
+    *,
+    password: bool = False,
+    choices: list[str] | None = None,
+    show_choices: bool = True,
+) -> str:
+    return Prompt.ask(
+        f"[bold cyan]{message}[/bold cyan]",
+        console=console(),
+        password=password,
+        choices=choices,
+        show_choices=show_choices,
+    )
 
 
-def confirm(message: str, **kwargs) -> bool:
-    return Confirm.ask(f"[bold cyan]{message}[/bold cyan]", console=console(), **kwargs)
+def confirm(message: str, *, default: bool | None = None) -> bool:
+    """Ask a yes or no question. Without a `default`, it asks until it gets an answer."""
+    prompt = f"[bold cyan]{message}[/bold cyan]"
+    if default is None:
+        return Confirm.ask(prompt, console=console())
+    return Confirm.ask(prompt, console=console(), default=default)
 
 
 def bullet_list(items: Iterable[str]) -> str:

@@ -62,8 +62,8 @@ class AccountTable(Container):
 
         return cleared_str(status)
 
-    def choice_to_table(self) -> DataTable:
-        table = DataTable(cursor_type="row")
+    def choice_to_table(self) -> DataTable[str | None]:
+        table: DataTable[str | None] = DataTable(cursor_type="row")
 
         table.add_column("Date")
         table.add_column("Payee")
@@ -131,7 +131,7 @@ class ReconcileModal(ModalScreen[int]):
         self.choices = choices
 
     def compose(self):
-        accounts_lines = []
+        accounts_lines: list[str] = []
         for choice in self.choices:
             n_child_selected = sum(child.is_selected for child in choice.choices)
             counter_str = (

@@ -11,7 +11,7 @@ class Choice:
         account: Account | None = None,
         title: str = "",
         choices: list[str | Choice] | None = None,
-        selected=False,
+        selected: bool = False,
         parent: Choice | None = None,
     ):
         self.id = id
