@@ -40,10 +40,12 @@ from ynab_unlinked.web.components import (
     PillKind,
     Segment,
     button,
+    count_up,
     empty_state,
     glass_card,
     pill,
     segmented_bar,
+    share_bar,
     stat_tile,
 )
 from ynab_unlinked.web.components.history_chart import (
@@ -52,7 +54,6 @@ from ynab_unlinked.web.components.history_chart import (
     history_options,
     set_options,
 )
-from ynab_unlinked.web.components.networth_parts import count_up, install_css, share_bar
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.onboarding import ynab_error_message
 
@@ -297,7 +298,6 @@ class NetWorthView:
     # ---- lifecycle -------------------------------------------------------------------------
 
     async def render(self) -> None:
-        install_css()
         with self.root:
             ui.timer(1.0, self.tick)
         await self.refresh()
@@ -401,10 +401,10 @@ class NetWorthView:
                     figure.classes("yul-grad yul-nw-figure").mark("nw-figure")
                 self.delta = ui.element("div").classes("yul-nw-delta").mark("nw-delta")
                 ui.element("span").classes("yul-grow")
-                with ui.element("div").classes("yul-nw-pills").mark("ranges"):
+                with ui.element("div").classes("yul-pills").mark("ranges"):
                     self.pills = {}
                     for key in RANGES:
-                        item = ui.label(key).classes("yul-nw-pill").mark(f"range-{key}")
+                        item = ui.label(key).mark(f"range-{key}")
                         item.props["role"] = "button"
                         item.props["tabindex"] = "0"
                         item.on("click", lambda _, key=key: self.set_range(key))
@@ -548,7 +548,7 @@ class NetWorthView:
             ui.label(f"Accounts · {len(picked)} of {MAX_PICKED}").classes(
                 "yul-faint yul-small"
             ).mark("pick-count")
-            with ui.element("div").classes("yul-nw-chips"):
+            with ui.element("div").classes("yul-chips"):
                 for account in table_order(snapshot):
                     chip = ui.element("div").classes("yul-chipc").mark(f"pick-{account.id}")
                     chip.props["role"] = "button"

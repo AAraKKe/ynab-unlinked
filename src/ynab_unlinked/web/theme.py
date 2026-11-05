@@ -117,10 +117,6 @@ def install() -> None:
 # window and hides when they leave it. Capture phase, because QUploader stops the propagation
 # of the drag events over its drop area, which would leave the count (and the overlay) stuck.
 # Drops that miss the uploader (onboarding has none) must not make the browser open the file.
-#
-# `yulCountUp(id, decimals)` animates a hero figure from 0 to the amount it shows, keeping the
-# currency format the server rendered (symbol, separators, decimals). Instant when the user
-# prefers reduced motion.
 DRAG_JS = """
 (() => {
   let depth = 0;
@@ -136,33 +132,4 @@ DRAG_JS = """
     if (!document.querySelector(".yul-drop-upload")) e.preventDefault();
   }, true);
 })();
-window.yulCountUp = (id, decimals, tries = 0) => {
-  const el = document.getElementById(id);
-  if (!el) { if (tries < 60) requestAnimationFrame(() => yulCountUp(id, decimals, tries + 1)); return; }
-  const final = el.textContent;
-  const m = final.match(/^([^\\d]*?)(\\d[\\d.,\\s\\u00a0\\u202f']*\\d|\\d)(.*)$/s);
-  if (!m || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const [, pre, num, post] = m;
-  const digits = num.replace(/\\D/g, "");
-  const target = Number(digits);
-  if (!target || digits.length > 15) return;
-  const fracStart = decimals > 0 ? num.length - decimals : num.length;
-  const render = (value) => {
-    const s = String(value).padStart(digits.length, "0");
-    let out = "", i = s.length - 1;
-    for (let k = num.length - 1; k >= 0; k--) out = (/\\d/.test(num[k]) ? s[i--] : num[k]) + out;
-    let cut = 0;
-    const intEnd = decimals > 0 ? fracStart - 2 : num.length - 1;
-    while (cut < intEnd && /[^1-9]/.test(out[cut])) cut++;
-    return pre + out.slice(cut) + post;
-  };
-  const start = performance.now();
-  const step = (now) => {
-    const t = Math.min(1, (now - start) / 900);
-    el.textContent = t < 1 ? render(Math.round(target * (1 - Math.pow(1 - t, 3)))) : final;
-    if (t < 1) requestAnimationFrame(step);
-  };
-  el.textContent = render(0);
-  requestAnimationFrame(step);
-};
 """

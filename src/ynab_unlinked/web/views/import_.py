@@ -56,84 +56,6 @@ OTHER_FILE_COLOR = "#64748b"
 YEARS_OFFERED = 3
 
 _FLOW_KEY = "yul.import_flow"
-_CSS_KEY = "yul.import.css"
-_CSS = """
-.yul-imp { width: 100%; }
-.yul-imp-stepper { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-.yul-imp-st { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-weight: 500; font-size: 13px; }
-.yul-imp-st > .num {
-  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px;
-  border: 1px solid var(--border-2); transition: all .2s;
-}
-.yul-imp-st.on { color: var(--text); }
-.yul-imp-st.on > .num { background: var(--accent); border-color: transparent; color: #fff; }
-.yul-imp-st.done { color: var(--text-2); }
-.yul-imp-st.done > .num {
-  background: color-mix(in oklab, var(--good) 20%, transparent); border-color: var(--good); color: var(--good);
-}
-.yul-imp-ln { flex: 1; height: 1px; background: var(--border-2); max-width: 60px; }
-.yul-imp-files { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-.yul-imp-file {
-  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden;
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); animation: yul-enter .35s var(--ease) both;
-  transition: opacity .2s;
-}
-.yul-imp-file.off { opacity: .55; }
-.yul-imp-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
-.yul-imp-badge {
-  width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-size: 10px;
-  font-weight: 800; color: #fff; flex: none; letter-spacing: .04em;
-}
-.yul-imp-badge.sm { width: 30px; height: 30px; border-radius: 9px; font-size: 9px; }
-.yul-imp-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.yul-imp-meta { color: var(--text-3); font-size: 12px; }
-.yul-imp-det {
-  display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; cursor: default;
-}
-.yul-imp-reason { color: var(--text-3); font-size: 12px; max-width: 320px; text-align: right; }
-.yul-imp-arrow { transition: transform .2s; color: var(--text-3); font-size: 18px; width: 12px; }
-.yul-imp-file.open .yul-imp-arrow { transform: rotate(90deg); }
-.yul-imp-body {
-  display: none; border-top: 1px solid var(--border); padding: 12px 14px 14px; background: rgba(0, 0, 0, .12);
-}
-body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
-.yul-imp-file.open .yul-imp-body { display: block; animation: yul-enter .25s var(--ease) both; }
-.yul-imp-seg { display: inline-flex; border: 1px solid var(--border-2); border-radius: 9px; overflow: hidden; }
-.yul-imp-seg > .opt { padding: 4px 10px; font-size: 12px; color: var(--text-2); cursor: pointer; transition: all .15s; }
-.yul-imp-seg > .opt + .opt { border-left: 1px solid var(--border); }
-.yul-imp-seg > .opt:hover { color: var(--text); }
-.yul-imp-seg > .opt.on { background: var(--surface-2); color: var(--text); }
-.yul-imp-det .q-field { min-width: 92px; }
-.yul-imp-det .yul-bank-logo { padding: 0 6px; }
-.yul-imp-det .q-field--dense .q-field__control,
-.yul-imp-det .q-field--dense .q-field__marginal { min-height: 30px; height: 30px; }
-.yul-imp-det .q-field--dense .q-field__native { min-height: 30px; padding: 0; font-size: 12.5px; }
-.yul-imp-det .q-field--dense .q-field__label { top: 6px; font-size: 12.5px; }
-.yul-imp-det .q-field--float .q-field__label { display: none; }
-.yul-imp-det .q-field--labeled .q-field__control-container,
-.yul-imp-det .q-field--labeled .q-field__native { padding-top: 0; }
-.yul-imp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.yul-imp-table th {
-  text-align: left; font-weight: 500; color: var(--text-3); padding: 6px 8px; border-bottom: 1px solid var(--border);
-  font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
-}
-.yul-imp-table td { padding: 7px 8px; border-bottom: 1px solid var(--hair); }
-.yul-imp-table tr:last-child td { border-bottom: 0; }
-.yul-imp-table .r { text-align: right; }
-.yul-imp-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.yul-imp-table tr.dim td { color: var(--text-3); }
-.yul-imp-note { color: var(--text-2); font-size: 12.5px; margin-bottom: 8px; }
-.yul-imp-sticky {
-  position: sticky; bottom: 12px; margin-top: 16px; display: flex; align-items: center; gap: 14px;
-  padding: 12px 16px; border-radius: 14px; border: 1px solid var(--border-2); z-index: 4;
-  background: color-mix(in oklab, var(--bg) 70%, transparent); backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px); box-shadow: 0 -10px 30px -20px rgba(0, 0, 0, .6);
-}
-.yul-imp-stat { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
-.yul-imp-stat b { font-weight: 600; }
-.yul-imp-card { margin-bottom: 10px; padding: 14px 16px; }
-.yul-imp-done { text-align: center; padding: 28px; }
-"""
 
 
 class Status(StrEnum):
@@ -563,7 +485,7 @@ class ImportFlow:
         badge = ui.label((suffix or "?").upper()[:4]).classes("yul-imp-badge")
         badge.style(f"background:{file_color(suffix)}")
         if small:
-            badge.classes(add="sm")
+            badge.classes(add="small")
 
     def draw_detection(self, item: ImportFile) -> None:
         match item.status:
@@ -725,8 +647,8 @@ class ImportFlow:
         blocked = any(item.blocking for item in self.files)
         transactions = sum(len(item.plan.rows) for item in ready if item.plan)
         new = sum(len(item.plan.new_rows) for item in ready if item.plan)
-        with self.footer, ui.element("div").classes("yul-imp-sticky").mark("files-footer"):
-            with ui.element("div").classes("yul-grow yul-imp-stat"):
+        with self.footer, ui.element("div").classes("yul-foot").mark("files-footer"):
+            with ui.element("div").classes("yul-grow yul-foot-stat"):
                 ui.label(plural(len(self.active), "file"))
                 ui.label(plural(transactions, "transaction"))
                 ui.label(f"{new} new").classes("yul-good")
@@ -770,8 +692,8 @@ class ImportFlow:
                             f"review-count-{item.key}"
                         )
                     self.table(item.plan)
-        with self.content, ui.element("div").classes("yul-imp-sticky").mark("review-footer"):
-            with ui.element("div").classes("yul-grow yul-imp-stat"):
+        with self.content, ui.element("div").classes("yul-foot").mark("review-footer"):
+            with ui.element("div").classes("yul-grow yul-foot-stat"):
                 ui.label(
                     f"{plural(new, 'new transaction')} in {plural(len(accounts), 'account')}"
                 ).style("font-weight:600").mark("review-summary")
@@ -940,13 +862,6 @@ class ImportFlow:
                 button("Import more", on_click=self.reset).mark("import-more")
 
 
-def _install_css() -> None:
-    storage = context.client.storage
-    if not storage.get(_CSS_KEY):
-        ui.add_css(_CSS)
-        storage[_CSS_KEY] = True
-
-
 @shell.view(
     shell.IMPORT_PATH,
     key="import",
@@ -957,7 +872,6 @@ def _install_css() -> None:
     live=False,
 )
 async def import_view() -> None:
-    _install_css()
     storage = context.client.storage
     if isinstance(previous := storage.get(_FLOW_KEY), ImportFlow):
         previous.close()

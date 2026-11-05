@@ -57,11 +57,13 @@ in the same change. Never update a document to describe something you did not bu
 
 - `components`: `button(text, kind=primary|ghost|danger|danger-primary, small, icon_name)`,
   `icon(name)` from `ICONS`, `pill(text, kind)`, `glass_card(hover, flush)`, `stat_tile`,
-  `segmented_bar`, `empty_state`, `spinner`, `check`, `bank_logo`.
-- `components.dropzone`, `components.history_chart`, `components.networth_parts`,
-  `components.reconcile_controls` for the bigger pieces.
-- CSS classes are prefixed `yul-` and live in `web/static/yul.css`; a view may add its
-  own block through `add_css_once(key, CSS)`. Use the tokens (`var(--accent-solid)`,
+  `segmented_bar`, `share_bar`, `empty_state`, `spinner`, `check`, `bank_logo`,
+  `count_up(label, milliunits, currency_format)` (the one count up).
+- `components.dropzone`, `components.history_chart`, `components.reconcile_controls` for
+  the bigger pieces.
+- CSS classes are prefixed `yul-` and live only in `web/static/yul.css`, in the section of
+  their view (never `ui.add_css` or a CSS string in Python); a flow's sticky footer is
+  `yul-foot` with `yul-foot-stat`. Use the tokens (`var(--accent-solid)`,
   `var(--text-2)`, `color-mix(...)`), never literal colours except in the tokens table.
 - `shell`: `@shell.view`, `shell.notify`, `shell.confirm`, `shell.set_header`,
   `shell.pending_uploads` / `shell.on_drop`, `shell.refresh_view`.

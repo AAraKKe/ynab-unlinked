@@ -572,15 +572,17 @@ web/
   shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay
   theme.py             palette constants, dark/light switch, install() of static/yul.css
   security.py          per run token, TokenGuard middleware, free_port(), entry_url()
-  static/              yul.css (tokens, component classes, motion), fonts/InterVariable.woff2
-  components/          button, glass_card, pill, bank_logo, stat_tile, segmented_bar, empty_state,
-                       spinner, check, icon (+ ICONS)
+  static/              yul.css: the only stylesheet (tokens, base, shared classes, one section
+                       per view, motion, then every media query), fonts/InterVariable.woff2.
+                       No CSS lives in Python.
+  components/          button, glass_card, pill, bank_logo, stat_tile, segmented_bar, share_bar,
+                       empty_state, spinner, check, icon (+ ICONS), count_up (the one count up
+                       animation: Home and Net worth heroes)
     dropzone.py        dropzone(on_files, *, compact=False, accept=None): Home and Import step 1
-    reconcile_controls.py  pill_group, switch, add_css_once (yul-rec- classes);
+    reconcile_controls.py  pill_group, switch (yul-pills, yul-rec-switch);
                        generic, promote to components when another view needs them
     history_chart.py   ChartSeries, history_options() / history_chart() / set_options(),
                        money_js() / compact_js(): the ECharts history line chart
-    networth_parts.py  count_up(), share_bar(), install_css() (the yul-nw- classes)
   views/
     __init__.py        register(): imports every view module
     onboarding.py      /onboarding, outside the shell (token, budget, banks, done)
@@ -694,7 +696,7 @@ Theme (`web/theme.py`): `SERIES` / `SERIES_LIGHT` (6 colours: DESIGN's three, th
 `#eda100`, a violet and a pink; `--series-1..6` in CSS), `ACCENT` (gradient start and end), `GOOD`, `WARN`, `BAD` (+ `_LIGHT`),
 `palette()` for the current browser's theme (`Palette` with series, accent, status and
 text colours for ECharts), `is_dark()`. CSS classes are prefixed `yul-` (`yul-card`,
-`yul-pill ok|warn|bad|acc`, `yul-grad`, `yul-hero`, `yul-muted`, `yul-faint`, `yul-num`,
+`yul-pill ok|warn|acc`, `yul-grad`, `yul-hero`, `yul-muted`, `yul-faint`, `yul-num`,
 `yul-row`, `yul-grow`, `yul-section`, `yul-kv`, `yul-map`, `yul-stagger`, `yul-prog active`,
 ...); CSS variables follow DESIGN.md (`--surface`, `--surface-2`, `--text-2`,
 `--series-1`, `--accent`, ...). Quasar fields look right with `.props("outlined dense")`;

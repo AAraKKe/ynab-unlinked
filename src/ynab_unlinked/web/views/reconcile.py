@@ -21,7 +21,7 @@ from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import StoredAccount, StoredTransaction
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button, check, empty_state, glass_card, pill, spinner
-from ynab_unlinked.web.components.reconcile_controls import add_css_once, pill_group, switch
+from ynab_unlinked.web.components.reconcile_controls import pill_group, switch
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.onboarding import ynab_error_message
 
@@ -33,68 +33,6 @@ SCOPE_BUFFER_DAYS = 7
 SINCE = "since"
 ALL_TIME = "all"
 UNCLEARED_SKIPPED = "Uncleared rows are skipped. Turn on “include uncleared” to lock them too."
-
-CSS = """
-.yul-rec-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
-.yul-rec-head .yul-lede { margin: 0; }
-.yul-rec-acct { margin-bottom: 12px; }
-.yul-rec-ah {
-  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 14px; padding: 16px 18px; align-items: center;
-}
-.yul-rec-bal {
-  font-size: 22px; font-weight: 700; letter-spacing: -.02em; line-height: 1.25;
-  font-variant-numeric: tabular-nums;
-}
-.yul-rec-bank .q-field { width: 160px; margin-top: 4px; }
-.yul-rec-bank input { text-align: right; font-variant-numeric: tabular-nums; }
-.yul-rec-match { font-size: 12.5px; display: flex; align-items: center; gap: 6px; min-height: 22px; flex-wrap: wrap; }
-.yul-rec-link { cursor: pointer; font-size: 12px; color: var(--text-3); user-select: none; transition: color .15s; }
-.yul-rec-link:hover { color: var(--text); }
-.yul-rec-gap-link { color: var(--accent-2); cursor: pointer; }
-body.body--light .yul-rec-gap-link { color: var(--accent-solid); }
-.yul-rec-lockcell { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.yul-rec-rows { border-top: 1px solid var(--border); padding: 6px 10px; animation: yul-enter .25s var(--ease) both; }
-.yul-rec-row {
-  display: grid; grid-template-columns: 22px 92px minmax(0, 1fr) 120px 110px; align-items: center;
-  gap: 10px; padding: 6px 8px; border-radius: 8px; cursor: pointer; transition: background .15s, opacity .3s;
-}
-.yul-rec-row:hover { background: var(--surface-2); }
-.yul-rec-row > .payee { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.yul-rec-row > .amt { text-align: right; font-variant-numeric: tabular-nums; }
-.yul-rec-row > .st { font-size: 11.5px; text-align: right; color: var(--text-3); white-space: nowrap; }
-.yul-rec-row.unclear { color: var(--text-3); }
-.yul-rec-row.locked { opacity: .45; cursor: default; }
-.yul-rec-row.locked:hover { background: none; }
-.yul-rec-row.gap {
-  background: color-mix(in oklab, var(--warn) 14%, transparent); box-shadow: inset 3px 0 0 var(--warn);
-}
-.yul-rec-cb {
-  width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--text-3);
-  display: inline-grid; place-items: center; flex: none; transition: all .15s;
-}
-.yul-rec-cb.on { background: var(--accent); border-color: transparent; }
-.yul-rec-cb.on::after {
-  content: ""; width: 8px; height: 5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff;
-  transform: rotate(-45deg) translate(1px, -1px);
-}
-.yul-rec-cb.off { opacity: .35; }
-.yul-rec-foot {
-  position: sticky; bottom: 12px; margin-top: 16px; display: flex; align-items: center; gap: 14px;
-  padding: 12px 16px; border-radius: 14px; border: 1px solid var(--border-2); z-index: 4;
-  background: color-mix(in oklab, var(--bg) 70%, transparent); backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px); box-shadow: 0 -10px 30px -20px rgba(0, 0, 0, .6);
-}
-.yul-rec-stat { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
-.yul-rec-stat > .main { font-weight: 600; }
-.yul-rec-foot .yul-prog { max-width: 220px; }
-.yul-rec-foot .yul-prog > i { width: 100%; }
-@media (max-width: 900px) {
-  .yul-rec-ah { grid-template-columns: 1fr 1fr; }
-  .yul-rec-row { grid-template-columns: 22px 80px minmax(0, 1fr) 100px; }
-  .yul-rec-row > .st { display: none; }
-}
-"""
 
 
 def scope_start(last_reconciliation: dt.date | None) -> dt.date | None:
@@ -281,7 +219,6 @@ class ReconcileView:
     # ---- page ----------------------------------------------------------------------------
 
     async def render(self) -> None:
-        add_css_once("reconcile", CSS)
         self.root = ui.element("div").mark("reconcile")
         with self.root, ui.element("div").classes("yul-row yul-muted"):
             spinner()
@@ -311,7 +248,7 @@ class ReconcileView:
                 return
             self.header()
             self.list = ui.element("div")
-            self.footer = ui.element("div").classes("yul-rec-foot").mark("rec-footer")
+            self.footer = ui.element("div").classes("yul-foot").mark("rec-footer")
         self.render_list()
 
     def all_reconciled(self) -> None:
@@ -621,7 +558,7 @@ class ReconcileView:
             if self.last_locked:
                 self.done_footer(count)
                 return
-            with ui.element("div").classes("yul-grow yul-rec-stat"):
+            with ui.element("div").classes("yul-grow yul-foot-stat"):
                 ui.label(
                     f"Lock {plural(count, 'transaction')} in {plural(accounts, 'account')}"
                 ).classes("main").mark("rec-summary")
@@ -641,7 +578,7 @@ class ReconcileView:
 
     def done_footer(self, remaining: int) -> None:
         check()
-        with ui.element("div").classes("yul-grow yul-rec-stat"):
+        with ui.element("div").classes("yul-grow yul-foot-stat"):
             ui.label(f"{plural(self.last_locked, 'transaction')} locked").classes("main").mark(
                 "rec-done"
             )

@@ -6,6 +6,7 @@ can be used inline (`pill("by hand", "acc")`) or as a container (`with glass_car
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,13 +14,17 @@ from typing import Any, Literal
 
 from nicegui import ui
 
+from ynab_unlinked.config.models.v2 import CurrencyFormat
+from ynab_unlinked.web.components.history_chart import money_js
 from ynab_unlinked.web.theme import STATIC_ROUTE
 
 LOGOS_DIR = Path(__file__).resolve().parent.parent / "static" / "logos"
 """One `<loader key>.svg` per bank yul ships a logo for; others get a monogram."""
 
 ButtonKind = Literal["default", "primary", "ghost", "danger", "danger-primary"]
-PillKind = Literal["default", "ok", "warn", "bad", "acc"]
+PillKind = Literal["default", "ok", "warn", "acc"]
+
+COUNT_UP_MS = 900
 
 # Inner markup of 24x24 stroke icons (the mock's set). Use them through `icon()`.
 ICONS: dict[str, str] = {
@@ -125,7 +130,7 @@ def glass_card(*, hover: bool = False, flush: bool = False) -> ui.element:
 
 
 def pill(text: str, kind: PillKind = "default") -> ui.label:
-    """A small rounded tag: `ok`, `warn` and `bad` carry status, `acc` marks a choice."""
+    """A small rounded tag: `ok` and `warn` carry status, `acc` marks a choice."""
     element = ui.label(text).classes("yul-pill")
     if kind != "default":
         element.classes(kind)
@@ -189,6 +194,42 @@ def empty_state(
     return element
 
 
+def share_bar(fraction: float, color: str) -> ui.element:
+    """A 4px track filled to `fraction` (0..1) in `color`, growing in on first paint."""
+    width = max(0.0, min(fraction, 1.0)) * 100
+    with ui.element("div").classes("yul-nw-bar") as bar:
+        ui.element("i").style(f"width:{width:.2f}%;background:{color}")
+    return bar
+
+
+def count_up(label: ui.label, milliunits: int, currency_format: CurrencyFormat) -> None:
+    """Make a hero figure count from zero to its amount over 900ms (ease out cubic).
+
+    The label already holds the final text, which is what it shows at the end, without
+    JavaScript, and with `prefers-reduced-motion`.
+    """
+    target = json.dumps(milliunits / 1000)
+    ui.run_javascript(
+        "(() => {"
+        "if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;"
+        f"const money = {money_js(currency_format)};"
+        "let tries = 0;"
+        "const start = () => {"
+        f"  const el = document.getElementById('c{label.id}');"
+        "  if (!el) { if (tries++ < 40) setTimeout(start, 25); return; }"
+        "  const final = el.textContent; const t0 = performance.now();"
+        "  const tick = (t) => {"
+        f"    const p = Math.min(1, (t - t0) / {COUNT_UP_MS}); const e = 1 - Math.pow(1 - p, 3);"
+        f"    el.textContent = p < 1 ? money({target} * e) : final;"
+        "    if (p < 1) requestAnimationFrame(tick);"
+        "  };"
+        "  requestAnimationFrame(tick);"
+        "};"
+        "start();"
+        "})()"
+    )
+
+
 def spinner() -> ui.element:
     return ui.element("span").classes("yul-spin")
 
@@ -211,11 +252,13 @@ __all__ = [
     "Segment",
     "button",
     "check",
+    "count_up",
     "empty_state",
     "glass_card",
     "icon",
     "pill",
     "segmented_bar",
+    "share_bar",
     "spinner",
     "stat_tile",
 ]

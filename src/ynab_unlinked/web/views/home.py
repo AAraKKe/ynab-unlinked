@@ -22,7 +22,7 @@ from ynab_unlinked.entities.registry import LoaderSpec
 from ynab_unlinked.store import Activity, Store
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell, theme
-from ynab_unlinked.web.components import PillKind, glass_card, icon, pill, spinner
+from ynab_unlinked.web.components import PillKind, count_up, glass_card, icon, pill, spinner
 from ynab_unlinked.web.components.dropzone import dropzone
 from ynab_unlinked.web.state import state
 
@@ -337,9 +337,8 @@ def _hero(data: HomeData, today: dt.date) -> None:
     card.props["tabindex"] = "0"
     card.on("click", lambda: ui.navigate.to(NETWORTH_PATH))
     card.on("keydown.enter", lambda: ui.navigate.to(NETWORTH_PATH))
-    formatter = state().formatter
-    decimals = formatter.currency_format.decimal_digits if formatter else 2
-    ui.run_javascript(f"window.yulCountUp && yulCountUp('c{figure.id}', {decimals})")
+    config, _ = state().require()
+    count_up(figure, data.net_worth, config.budget.currency_format)
 
 
 def _activity(entries: Sequence[Activity]) -> None:
