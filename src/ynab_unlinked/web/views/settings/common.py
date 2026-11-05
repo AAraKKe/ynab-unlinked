@@ -1,0 +1,33 @@
+"""What every Settings tab uses: the config to read, the key cell of a grid, the accounts."""
+
+from __future__ import annotations
+
+from nicegui import ui
+
+from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.store import StoredAccount
+from ynab_unlinked.web import shell
+from ynab_unlinked.web.state import state
+from ynab_unlinked.web.wording import ynab_error_message
+from ynab_unlinked.web.ynab import fallback_accounts
+
+
+def current_config() -> LatestConfig:
+    """The config as the app holds it, for reading. Changes go through `shell.edit_config`."""
+    config, _ = state().require()
+    return config
+
+
+def kv(key: str) -> None:
+    """The key cell of a `yul-kv` grid row; the value follows it."""
+    ui.label(key).classes("k")
+
+
+async def open_accounts() -> list[StoredAccount]:
+    """The budget's open accounts, or the configured ones when YNAB cannot be reached."""
+    try:
+        accounts = await state().budget_accounts()
+    except Exception as error:
+        shell.notify(ynab_error_message(error), "warn")
+        return fallback_accounts(current_config())
+    return [account for account in accounts if not account.closed]

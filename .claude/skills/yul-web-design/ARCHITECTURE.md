@@ -607,7 +607,15 @@ web/
     import_.py         /import      Files -> Review -> Done on core.detect and core.importing
     reconcile.py       /reconcile   per account cleared vs bank balance, lock (see 3.5)
     networth.py        /networth    history chart, buckets, accounts, balance updates, drawer (see 3.6)
-    settings.py        /settings    connection, banks, accounts, net worth, data & privacy
+    settings/          /settings    one module per tab, each with render(page: Settings):
+      __init__.py      Settings (tab row, panel, rerender()), TABS, RENDERERS, tab_from_slug, the view
+      common.py        current_config(), kv(key), open_accounts() (open budget accounts, the
+                       configured ones when YNAB cannot be reached)
+      connection.py    token (reveal, check and save), budget dialog and switch
+      banks.py         bank cards, bank_summary(), toggle_bank(), bank_dialog(), option_control()
+      accounts.py      AccountCards (the Accounts tab), BY_HAND_HINT
+      networth.py      debt mappings (mapping_row) and adjustment settings, CLEARED_LABELS
+      privacy.py       Data & privacy: what is kept where, resync, reset; token_wording()
 ```
 
 ### 3.1 Running and security
@@ -909,7 +917,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   to the config when the import is confirmed. Files with nothing new are shown in Done but
   not committed or logged. Files dropped during Review restart the flow, and files dropped
   during the commit are turned away with a toast.
-- Settings "Banks" (`views/settings.py`): one card per `LoaderSpec` (`bank_logo`, a switch
+- Settings "Banks" (`views/settings/banks.py`): one card per `LoaderSpec` (`bank_logo`, a switch
   for `LoaderConfig.enabled`, the summary line from `bank_summary()`, a "Settings" button).
   The card is `live` when the bank is on and `off` (muted) otherwise, with no status pill; a
   bank without an entry in `config.loaders` is muted and its summary ("Pick the YNAB account
@@ -920,8 +928,8 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   size)` shows `static/logos/<key>.svg` on a white `size` x `2 * size` tile, or the bank's
   monogram when yul ships no logo for that key. Logos follow the rule in DESIGN.md
   (`viewBox="0 0 120 60"`, padding inside the SVG).
-- Settings "Accounts" (`views/settings.py`, `AccountCards`): a lede (`accounts-lede`) and
-  one card (`account-card-{id}`) per open budget account (`Settings.open_accounts()`, the
+- Settings "Accounts" (`views/settings/accounts.py`, `AccountCards`): a lede (`accounts-lede`) and
+  one card (`account-card-{id}`) per open budget account (`settings.common.open_accounts()`, the
   configured ones when YNAB cannot be reached), in a `yul-section` per bucket
   (`bucket-section-{bucket}`; Cash, Savings, Assets, Debt). Each card starts from
   `accounts.account_settings()` with the name and type of the budget. A card has the name
