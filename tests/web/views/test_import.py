@@ -13,7 +13,7 @@ from ynab import ApiException, TransactionClearedStatus
 
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers import assets
-from tests.helpers.statements import bbva_sheet, write_xls
+from tests.helpers.statements import bbva_sheet, sabadell_statement, write_xls
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.context_object import YnabUnlinkedContext
@@ -176,6 +176,30 @@ async def test_statements_are_detected_reviewed_and_imported(
     assert logged == [
         ("Imported 2 transactions to 💳 Maxima from tarjeta_maxima.xlsx", "bbva", 2, 1, 0),
         ("Imported 2 transactions to 💳 Oro from movements.txt", "sabadell", 2, 0, 1),
+    ]
+
+
+async def test_two_files_for_one_account_do_not_collide_on_a_same_day_same_amount_row(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, tmp_path: Path
+):
+    # Numbered per file, both rows were :1 and YNAB rejected the second as already imported
+    statements = []
+    for name, payee in (("first.txt", "LUNCH"), ("second.txt", "DINNER")):
+        statement = tmp_path / name
+        statement.write_text(sabadell_statement([f"01/01|{payee}|MADRID|12,34EUR"]), "cp1252")
+        statements.append(statement)
+
+    await drop(user, *statements)
+    await user.should_see("1 new / 1", marker="count-2", retries=30)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+
+    await user.should_see("2 transactions imported", retries=30)
+    # 1 January, the one day of the year the statement is never moved back a year
+    year = dt.date.today().year
+    assert [t.import_id for t in created(ynab)[ORO]] == [
+        f"YNAB:-12340:{year}-01-01:1",
+        f"YNAB:-12340:{year}-01-01:2",
     ]
 
 

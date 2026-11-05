@@ -13,6 +13,7 @@ from ynab_unlinked.core.importing import (
     ImportResult,
     build_import_plan,
     commit_import_plan,
+    share_import_ids,
 )
 from ynab_unlinked.models import PendingImport, Transaction, assign_import_ids
 from ynab_unlinked.ynab_api import Client
@@ -161,3 +162,80 @@ def test_commit_import_plan_with_nothing_new_never_reaches_ynab(
 
     assert result == ImportResult(created=0, duplicate_import_ids=())
     ynab_api.api("transactions").create_transaction.assert_not_called()
+
+
+OTHER_ACCOUNT_ID = "00000000-0000-0000-0000-00000000000b"
+LUNCH = TransactionFactory(date=dt.date(2025, 5, 12), payee="Lunch", amount=-12.34)
+LUNCH_ID = "YNAB:-12340:2025-05-12"
+
+
+def planned(
+    client: Client, account_id: str, transactions: list[Transaction], name: str
+) -> ImportPlan:
+    return build_import_plan(
+        client,
+        budget_id=BUDGET_ID,
+        account_id=account_id,
+        entity_name="test",
+        input_file=Path(name),
+        transactions=transactions,
+    )
+
+
+@pytest.mark.parametrize(
+    ("held_by_ynab", "second_account", "expected"),
+    [
+        pytest.param(
+            [],
+            ACCOUNT_ID,
+            [[(f"{LUNCH_ID}:1", False)], [(f"{LUNCH_ID}:2", False)]],
+            id="numbered-as-one-file-for-one-account",
+        ),
+        pytest.param(
+            [f"{LUNCH_ID}:1"],
+            ACCOUNT_ID,
+            [[(f"{LUNCH_ID}:1", True)], [(f"{LUNCH_ID}:2", False)]],
+            id="the-first-file-was-imported-before",
+        ),
+        pytest.param(
+            [],
+            OTHER_ACCOUNT_ID,
+            [[(f"{LUNCH_ID}:1", False)], [(f"{LUNCH_ID}:1", False)]],
+            id="each-account-numbers-its-own",
+        ),
+    ],
+)
+def test_share_import_ids_numbers_the_files_of_an_account_together(
+    client: Client,
+    ynab_api: YnabClientStub,
+    held_by_ynab: list[str],
+    second_account: str,
+    expected: list[list[tuple[str, bool]]],
+):
+    ynab_holds(ynab_api, held_by_ynab)
+    plans = [
+        planned(client, ACCOUNT_ID, [LUNCH], "cobee.html"),
+        planned(client, second_account, [COFFEE], "card.xls"),
+    ]
+
+    shared = share_import_ids(plans)
+
+    assert [[(r.import_id, r.already_imported) for r in plan.rows] for plan in shared] == expected
+    assert [plan.input_file for plan in shared] == [Path("cobee.html"), Path("card.xls")]
+
+
+def test_sharing_import_ids_again_after_a_file_is_dropped_numbers_it_alone(
+    client: Client, ynab_api: YnabClientStub
+):
+    # The web app shares the ids each time the review opens, with the files still in it
+    ynab_holds(ynab_api, [])
+    first, second = share_import_ids(
+        [
+            planned(client, ACCOUNT_ID, [LUNCH], "cobee.html"),
+            planned(client, ACCOUNT_ID, [COFFEE], "card.xls"),
+        ]
+    )
+
+    [alone] = share_import_ids([second])
+
+    assert [row.import_id for row in alone.rows] == [f"{LUNCH_ID}:1"]

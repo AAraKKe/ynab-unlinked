@@ -223,7 +223,8 @@ def test_nothing_is_asked_when_every_transaction_is_already_in_ynab(
             kwargs["entity_name"],
             kwargs["account_id"],
             kwargs["input_file"],
-            (ImportRowFactory(already_imported=True),),
+            (row := ImportRowFactory(already_imported=True),),
+            known_import_ids=frozenset({row.import_id}),
         ),
     )
     confirm = mocker.spy(display, "confirm")
@@ -264,3 +265,26 @@ def test_each_imported_file_is_noted_in_the_activity_log(
         ("cobee", OTHER_ACCOUNT_ID, Path(COBEE).name, 2),
         ("sabadell", ACCOUNT_ID, Path(SABADELL).name, 3),
     ]
+
+
+def test_two_files_for_one_account_do_not_collide_on_a_same_day_same_amount_row(
+    tmp_path: Path, yul: CliRunner, accounts, ynab: YnabClientStub
+):
+    # Numbered per file, both rows were YNAB:-34800:2025-05-15:1 and YNAB rejected the second
+    first, second = tmp_path / "first.html", tmp_path / "second.html"
+    first.write_text(
+        cobee_export(["Transacciones", "15 May 2025", "Restaurante Botin", "-34.80 €"])
+    )
+    second.write_text(
+        cobee_export(["Transacciones", "15 May 2025", "Cafeteria Lolina", "-34.80 €"])
+    )
+
+    result = yul("load", "--yes", "auto", str(first), str(second), env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    import_ids = [
+        transaction.import_id
+        for call in ynab.api("transactions").create_transaction.call_args_list
+        for transaction in call.kwargs["data"].transactions
+    ]
+    assert import_ids == ["YNAB:-34800:2025-05-15:1", "YNAB:-34800:2025-05-15:2"]

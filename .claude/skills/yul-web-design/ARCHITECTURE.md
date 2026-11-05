@@ -85,6 +85,7 @@ class ImportPlan:
     account_id: str
     input_file: Path
     rows: tuple[ImportRow, ...]
+    known_import_ids: frozenset[str] = frozenset()   # what YNAB held for the account
 
     @property
     def new_rows(self) -> tuple[ImportRow, ...]: ...
@@ -107,6 +108,12 @@ def build_import_plan(
     # assigns import ids (models.assign_import_ids), fetches YNAB transactions for the
     # account since min(date) - buffer, marks already_imported by import_id or legacy id.
     # An empty `transactions` returns a plan with no rows without calling YNAB.
+
+def share_import_ids(plans: Sequence[ImportPlan]) -> list[ImportPlan]
+    # same plans, same order, import ids numbered over every file of one account, so two
+    # files with a same day, same amount row get :1 and :2 instead of both :1. No YNAB call:
+    # already_imported is recomputed from known_import_ids. `yul load auto` calls it on all
+    # its plans, the web import view each time the review opens.
 
 def commit_import_plan(
     client: Client, budget_id: str, plan: ImportPlan, cleared: TransactionClearedStatus,
@@ -268,7 +275,7 @@ transactions, account), and stops with exit 1 before importing anything if a fil
 supported, not recognised, unreadable or ambiguous. Otherwise it is built on
 `core.importing`, not `process_transactions`: it resolves the account of every file first
 (`process.get_or_prompt_account_id`, so `-a` asks once per file), parses each file with
-`parse_transactions` and builds every `ImportPlan`, prints one import table per file, then
+`parse_transactions` and builds every `ImportPlan` (then `share_import_ids`), prints one import table per file, then
 asks ONE confirmation for the whole batch ("Create N transactions from M files in YNAB?"),
 commits every plan and prints one summary: duplicates YNAB rejected and transactions created
 per account (named from `config.accounts` when known, else the id). Nothing is asked when no

@@ -32,6 +32,7 @@ from ynab_unlinked.core.importing import (
     build_import_plan,
     commit_import_plan,
     parse_transactions,
+    share_import_ids,
 )
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec, loaders
 from ynab_unlinked.formatter import Formatter
@@ -744,6 +745,11 @@ class ImportFlow:
         ready = self.ready
         if not ready or any(item.blocking for item in self.files):
             return
+        # Files for one account are numbered as one, or their identical rows would collide
+        planned = [(item, item.plan) for item in ready if item.plan is not None]
+        shared = share_import_ids([plan for _, plan in planned])
+        for (item, _), plan in zip(planned, shared, strict=True):
+            item.plan = plan
         self.set_step(1)
         assert self.content is not None
         self.content.clear()
