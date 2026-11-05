@@ -29,7 +29,7 @@ from ynab_unlinked.core.importing import (
     ImportResult,
     build_import_plan,
     commit_import_plan,
-    share_import_ids,
+    file_digest,
 )
 from ynab_unlinked.entities.registry import loaders
 from ynab_unlinked.formatter import Formatter
@@ -55,6 +55,7 @@ from ynab_unlinked.web.views.import_.data import (
     parse_file,
     preferred_options,
     problem_text,
+    same_file,
 )
 from ynab_unlinked.web.views.import_.rows import draw_row
 from ynab_unlinked.web.wording import plural, ynab_error_message
@@ -156,7 +157,12 @@ class ImportFlow:
             name = Path(upload.name).name or "statement"
             path = Path(self.tempdir.name) / str(key) / name
             await upload.save(path)
-            added.append(ImportFile(key=key, name=name, size=upload.size(), path=path))
+            item = ImportFile(key=key, name=name, size=upload.size(), path=path)
+            item.digest = await run.io_bound(file_digest, path) or ""
+            if (first := same_file(item, [*self.files, *added])) is not None:
+                item.status = Status.UNSUPPORTED
+                item.problem = f"Already in this import as {first.name}"
+            added.append(item)
 
         first = not self.files
         self.files.extend(added)
@@ -164,6 +170,8 @@ class ImportFlow:
             self.draw_drop_area()
         for item in added:
             self.add_row(item)
+            if item.status is Status.UNSUPPORTED:
+                continue
             # NiceGUI returns the task as a bare `asyncio.Task`
             background_tasks.create(self.detect(item), name=f"yul detect {item.name}")  # pyright: ignore[reportUnknownMemberType]
         self.draw_footer()
@@ -388,11 +396,6 @@ class ImportFlow:
         ready = self.ready
         if not ready or any(item.blocking for item in self.files):
             return
-        # Files for one account are numbered as one, or their identical rows would collide
-        planned = [(item, item.plan) for item in ready if item.plan is not None]
-        shared = share_import_ids([plan for _, plan in planned])
-        for (item, _), plan in zip(planned, shared, strict=True):
-            item.plan = plan
         self.set_step(1)
         assert self.content is not None
         self.content.clear()

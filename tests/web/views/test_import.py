@@ -13,7 +13,7 @@ from ynab import ApiException, TransactionClearedStatus
 
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers import assets
-from tests.helpers.statements import bbva_sheet, sabadell_statement, write_xls
+from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, LoaderConfig
@@ -186,28 +186,20 @@ async def test_statements_are_detected_reviewed_and_imported(
     ]
 
 
-async def test_two_files_for_one_account_do_not_collide_on_a_same_day_same_amount_row(
+async def test_a_file_dropped_twice_is_imported_once(
     accounts: LatestConfig, ynab: YnabClientStub, user: User, tmp_path: Path
 ):
-    # Numbered per file, both rows were :1 and YNAB rejected the second as already imported
-    statements = []
-    for name, payee in (("first.txt", "LUNCH"), ("second.txt", "DINNER")):
-        statement = tmp_path / name
-        statement.write_text(sabadell_statement([f"01/01|{payee}|MADRID|12,34EUR"]), "cp1252")
-        statements.append(statement)
+    copy = tmp_path / "copy.txt"
+    copy.write_bytes(SABADELL.read_bytes())
 
-    await drop(user, *statements)
-    await user.should_see("1 new / 1", marker="count-2", retries=30)
+    await drop(user, SABADELL, copy)
+    await user.should_see("Already in this import as movements.txt", marker="problem-2")
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
     user.find(marker="review").click()
     user.find(marker="import").click()
 
-    await user.should_see("2 transactions imported", retries=30)
-    # 1 January, the one day of the year the statement is never moved back a year
-    year = dt.date.today().year
-    assert [t.import_id for t in created(ynab)[ORO]] == [
-        f"YNAB:-12340:{year}-01-01:1",
-        f"YNAB:-12340:{year}-01-01:2",
-    ]
+    await user.should_see("3 transactions imported", retries=30)
+    assert len(ynab.api("transactions").create_transaction.call_args_list) == 1
 
 
 async def test_import_as_reconciled_sends_reconciled_transactions(

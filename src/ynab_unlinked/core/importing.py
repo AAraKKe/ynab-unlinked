@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 from collections.abc import Sequence
-from dataclasses import dataclass, field, replace
-from itertools import islice
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -31,8 +31,6 @@ class ImportPlan:
     account_id: str
     input_file: Path
     rows: tuple[ImportRow, ...]
-    known_import_ids: frozenset[str] = field(default=frozenset(), repr=False)
-    """The import ids YNAB held for the account when the plan was built."""
 
     @property
     def new_rows(self) -> tuple[ImportRow, ...]:
@@ -47,6 +45,31 @@ class ImportPlan:
 class ImportResult:
     created: int
     duplicate_import_ids: tuple[str, ...]
+
+
+def file_digest(input_file: Path) -> str:
+    """The SHA-256 of the file's bytes: two copies of one export have the same digest."""
+    return hashlib.sha256(input_file.read_bytes()).hexdigest()
+
+
+def unique_files(files: Sequence[Path]) -> tuple[list[Path], list[tuple[Path, Path]]]:
+    """
+    The files, each export once, and the (copy, first) pairs of the ones left out.
+
+    A second copy would show every row as new again and only be turned away by YNAB, as
+    duplicates, once the first copy is in.
+    """
+    seen: dict[str, Path] = {}
+    unique: list[Path] = []
+    copies: list[tuple[Path, Path]] = []
+    for input_file in files:
+        digest = file_digest(input_file)
+        if (first := seen.get(digest)) is not None:
+            copies.append((input_file, first))
+            continue
+        seen[digest] = input_file
+        unique.append(input_file)
+    return unique, copies
 
 
 def parse_transactions(
@@ -87,36 +110,7 @@ def build_import_plan(
     progress.done("Transactions read")
 
     known_ids = frozenset(t.import_id for t in ynab_transactions if t.import_id is not None)
-    return ImportPlan(entity_name, account_id, input_file, _rows(pending, known_ids), known_ids)
-
-
-def share_import_ids(plans: Sequence[ImportPlan]) -> list[ImportPlan]:
-    """
-    The plans, in the same order, with the import ids numbered over every file of an account.
-
-    Import ids count the occurrence of a date and amount (`YNAB:-5000:2025-05-01:1`). Two
-    files that feed one account in the same import (a Cobee page and a card statement) would
-    each number a same day, same amount row `:1`, and YNAB would reject the second one as
-    already imported. Numbered as if the files were one, they are `:1` and `:2`.
-    """
-    groups: dict[str, list[ImportPlan]] = {}
-    for plan in plans:
-        groups.setdefault(plan.account_id, []).append(plan)
-
-    shared: dict[int, ImportPlan] = {}
-    for group in groups.values():
-        known = frozenset[str]().union(*(plan.known_import_ids for plan in group))
-        union = iter(assign_import_ids([row.transaction for plan in group for row in plan.rows]))
-        for plan in group:
-            # Legacy ids were numbered per file, keep reading them that way
-            legacy = assign_import_ids([row.transaction for row in plan.rows])
-            pending = [
-                replace(own, import_id=numbered.import_id)
-                for own, numbered in zip(legacy, islice(union, len(plan.rows)), strict=True)
-            ]
-            shared[id(plan)] = replace(plan, rows=_rows(pending, known), known_import_ids=known)
-
-    return [shared[id(plan)] for plan in plans]
+    return ImportPlan(entity_name, account_id, input_file, _rows(pending, known_ids))
 
 
 def _rows(pending: Sequence[PendingImport], known_ids: frozenset[str]) -> tuple[ImportRow, ...]:

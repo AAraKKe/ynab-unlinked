@@ -60,6 +60,8 @@ class ImportFile:
     """Picked on the row: saved to the config when the import is confirmed."""
     plan: ImportPlan | None = None
     problem: str | None = None
+    digest: str = ""
+    """SHA-256 of the bytes, to take a file dropped twice once."""
     open: bool = False
     version: int = 0
     """Bumped on every change, so an answer for an older state is dropped."""
@@ -75,6 +77,18 @@ class ImportFile:
 
 def file_color(suffix: str) -> str:
     return FILE_COLORS.get(suffix, OTHER_FILE_COLOR)
+
+
+def same_file(item: ImportFile, others: Sequence[ImportFile]) -> ImportFile | None:
+    """The file already in the import with the same bytes as `item`, if any."""
+    return next(
+        (
+            other
+            for other in others
+            if other is not item and other.digest and other.digest == item.digest
+        ),
+        None,
+    )
 
 
 def problem_text(detection: Detection, specs: Sequence[LoaderSpec]) -> str:
@@ -167,4 +181,5 @@ __all__ = [
     "parse_file",
     "preferred_options",
     "problem_text",
+    "same_file",
 ]

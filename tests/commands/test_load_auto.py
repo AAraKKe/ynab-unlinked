@@ -223,8 +223,7 @@ def test_nothing_is_asked_when_every_transaction_is_already_in_ynab(
             kwargs["entity_name"],
             kwargs["account_id"],
             kwargs["input_file"],
-            (row := ImportRowFactory(already_imported=True),),
-            known_import_ids=frozenset({row.import_id}),
+            (ImportRowFactory(already_imported=True),),
         ),
     )
     confirm = mocker.spy(display, "confirm")
@@ -267,24 +266,53 @@ def test_each_imported_file_is_noted_in_the_activity_log(
     ]
 
 
-def test_two_files_for_one_account_do_not_collide_on_a_same_day_same_amount_row(
+def sent_import_ids(ynab: YnabClientStub) -> list[list[str]]:
+    """The import ids of every create request, one list per file."""
+    return [
+        [transaction.import_id for transaction in call.kwargs["data"].transactions]
+        for call in ynab.api("transactions").create_transaction.call_args_list
+    ]
+
+
+def test_overlapping_exports_of_one_bank_send_the_shared_row_under_the_same_id(
     tmp_path: Path, yul: CliRunner, accounts, ynab: YnabClientStub
 ):
-    # Numbered per file, both rows were YNAB:-34800:2025-05-15:1 and YNAB rejected the second
+    # Numbered over both files the shared row was :1 and :2, and YNAB created it twice
     first, second = tmp_path / "first.html", tmp_path / "second.html"
     first.write_text(
         cobee_export(["Transacciones", "15 May 2025", "Restaurante Botin", "-34.80 €"])
     )
     second.write_text(
-        cobee_export(["Transacciones", "15 May 2025", "Cafeteria Lolina", "-34.80 €"])
+        cobee_export(
+            [
+                "Transacciones",
+                "16 May 2025",
+                "Cafeteria Lolina",
+                "-2.10 €",
+                "15 May 2025",
+                "Restaurante Botin",
+                "-34.80 €",
+            ]
+        )
     )
 
     result = yul("load", "--yes", "auto", str(first), str(second), env=WIDE)
 
     assert result.exit_code == 0, result.output
-    import_ids = [
-        transaction.import_id
-        for call in ynab.api("transactions").create_transaction.call_args_list
-        for transaction in call.kwargs["data"].transactions
+    assert sent_import_ids(ynab) == [
+        ["YNAB:-34800:2025-05-15:1"],
+        ["YNAB:-2100:2025-05-16:1", "YNAB:-34800:2025-05-15:1"],
     ]
-    assert import_ids == ["YNAB:-34800:2025-05-15:1", "YNAB:-34800:2025-05-15:2"]
+
+
+def test_the_same_file_given_twice_is_imported_once(
+    tmp_path: Path, yul: CliRunner, accounts, ynab: YnabClientStub
+):
+    copy = tmp_path / "copy.html"
+    copy.write_bytes(Path(COBEE).read_bytes())
+
+    result = yul("load", "--yes", "auto", COBEE, str(copy), env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert "copy.html: same file as transactions.html, imported once" in result.output
+    assert created(ynab) == {OTHER_ACCOUNT_ID: ["Restaurante Botin", "Cafeteria Lolina"]}

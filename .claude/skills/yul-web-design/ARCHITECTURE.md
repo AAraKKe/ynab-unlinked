@@ -87,7 +87,6 @@ class ImportPlan:
     account_id: str
     input_file: Path
     rows: tuple[ImportRow, ...]
-    known_import_ids: frozenset[str] = frozenset()   # what YNAB held for the account
 
     @property
     def new_rows(self) -> tuple[ImportRow, ...]: ...
@@ -111,11 +110,12 @@ def build_import_plan(
     # account since min(date) - buffer, marks already_imported by import_id or legacy id.
     # An empty `transactions` returns a plan with no rows without calling YNAB.
 
-def share_import_ids(plans: Sequence[ImportPlan]) -> list[ImportPlan]
-    # same plans, same order, import ids numbered over every file of one account, so two
-    # files with a same day, same amount row get :1 and :2 instead of both :1. No YNAB call:
-    # already_imported is recomputed from known_import_ids. `yul load auto` calls it on all
-    # its plans, the web import view each time the review opens.
+def file_digest(input_file: Path) -> str            # SHA-256 of the bytes
+def unique_files(files: Sequence[Path]) -> tuple[list[Path], list[tuple[Path, Path]]]
+    # each export once, plus (copy, first) for the byte identical ones left out.
+    # Import ids are numbered per file (YNAB's own scheme), so an export that overlaps an
+    # imported one gives its shared rows the same ids and YNAB rejects them; a second copy
+    # in one batch would only be rejected once the first is in, so both frontends drop it.
 
 def commit_import_plan(
     client: Client, budget_id: str, plan: ImportPlan, cleared: TransactionClearedStatus,
@@ -272,12 +272,13 @@ true when more than one candidate parsed and none is clearly ahead. A file with 
 candidates (unsupported suffix, or nothing sniffed above the threshold) and a file whose
 candidates all failed to parse have `best is None` and `ambiguous is False`.
 
-CLI: `yul load auto <files...>` runs detection, prints a table (file, loader, confidence,
+CLI: `yul load auto <files...>` takes each file once (`unique_files`, a warning line per
+copy left out), runs detection, prints a table (file, loader, confidence,
 transactions, account), and stops with exit 1 before importing anything if a file is not
 supported, not recognised, unreadable or ambiguous. Otherwise it is built on
 `core.importing`, not `process_transactions`: it resolves the account of every file first
 (`process.get_or_prompt_account_id`, so `-a` asks once per file), parses each file with
-`parse_transactions` and builds every `ImportPlan` (then `share_import_ids`), prints one import table per file, then
+`parse_transactions` and builds every `ImportPlan`, prints one import table per file, then
 asks ONE confirmation for the whole batch ("Create N transactions from M files in YNAB?"),
 commits every plan and prints one summary: duplicates YNAB rejected and transactions created
 per account (named from `config.accounts` when known, else the id). Nothing is asked when no
@@ -651,7 +652,7 @@ web/
                        message_markup, Attention, attention_items
       view.py          the page (hero with count_up, spark_options, activity, banner)
     import_/           /import      Files -> Review -> Done on core.detect and core.importing
-      data.py          Status, ImportFile, problem_text, option_choices, preferred_options,
+      data.py          Status, ImportFile, same_file, problem_text, option_choices, preferred_options,
                        parse_file, chosen_accounts, done_summary, import_log
       view.py          ImportFlow (lifecycle, detection, the three steps, commit) and the view
       rows.py          draw_row(flow, item): a file row of step Files and its body
@@ -982,7 +983,9 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
   discard.
 - Import (`views/import_/`) keeps one `ImportFlow` per tab. Its temporary directory goes
   when the commit ends, on "Import more", when the last file is removed, when the view is
-  opened again, or when the client is deleted. Each file is detected on its own
+  opened again, or when the client is deleted. A file with the same bytes as one already in
+  the flow (`ImportFile.digest`, `data.same_file`) is unsupported with "Already in this
+  import as <name>" and never detected. Each file is detected on its own
   (`detect_loaders([path])` through `io_bound`). A non `auto` option saved for the loader in
   the config wins over the detected value (the file is parsed again with it). Every option
   of the loader gets a select on the row, starting from the resolved value, so the saved

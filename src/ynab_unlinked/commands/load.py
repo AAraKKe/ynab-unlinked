@@ -108,16 +108,16 @@ def auto(
 
     from ynab_unlinked.activity import log_import
     from ynab_unlinked.core.detect import detect_loaders
-    from ynab_unlinked.core.importing import (
-        build_import_plan,
-        commit_import_plan,
-        share_import_ids,
-    )
+    from ynab_unlinked.core.importing import build_import_plan, commit_import_plan, unique_files
     from ynab_unlinked.process import get_or_prompt_account_id
     from ynab_unlinked.utils import display_import_table, display_transaction_table
     from ynab_unlinked.ynab_api.client import Client
 
     ctx: YnabUnlinkedContext[Any] = context.obj
+
+    files, copies = unique_files(files)
+    for copy, first in copies:
+        display.warning(f"{copy.name}: same file as {first.name}, imported once")
 
     with display.process("Finding the bank of each file..."):
         detections = detect_loaders(files, ctx)
@@ -187,9 +187,6 @@ def auto(
                     progress=progress,
                 )
             )
-
-    # Two files for one account are numbered as one, or their identical rows would collide
-    plans = share_import_ids(plans)
 
     for plan, (input_file, candidate) in zip(plans, chosen, strict=True):
         display.console().rule(f"{input_file.name}: {candidate.loader.title}")

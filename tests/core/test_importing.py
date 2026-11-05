@@ -13,7 +13,7 @@ from ynab_unlinked.core.importing import (
     ImportResult,
     build_import_plan,
     commit_import_plan,
-    share_import_ids,
+    unique_files,
 )
 from ynab_unlinked.models import PendingImport, Transaction, assign_import_ids
 from ynab_unlinked.ynab_api import Client
@@ -182,60 +182,30 @@ def planned(
     )
 
 
-@pytest.mark.parametrize(
-    ("held_by_ynab", "second_account", "expected"),
-    [
-        pytest.param(
-            [],
-            ACCOUNT_ID,
-            [[(f"{LUNCH_ID}:1", False)], [(f"{LUNCH_ID}:2", False)]],
-            id="numbered-as-one-file-for-one-account",
-        ),
-        pytest.param(
-            [f"{LUNCH_ID}:1"],
-            ACCOUNT_ID,
-            [[(f"{LUNCH_ID}:1", True)], [(f"{LUNCH_ID}:2", False)]],
-            id="the-first-file-was-imported-before",
-        ),
-        pytest.param(
-            [],
-            OTHER_ACCOUNT_ID,
-            [[(f"{LUNCH_ID}:1", False)], [(f"{LUNCH_ID}:1", False)]],
-            id="each-account-numbers-its-own",
-        ),
-    ],
-)
-def test_share_import_ids_numbers_the_files_of_an_account_together(
-    client: Client,
-    ynab_api: YnabClientStub,
-    held_by_ynab: list[str],
-    second_account: str,
-    expected: list[list[tuple[str, bool]]],
-):
-    ynab_holds(ynab_api, held_by_ynab)
-    plans = [
-        planned(client, ACCOUNT_ID, [LUNCH], "cobee.html"),
-        planned(client, second_account, [COFFEE], "card.xls"),
-    ]
-
-    shared = share_import_ids(plans)
-
-    assert [[(r.import_id, r.already_imported) for r in plan.rows] for plan in shared] == expected
-    assert [plan.input_file for plan in shared] == [Path("cobee.html"), Path("card.xls")]
-
-
-def test_sharing_import_ids_again_after_a_file_is_dropped_numbers_it_alone(
+def test_an_export_overlapping_an_imported_one_finds_the_rows_they_share(
     client: Client, ynab_api: YnabClientStub
 ):
-    # The web app shares the ids each time the review opens, with the files still in it
+    # Numbered over both files, February's Lunch and Coffee were :3 and :4, created twice
     ynab_holds(ynab_api, [])
-    first, second = share_import_ids(
-        [
-            planned(client, ACCOUNT_ID, [LUNCH], "cobee.html"),
-            planned(client, ACCOUNT_ID, [COFFEE], "card.xls"),
-        ]
-    )
+    january = planned(client, ACCOUNT_ID, [LUNCH, COFFEE], "january.xls")
+    ynab_holds(ynab_api, [row.import_id for row in january.rows])
 
-    [alone] = share_import_ids([second])
+    february = planned(client, ACCOUNT_ID, [LUNCH, COFFEE, BAKERY], "february.xls")
 
-    assert [row.import_id for row in alone.rows] == [f"{LUNCH_ID}:1"]
+    assert [(row.import_id, row.already_imported) for row in february.rows] == [
+        (f"{LUNCH_ID}:1", True),
+        (f"{LUNCH_ID}:2", True),
+        ("YNAB:-5000:2025-05-14:1", False),
+    ]
+
+
+def test_unique_files_takes_each_export_once(tmp_path: Path):
+    january, copy, february = (tmp_path / name for name in ("jan.txt", "copy.txt", "feb.txt"))
+    january.write_text("01/05|LUNCH|12,34EUR")
+    copy.write_text("01/05|LUNCH|12,34EUR")
+    february.write_text("01/06|LUNCH|12,34EUR")
+
+    unique, copies = unique_files([january, copy, february, january])
+
+    assert unique == [january, february]
+    assert copies == [(copy, january), (january, january)]
