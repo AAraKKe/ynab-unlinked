@@ -146,7 +146,10 @@ async def test_a_sync_that_removes_merged_ghosts_says_so_in_the_log(
     budget_id = state().require()[0].budget.id
     # Both exist at first: a match the user has not approved yet
     Store(store_file).sync(state().require()[1], budget_id)
-    api.get_transactions.return_value.data.transactions = []
+    # The user approves the match: the delta brings the manual one, the import is gone
+    api.get_transactions.return_value.data.transactions = [
+        TransactionDetailFactory(id="manual", import_id="YNAB:-12900:2026-11-01:1"),
+    ]
 
     def get_transaction_by_id(plan_id: str, transaction_id: str) -> None:
         if transaction_id == "imported":
@@ -157,11 +160,11 @@ async def test_a_sync_that_removes_merged_ghosts_says_so_in_the_log(
 
     user.find(marker="sync-chip").click()
 
-    await user.should_see("0 changes pulled from YNAB", retries=20)
+    await user.should_see("1 change pulled from YNAB", retries=20)
     assert [(a.message, a.details) for a in Store(store_file).activity(budget_id)] == [
         (
-            "Synced · 0 changes from YNAB · 1 stale removed",
-            {"changes": 0, "full": False, "ghosts": 1},
+            "Synced · 1 change from YNAB · 1 stale removed",
+            {"changes": 1, "full": False, "ghosts": 1},
         )
     ]
 
