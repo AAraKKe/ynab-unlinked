@@ -339,61 +339,6 @@ class Store:
             else:
                 conn.execute(f"DELETE FROM {table} WHERE budget_id = ?", (budget_id,))
 
-    def upsert(
-        self,
-        budget_id: str,
-        *,
-        accounts: Iterable[StoredAccount] = (),
-        transactions: Iterable[StoredTransaction] = (),
-    ) -> None:
-        """Insert or replace accounts and transactions, matched by id, in one transaction.
-
-        For writes yul made to YNAB itself (so the store reflects them before the next sync)
-        and for tests. The sync state is left alone: the next delta sync still sends them.
-        """
-        with self._connect() as conn:
-            conn.executemany(
-                "INSERT OR REPLACE INTO accounts (budget_id, id, name, type, closed, on_budget, "
-                "balance, cleared_balance, uncleared_balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [
-                    (
-                        budget_id,
-                        a.id,
-                        a.name,
-                        a.type,
-                        a.closed,
-                        a.on_budget,
-                        a.balance,
-                        a.cleared_balance,
-                        a.uncleared_balance,
-                    )
-                    for a in accounts
-                ],
-            )
-            conn.executemany(
-                "INSERT OR REPLACE INTO transactions (budget_id, id, account_id, date, amount, "
-                "cleared, approved, deleted, payee_name, category_name, import_id, memo, "
-                "transfer_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [
-                    (
-                        budget_id,
-                        t.id,
-                        t.account_id,
-                        t.date.isoformat(),
-                        t.amount,
-                        t.cleared.value,
-                        t.approved,
-                        t.deleted,
-                        t.payee_name,
-                        t.category_name,
-                        t.import_id,
-                        t.memo,
-                        t.transfer_account_id,
-                    )
-                    for t in transactions
-                ],
-            )
-
     def accounts(self, budget_id: str) -> list[StoredAccount]:
         """Every account of the budget, closed ones included, sorted by name."""
         with self._connect() as conn:

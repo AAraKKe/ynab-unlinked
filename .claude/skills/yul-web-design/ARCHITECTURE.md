@@ -470,11 +470,6 @@ class Store:
     def activity(self, budget_id: str, limit: int | None = 20, *,
                  kind: str | None = None) -> list[Activity]
         # newest first; limit None = all; kind keeps one kind only
-    def upsert(self, budget_id: str, *, accounts: Iterable[StoredAccount] = (),
-               transactions: Iterable[StoredTransaction] = ()) -> None
-        # insert or replace by id in one transaction; sync state untouched, so the next delta
-        # sync still brings the rows. For writes yul just made to YNAB (reconcile, import,
-        # adjustments: reflect them before the next sync) and to seed tests
     def daily_amounts(self, budget_id: str,
                       account_ids: Iterable[str] | None = None) -> dict[str, DailyAmounts]
         # per account: its stored balance and the sum of its non deleted transactions per
@@ -551,7 +546,7 @@ History as built:
   (as in `net_worth`). Account series hold balances after netting, debt accounts keep their
   raw balance; the `"debt"` key is the sum of the raw debt balances.
 - History tests fill the store through `Store.sync` with the `ynab_api` stub (`populate`
-  fixture in `tests/core/test_history.py`). Web view tests seed it with `Store.upsert` and
+  fixture in `tests/core/test_history.py`). Web view tests seed it with `tests.helpers.store.upsert` and
   `Store.log(..., at=...)` after one empty `Store.sync` (so `last_sync` is set); see the
   `store` fixture in `tests/web/views/test_home.py`.
 

@@ -4,7 +4,6 @@ import stat
 import uuid
 from collections.abc import Sequence
 from contextlib import closing
-from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -651,42 +650,3 @@ def test_activity_filters_by_kind_and_orders_backdated_entries_by_time(store: St
     assert [a.message for a in imports] == ["recent", "oldest", "older"]
     assert imports[2].at == dt.datetime(2025, 5, 1, 21, 30, tzinfo=dt.UTC)
     assert [a.message for a in store.activity(BUDGET_ID, limit=1, kind="sync")] == ["not an import"]
-
-
-def test_upsert_replaces_rows_by_id_and_leaves_the_sync_state_alone(store: Store):
-    account = StoredAccount(
-        id="checking",
-        name="Checking",
-        type="checking",
-        closed=False,
-        on_budget=True,
-        balance=1000,
-        cleared_balance=1000,
-        uncleared_balance=0,
-    )
-    transaction = StoredTransaction(
-        id="t1",
-        account_id="checking",
-        date=dt.date(2025, 5, 1),
-        amount=1000,
-        cleared=UNCLEARED,
-        approved=True,
-        deleted=False,
-        payee_name="Shop",
-        category_name=None,
-        import_id=None,
-        memo=None,
-        transfer_account_id=None,
-    )
-    store.upsert(BUDGET_ID, accounts=[account], transactions=[transaction])
-
-    store.upsert(
-        BUDGET_ID,
-        accounts=[replace(account, balance=2000)],
-        transactions=[replace(transaction, cleared=RECONCILED)],
-    )
-
-    assert store.accounts(BUDGET_ID) == [replace(account, balance=2000)]
-    assert store.transactions(BUDGET_ID) == [replace(transaction, cleared=RECONCILED)]
-    assert store.accounts(OTHER_BUDGET_ID) == []
-    assert store.last_sync(BUDGET_ID) is None

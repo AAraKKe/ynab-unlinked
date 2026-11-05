@@ -101,7 +101,7 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
   (`tests/helpers/web.py`) wraps NiceGUI's global reset, which otherwise unloads
   `ynab_unlinked` from `sys.modules`.
 - `store_file` (root conftest, autouse) points `store_path()` into `tmp_path`. Seed the store
-  with `Store.upsert` and `Store.log(..., at=...)` after one empty `Store.sync` so
+  with `tests.helpers.store.upsert` and `Store.log(..., at=...)` after one empty `Store.sync` so
   `last_sync` is set (the `store` fixture in `tests/web/views/test_home.py`), or through
   `Store.sync` with the `ynab_api` stub answering (`serve()` in `test_networth.py`).
 - `nicegui.testing.user_plugin` is loaded in the root conftest and `pytest-asyncio` runs with

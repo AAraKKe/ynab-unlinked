@@ -11,6 +11,7 @@ from nicegui.testing.user import User
 from pytest_mock import MockerFixture
 from ynab import TransactionClearedStatus
 
+from tests.helpers.store import upsert
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import DebtMapping, LatestConfig, TrackedAccount
@@ -117,7 +118,8 @@ def store(
     store = Store(store_file)
     store.sync(Client(api_key="an-api-key"), budget.budget.id)
 
-    store.upsert(
+    upsert(
+        store,
         budget.budget.id,
         accounts=[
             account("checking", 1_000_000),
@@ -184,7 +186,8 @@ async def test_the_hero_opens_net_worth(store: Store, user: User):
 
 
 def unreconciled(store: Store, budget_id: str) -> None:
-    store.upsert(
+    upsert(
+        store,
         budget_id,
         transactions=[
             transaction("u1", "checking", days_ago(2), -5_000, cleared=CLEARED),
@@ -194,7 +197,8 @@ def unreconciled(store: Store, budget_id: str) -> None:
 
 
 def unreconciled_in_closed_account(store: Store, budget_id: str) -> None:
-    store.upsert(
+    upsert(
+        store,
         budget_id,
         accounts=[account("old", 0, closed=True)],
         transactions=[transaction("u1", "old", days_ago(2), -5_000, cleared=CLEARED)],
@@ -202,7 +206,8 @@ def unreconciled_in_closed_account(store: Store, budget_id: str) -> None:
 
 
 def stale_balance(store: Store, budget_id: str) -> None:
-    store.upsert(
+    upsert(
+        store,
         budget_id,
         transactions=[
             transaction("b2", "broker", days_ago(40), 0, payee="Balance Adjustment"),
@@ -372,7 +377,8 @@ async def test_with_every_bank_turned_off_there_is_no_last_imports_line(
 async def test_without_account_settings_every_open_account_counts(
     store: Store, budget: LatestConfig, user: User, left_out: tuple[str, ...], figure: str
 ):
-    store.upsert(
+    upsert(
+        store,
         budget.budget.id,
         accounts=[
             dataclasses.replace(account("card", -200_000), type="creditCard"),
@@ -474,7 +480,7 @@ async def test_home_waits_for_the_first_sync_and_then_shows_the_budget(
     await user.should_see("First sync running…", retries=20)
 
     store = Store(store_file)
-    store.upsert(budget.budget.id, accounts=[account("checking", 1_000_000)])
+    upsert(store, budget.budget.id, accounts=[account("checking", 1_000_000)])
     state().last_sync = NOW
     syncing.return_value = False
 
