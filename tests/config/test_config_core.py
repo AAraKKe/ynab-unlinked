@@ -271,3 +271,18 @@ def test_choosing_the_same_budget_again_keeps_its_settings():
     assert config.budget.name == "Renamed in YNAB"
     assert config.loaders and config.accounts and config.debt_mappings
     assert config.last_reconciliation_date == dt.date(2025, 5, 10)
+
+
+@pytest.mark.parametrize("version", ["V1", "V2", "V3", "V4"])
+def test_an_invalid_config_is_reported_without_the_token(config_files: ConfigFiles, version: str):
+    content = json.loads(assets.read_text(f"config_{version}/config.json"))
+    content["api_key"] = "SECRET-TOKEN-1234567890"
+    # Without the budget the config is invalid, and the error used to show the whole input
+    content.pop("budget_id" if version == "V1" else "budget")
+    config_files.write(version, json.dumps(content))
+
+    with pytest.raises(ConfigError) as error:
+        get_config()
+
+    assert "budget" in str(error.value)
+    assert "SECRET" not in str(error.value) and "67890" not in str(error.value)

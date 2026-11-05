@@ -36,7 +36,10 @@ class ConfigV2(BaseModel):
     payee_rules: dict[str, set[str]] = Field(default_factory=dict)
     version_number: str = Field(default="V2", alias="version")
 
-    model_config = ConfigDict(validate_by_alias=True, serialize_by_alias=True)
+    # A validation error must not print the token, which the input of the error would show
+    model_config = ConfigDict(
+        validate_by_alias=True, serialize_by_alias=True, hide_input_in_errors=True
+    )
 
     @staticmethod
     def version() -> Version:

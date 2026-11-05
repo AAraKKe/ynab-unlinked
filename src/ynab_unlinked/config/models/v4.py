@@ -65,7 +65,10 @@ class ConfigV4(BaseModel):
     debt_mappings: list[DebtMapping] = Field(default_factory=list[DebtMapping])
     version_number: str = Field(default="V4", alias="version")
 
-    model_config = ConfigDict(validate_by_alias=True, serialize_by_alias=True)
+    # A validation error must not print the token, which the input of the error would show
+    model_config = ConfigDict(
+        validate_by_alias=True, serialize_by_alias=True, hide_input_in_errors=True
+    )
 
     _keychain_unread: bool = PrivateAttr(default=False)
     """The file points to the keychain but the token could not be read from it. A save with

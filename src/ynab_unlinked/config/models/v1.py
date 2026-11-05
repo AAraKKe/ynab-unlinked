@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ynab_unlinked.config.migrations import Version
 from ynab_unlinked.config.paths import config_path
@@ -17,6 +17,9 @@ class ConfigV1(BaseModel):
     last_reconciliation_date: dt.date | None = None
     entities: dict[str, EntityConfig] = Field(default_factory=dict)
     payee_rules: dict[str, set[str]] = Field(default_factory=dict)
+
+    # A validation error must not print the token, which the input of the error would show
+    model_config = ConfigDict(hide_input_in_errors=True)
 
     @staticmethod
     def version() -> Version:
