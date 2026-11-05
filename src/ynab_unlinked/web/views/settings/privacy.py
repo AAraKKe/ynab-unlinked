@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import TYPE_CHECKING
 
-from nicegui import run, ui
+from nicegui import ui
 
 from ynab_unlinked import keychain
 from ynab_unlinked.config import LatestConfig
