@@ -13,7 +13,6 @@ from ynab_unlinked.cli.setup import ensure_config
 from ynab_unlinked.config import LatestConfig, update_config
 from ynab_unlinked.core.reconcile import (
     RECONCILE_BUFFER_DAYS,
-    RowToLock,
     next_reconciliation_date,
     reconciliation_overview,
 )
@@ -128,17 +127,17 @@ def reconcile(
         if child.transaction and not child.is_selected and not child.is_forced_selected()
     ]
 
-    with CliProgress() as progress:
-        latest_date = reconcile_transactions(
-            client,
-            budget_id=budget_id,
-            rows=[RowToLock.of(t) for t in selected_transactions],
-            progress=progress,
-        )
-
-    if latest_date is None:
+    if not selected_transactions:
         display.info("Nothing to reconcile.\n👋 Bye!")
         return
+
+    with CliProgress() as progress:
+        reconcile_transactions(
+            client,
+            budget_id=budget_id,
+            transaction_ids=[t.id for t in selected_transactions],
+            progress=progress,
+        )
 
     next_date = next_reconciliation_date(
         [t.var_date for t in selected_transactions], left_unreconciled

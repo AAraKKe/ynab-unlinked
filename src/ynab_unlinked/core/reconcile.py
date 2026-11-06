@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Protocol
 
 from ynab import Account, TransactionClearedStatus, TransactionDetail
 
@@ -62,51 +61,23 @@ def reconciliation_overview(
     ]
 
 
-class ReconcileRow(Protocol):
-    """What `reconcile` needs of a transaction: its id and its date.
-
-    A stored row of the web app is one as it is; a YNAB `TransactionDetail` goes through
-    `RowToLock.of` (its date is `var_date`).
-    """
-
-    @property
-    def id(self) -> str: ...
-
-    @property
-    def date(self) -> dt.date: ...
-
-
-@dataclass(frozen=True)
-class RowToLock:
-    """A plain `ReconcileRow`."""
-
-    id: str
-    date: dt.date
-
-    @classmethod
-    def of(cls, transaction: TransactionDetail) -> RowToLock:
-        return cls(id=transaction.id, date=transaction.var_date)
-
-
 def reconcile(
     client: Client,
     budget_id: str,
-    rows: Sequence[ReconcileRow],
+    transaction_ids: Sequence[str],
     progress: Progress = NO_PROGRESS,
-) -> dt.date | None:
-    """Mark the transactions as reconciled and return the date of the latest one."""
-    if not rows:
-        return None
+) -> None:
+    """Mark the transactions as reconciled. Nothing reaches YNAB when there are none."""
+    if not transaction_ids:
+        return
 
     progress.start("Updating transactions")
     client.update_transactions(
         budget_id=budget_id,
-        transaction_ids=[row.id for row in rows],
+        transaction_ids=list(transaction_ids),
         cleared=TransactionClearedStatus.RECONCILED,
     )
     progress.done()
-
-    return max(row.date for row in rows)
 
 
 def next_reconciliation_date(

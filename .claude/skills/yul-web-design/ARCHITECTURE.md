@@ -149,22 +149,13 @@ def reconciliation_overview(
     # account in the order YNAB lists accounts, accounts without transactions omitted,
     # closed accounts omitted
 
-class ReconcileRow(Protocol):        # what reconcile needs of a transaction
-    id: str                          # (read only properties)
-    date: dt.date
-
-@dataclass(frozen=True)
-class RowToLock:                     # a plain ReconcileRow; RowToLock.of(TransactionDetail)
-    id: str
-    date: dt.date
-
 def reconcile(
-    client: Client, budget_id: str, rows: Sequence[ReconcileRow],
+    client: Client, budget_id: str, transaction_ids: Sequence[str],
     progress: Progress = NullProgress(),
-) -> dt.date | None
+) -> None
     # Client.update_transactions(budget_id, ids, RECONCILED) sends only {id, cleared}: an
-    # account id read earlier could be stale and move the transaction back. Returns the
-    # latest row date or None if empty (YNAB is not called then)
+    # account id read earlier could be stale and move the transaction back. YNAB is not
+    # called when there are no ids
 
 def next_reconciliation_date(locked: Iterable[dt.date],
                              remaining: Iterable[dt.date] = ()) -> dt.date | None

@@ -435,10 +435,10 @@ class ReconcileView:
             self.footer.clear()
             with self.footer:
                 footer.locking(count)
-        rows_to_lock = [row.transaction for _, rows in batches for row in rows]
+        ids_to_lock = [row.transaction.id for _, rows in batches for row in rows]
         try:
             config, client = state().require()
-            await run.io_bound(reconcile, client, config.budget.id, rows_to_lock)
+            await run.io_bound(reconcile, client, config.budget.id, ids_to_lock)
         except Exception as error:
             self.busy = False
             if classify(error).failure is Failure.TIMED_OUT:
