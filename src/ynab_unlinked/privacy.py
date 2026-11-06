@@ -17,18 +17,11 @@ def storage_path() -> str:
     return str(config_path().parent)
 
 
-def token_location(*, markup: bool = True) -> str:
-    """Where the token is kept on this machine, for notices.
-
-    With `markup` False the names are quoted instead of coloured, for the web app.
-    """
-
-    def name_of(text: str) -> str:
-        return f"[cyan]{text}[/cyan]" if markup else f"“{text}”"
-
+def token_location() -> str:
+    """Where the token is kept on this machine, for notices."""
     if (name := keychain.backend_name()) is not None:
-        return f"in your {name} (item {name_of(keychain.service_name())})"
-    return f"in plaintext at {name_of(storage_path())} (no keychain found on this computer)"
+        return f"in your {name} (item [cyan]{keychain.service_name()}[/cyan])"
+    return f"in plaintext at [cyan]{storage_path()}[/cyan] (no keychain found on this computer)"
 
 
 def privacy_notice() -> None:
