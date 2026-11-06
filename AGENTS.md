@@ -107,7 +107,7 @@ CI runs the same four things on every PR. See `tests/AGENTS.md` for test convent
 
 `yul app` (`web/`, extra `web`) is a NiceGUI app on 127.0.0.1 with a per run session
 token. Views call `core/` and `store/`, run blocking work through `run.io_bound`, and read
-shared state from `web.state.state()`. `.claude/skills/yul-web-design/ARCHITECTURE.md` is the as built contract
+shared state from `web.state.state()`. `.claude/skills/yul-web-design/ARCHITECTURE.md` is the contract
 (names, signatures, activity log shapes); update it in the same change when deviating.
 `DESIGN.md` next to it is the visual language: use the `yul-*` classes and the `components`
 helpers. Its section 5 lists the frozen rules; the project skill

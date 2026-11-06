@@ -12,7 +12,8 @@ Decisions taken (2026-11-03):
 - Command name: `yul app`.
 - Config V4 keeps `last_reconciliation_date` (the CLI `yul reconcile` still uses it). The web
   reconcile view reads from the local store instead. Removing the field is a later change.
-- Token stays in the config file. Keychain is a later change.
+- The token lives in the system keychain when there is one (`ynab_unlinked.keychain`);
+  the file then holds `@keychain`.
 
 ## 1. Package layout
 
@@ -135,9 +136,6 @@ The `NullProgress()` defaults are `core.progress.NO_PROGRESS` in the code. The C
 spinner per step and stops it if the core call raises. `cli.utils.display_import_table` takes
 `Sequence[ImportRow]`.
 
-`cli.process.process_transactions` keeps its signature and behaviour (tests in `tests/cli/process`
-pin it) but is implemented on top of these functions plus the account prompt and the tables.
-
 ### 2.3 Reconcile (`core/reconcile.py`)
 
 ```python
@@ -183,7 +181,7 @@ RECONCILE_BUFFER_DAYS = 7
 `cli/commands/reconcile.py` and the Textual app keep working on top of these. The two
 frontends read from different places on purpose: `yul reconcile` asks YNAB live
 (`reconciliation_overview`), the app reads the budget copy (`Store.unreconciled`, synced
-first when older than 10 minutes or after a write, 3.5). Both use the same scope rule and
+first when older than 10 minutes or after a write). Both use the same scope rule and
 `reconcile()`, so they differ only by what YNAB changed since the last sync.
 
 ### 2.4 Loaders and detection (`entities/`, `core/detect.py`)
@@ -316,20 +314,6 @@ true when more than one candidate parsed and none is clearly ahead. A file with 
 candidates (unsupported suffix, or nothing sniffed above the threshold) and a file whose
 candidates all failed to parse have `best is None` and `ambiguous is False`.
 
-CLI: `yul load auto <files...>` takes each file once (`unique_files`, a warning line per
-copy left out), runs detection, prints a table (file, loader, confidence,
-transactions, account), and stops with exit 1 before importing anything if a file is not
-supported, not recognised, unreadable or ambiguous. Otherwise it is built on
-`core.importing`, not `process_transactions`: it resolves the account of every file first
-(`process.get_or_prompt_account_id`, so `-a` asks once per file), parses each file with
-`parse_transactions` and builds every `ImportPlan`, prints one import table per file, then
-asks ONE confirmation for the whole batch ("Create N transactions from M files in YNAB?"),
-commits every plan and prints one summary: duplicates YNAB rejected and transactions created
-per account (named from `config.accounts` when known, else the id). Nothing is asked when no
-file has new transactions. `--yes` skips the confirmation and also fails up front when a
-detected loader has no saved account; `--show` prints the parsed transactions of each file
-and stops without resolving accounts or calling YNAB.
-
 ### 2.5 Balances and net worth (`core/balances.py`)
 
 ```python
@@ -377,24 +361,6 @@ def create_adjustments(
 `create_adjustments(...)` (approved=True, no import id). `parse_amount_to_milliunits` reads
 what the user types as a balance and lives in `core/balances.py` too.
 
-Implementation notes (as built):
-
-- The client takes adjustments typed as `ynab_api.client.BalanceAdjustment`, a protocol
-  (`account_id`, `amount`) that `Adjustment` satisfies, so `ynab_api` never imports `core`.
-  It returns 0 without calling YNAB when there is nothing to create.
-- The even split truncates toward zero (`int(balance / n)`), not floor
-  division: -1001 over two accounts nets -501 on the first and -500 on the second.
-- `NetWorth.share` and `build_adjustments` raise `KeyError` for an account they do not know
-  (unknown id, or a wanted balance with no current one).
-- `parse_amount_to_milliunits(text, *, decimal_separator=".", group_separator=",")`. With
-  the defaults `,` is always a thousands separator, so
-  `€1.000,50` is read as `1.0005` (1000 milliunits), not 1000.50. Pass the budget's
-  `currency_format` separators to swap the roles: with `decimal_separator=","` and
-  `group_separator="."`, `1.000,50` is 1000500 and `99,99` is 99990. A group separator
-  other than `.` or `,` (space, apostrophe) is dropped like any symbol; a currency symbol or
-  ISO code before or after the number is ignored. A decimal separator other than `.` or `,`,
-  or equal to the group separator, raises `ValueError`.
-
 ### 2.6 Config V4 (`config/`)
 
 ```python
@@ -402,19 +368,6 @@ class LoaderConfig(BaseModel):
     account_id: str
     options: dict[str, str] = {}
     enabled: bool = True        # off: `load auto` and the app skip the bank, settings kept
-
-# The token (`api_key`) lives in the system keychain (`ynab_unlinked.keychain`, through
-# `keyring`) when there is one: `save()` stores it and writes `keychain.REFERENCE`
-# ("@keychain") to the file, `load()` reads it back; a token still in the file moves on the
-# first load. Without a keychain the file keeps it in plain text. `api_key == ""` after
-# load means the keychain lost it: the CLI says to run `yul config set api_key`, the web
-# app keeps the config in `state().token_lost` and onboarding asks for the token only.
-# A save while the token is unread writes `REFERENCE` back, never an empty token.
-# A save that keeps the token read from (or stored to) the keychain does not store it again.
-# `save()` writes a 0600 temp file in the same directory (created 0700) and `os.replace`s it.
-# `keychain.read()` returns None when `YUL_NO_KEYCHAIN` is set. The item is
-# `keychain.service_name()`, read at each use: `YUL_KEYCHAIN_SERVICE`, else `ynab-unlinked (<YUL_HOME>)` when
-# `YUL_HOME` is set, else `ynab-unlinked`.
 
 class TrackedAccount(BaseModel):
     id: str
@@ -467,34 +420,9 @@ def switch_budget(config: LatestConfig, budget: Budget) -> None
 ```
 
 - Every config save, in the CLI and in the app, goes through `edit_config` / `update_config`:
-  the file is read again, the change applied and the result saved, so each writer only
-  changes what it touches and what another process saved meanwhile is kept. With no file,
-  `fallback` is changed instead (only onboarding passes one, when it recovers the token);
-  without one it raises `ConfigError`. Nothing is saved when the block raises. The read, change and save hold a
-  process wide `threading.Lock` and an advisory lock on `config.json.lock` next to the file
-  (`config.lock.file_lock`: `fcntl.flock` on POSIX, `msvcrt.locking` on Windows;
-  `config.core.lock_path()`), so two threads of the app or the app and the CLI take turns
-  and neither loses the other's change. Do not nest it. Only `yul setup` writes a whole new
-  config.
-- `get_config()` migrates an old config under the same two locks and reads the version
-  again once it holds them, so the CLI and the app starting together migrate it once. The
-  V2+ file wins over a V1 file left behind (`config_version()`).
-- `switch_budget` is the one rule for a budget change (`yul config set budget` and
-  Settings › Connection): another budget clears `loaders`, `accounts`, `debt_mappings` and
-  `last_reconciliation_date`; the token and `adjustments` stay. The same budget again only
-  refreshes `budget` (name, formats).
-- `DeltaConfigV3ToV4`: `entities` -> `loaders` (options empty), everything else default.
-  Rollback drops the new fields. Registered in `core.migration_engine()`.
-- `LATEST_VERSION`, `MAX_CONFIG_VERSION`, `VERSION_MAPPING`, `LatestConfig` updated.
-- `MigrationEngine.migrate` takes `progress: Progress = NullProgress()` instead of calling
-  `display.process` directly; `config/core.py` passes a CLI progress. After this the
-  `config/migrations` package imports nothing from `ynab_unlinked` outside itself and
-  `core/progress.py`.
-- `MigrationEngine.migrate` reports through `progress` only when there is something to
-  migrate; on failure it calls `progress.done()` with no message and re-raises. The CLI
-  progress is `display.CliProgress`.
-- `tests/assets/config_V4/config.json` fixture (same layout as the V1..V3 assets),
-  `@pytest.mark.version("V4")` support in conftest, `config_v4` fixture.
+  the file is read again, the change applied and the result saved under a process wide lock
+  and an advisory lock on `config.json.lock` (`config.lock`), so each writer only changes
+  what it touches. Do not nest it. Only `yul setup` writes a whole new config.
 
 ### 2.7 Store (`store/`) and history (`core/history.py`)
 
@@ -570,36 +498,10 @@ class DailyAmounts:
     days: tuple[tuple[dt.date, int], ...]     # (date, sum of that day), oldest first
 ```
 
-Ghost repair: when the user approves a YNAB match between an imported transaction and a
-manual or scheduled one of the same account, the manual one survives with the `import_id`
-(and `matched_transaction_id` pointing at the import) and the imported id vanishes (404)
-without a delta tombstone. After every sync `Store._repair_ghosts` looks for two or more non
-deleted rows sharing `(account_id, import_id)`, checks each id with
-`client.transaction_exists` and flags the missing ones `deleted = 1`. A group where every
-row exists (a match not approved yet) stays. No duplicate groups, no requests. Only groups
-holding a row this sync received are checked (every group on a full sync): the merge always
-changes the surviving row, so a pending match costs requests once, not on every sync. One
-sync checks at most `GHOST_CHECKS_PER_SYNC` (50) ids, whole groups only; the groups left over
-go to the `ghost_checks` table (schema 2), a `progress.warn` says how many wait, and the next
-sync checks them first. An `ApiException`, urllib3 `HTTPError` or `OSError` during the check
-is a `progress.warn`, 0 ghosts, the groups it was checking wait in `ghost_checks`, and the
-sync still succeeds.
-
-Every method opens its own connection, so one `Store` can be shared across threads
-(`run.io_bound`). The file is in WAL mode (set once at open) and every connection waits up
-to `BUSY_TIMEOUT_SECONDS` (30) for a lock, so the CLI and the app can use it at once. Timestamps (`synced_at`, `at`) are UTC ISO strings. `Store.sync` does not
-log activity; the caller decides what is worth an entry.
-
-Schema: `accounts(budget_id, id, name, type, closed, on_budget, balance, cleared_balance,
-uncleared_balance, PRIMARY KEY(budget_id, id))`, `transactions(budget_id, id, account_id,
-date, amount, cleared, approved, deleted, payee_name, category_name, import_id, memo,
-transfer_account_id, PRIMARY KEY(budget_id, id))` with indexes on `(budget_id, account_id,
-date)` and, for the ghost repair, `(budget_id, account_id, import_id)` (schema 3), `sync_state(budget_id PRIMARY KEY, server_knowledge, synced_at)`,
-`activity(budget_id, at, kind, message, details)` (details is a JSON object). The schema
-version lives in `PRAGMA user_version`; `store/migrations/NNNN_*.sql` are the steps, one file each (`store.migrations.MIGRATIONS`).
-`migrations.apply` runs each step as `BEGIN IMMEDIATE`, reads the version again inside that
-transaction (another process may have applied the step while this one waited) and only then
-runs the script's statements one by one (`migrations.statements`), so no step runs twice.
+`Store` opens a connection per call, so one instance is shared across threads
+(`run.io_bound`) and the CLI and the app can use the file at once. `Store.sync` does not log
+activity; the caller decides what is worth an entry. The schema steps are
+`store/migrations/NNNN_*.sql`, one file each, applied in order (`store.migrations.MIGRATIONS`).
 
 `ynab_api.Client` gains `transactions_delta(budget_id, server_knowledge) -> tuple[list[TransactionDetail], int]`
 and `transactions_with_knowledge(budget_id, since_date=None) -> tuple[list[TransactionDetail], int]`,
@@ -613,7 +515,7 @@ class Point: date: dt.date; value: int
 def balance_series(store: Store, budget_id: str, account_id: str,
                    start: dt.date, end: dt.date) -> list[Point]
     # running sum of non deleted transactions up to each day; one point per day, the
-    # value on `end` equals the account balance in the store (assert in tests)
+    # value on `end` equals the account balance in the store
 
 def net_worth_series(store: Store, budget_id: str, accounts: Sequence[TrackedAccount],
                      nettings: Sequence[DebtNetting], start: dt.date, end: dt.date,
@@ -624,30 +526,6 @@ def net_worth_series(store: Store, budget_id: str, accounts: Sequence[TrackedAcc
 def sample_dates(start: dt.date, end: dt.date) -> list[dt.date]
     # every day, or every Monday in the range plus `end` when end - start > 366 days
 ```
-
-History as built:
-
-- Both series make one `Store.daily_amounts` call (a single SQL query) and accumulate in
-  Python, then sample at `sample_dates(start, end)`. Ten years of 15 transactions a day over
-  20 accounts (55k rows) takes about 60 ms for the net worth series.
-- The series is anchored on the live balance: it is shifted by `StoredAccount.balance -
-  sum(all non deleted amounts)`, so its last point always equals the balance YNAB reported
-  even if some history is missing. Normally the shift is 0 because the starting balance is
-  a transaction. An account the store does not know is flat at 0; an account with
-  transactions but no stored row (deleted in YNAB) is not shifted.
-- Transactions dated after `end` are left out of the points but count for the anchor, so a
-  past `end` shows the balance on that day, not the live one.
-- `end < start` gives no points (empty lists, keys still present in the net worth dict).
-- `net_worth_series` only uses `accounts`: a debt account missing from it does not count at
-  all, a counted one with no mapping comes off the total directly (as in `net_worth`). Account series hold balances after netting, debt accounts keep their
-  raw balance; the `"debt"` key is the sum of the raw debt balances.
-- History tests fill the store through `Store.sync` with the `ynab_api` stub (`populate`
-  fixture in `tests/core/test_history.py`). Web view tests seed it with `tests.helpers.store.upsert` and
-  `Store.log(..., at=...)` after one empty `Store.sync` (so `last_sync` is set); see the
-  `store` fixture in `tests/web/views/test_home.py`.
-
-`yul config reset` also deletes the store file. `yul privacy` lists it. Tests get an autouse
-`store_file` fixture that points `store_path()` into `tmp_path`.
 
 ## 3. Web app (`web/`, extra `web`)
 
@@ -721,7 +599,7 @@ web/
       rows.py          draw_row(flow, item): a file row of step Files and its body
       tables.py        badge, plan_table, transactions_table
       cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
-    reconcile/         /reconcile   per account cleared vs bank balance, lock (see 3.5)
+    reconcile/         /reconcile   per account cleared vs bank balance, lock
       data.py          scope_start, gap_candidates, ReconcileData (read,
                        open_transactions, has_anything), LOCK_TIMED_OUT, parse_bank_balance, lock_confirmation,
                        lock_log, lock_checkpoint, pending_title
@@ -729,7 +607,7 @@ web/
       view.py          ReconcileView and the view
       lock.py          lock(view, groups): confirm, reconcile, log, checkpoint (3.5)
       footer.py        selection / done / locking footers
-    networth/          /networth    history chart, buckets, accounts, balance updates, drawer (see 3.6)
+    networth/          /networth    history chart, buckets, accounts, balance updates, drawer
       data.py          RANGES, MAX_PICKED, range_start, last_set, by_hand_pill, assign_slots,
                        Snapshot, load_snapshot, table_order, default_picked, parse_balance,
                        set_balance (the one write: live balance, build and create the adjustment)
@@ -772,8 +650,7 @@ web/
   whose `Origin` is present and not `http://127.0.0.1:<port>` (a page served from another
   loopback port is "same site", so SameSite does not stop it). Every HTTP response, refused
   ones included, carries `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors
-  'none'` and `X-Content-Type-Options: nosniff` (`FRAME_HEADERS`). Tests talk to
-  `http://127.0.0.1:8765` (`tests.helpers.web.BASE_URL`).
+  'none'` and `X-Content-Type-Options: nosniff` (`FRAME_HEADERS`).
 
 ### 3.2 Shell contract for views
 
@@ -823,9 +700,7 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
 - Drop zone (`components/dropzone.py`):
   `dropzone(on_files, *, compact=False, accept=None) -> ui.element` (the `ui.upload`, marker
   `dropzone`). `on_files(list[UploadedFile])` may be async; `accept=None` is
-  `DEFAULT_ACCEPT` (`.pdf,.xlsx,.xls,.txt,.html`). A QUploader with a custom header slot
-  holding `<q-uploader-add-trigger>` (the native input stretched over the card, so a click is
-  a real user gesture) and no file list; the queue is reset after each batch.
+  `DEFAULT_ACCEPT` (`.pdf,.xlsx,.xls,.txt,.html`).
 - Deep links: `/settings?tab=<slug>` (`connection`, `banks`, `accounts`, `networth` or
   `net-worth`, `data`, `privacy` or `data-privacy`, case insensitive) opens that tab;
   anything else opens Connection (`settings.tab_from_slug`).
@@ -834,38 +709,11 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
   `RECONCILE_PATH`, `NETWORTH_PATH`, `SETTINGS_PATH`, `ONBOARDING_PATH`); views never import
   each other: shared wording is `web.wording`, shared YNAB calls are `web.ynab`.
 
-`state()` (`web/state.py`): `config: LatestConfig | None`, `client: Client | None`,
-`store: Store` (opened on first use at `store_path()`, always off the event loop: by `load()`
-in `app.run()` before the server starts, inside the state's `run.io_bound` calls, and
-`reset` and onboarding run `load()` / `reload()` through `run.io_bound`), `formatter`, `loaders:
-list[LoaderSpec]`, `last_sync`, `sync_error`, `load_error`, `configured`, `syncing`,
-`require() -> (config, client)` and `require_formatter() -> Formatter` (both raise
-`NotConfiguredError`; the one way views get the formatter), `load()` (reads the config,
-reopens the store: after the local data was deleted) / `reload()` (after saving the config:
-keeps the store and, for the same budget, `last_sync`; the banks are discovered once per
-process), `update_config(change: Callable[[LatestConfig], None], fallback=None) -> LatestConfig` (every
-config save in the app: `config.update_config`, then a reload, so what the CLI saved
-meanwhile is kept; with the file gone (`yul config reset` while the app is open) it raises
-`ConfigError` after `load()`, so the app drops to onboarding and nothing comes back; only
-onboarding's token recovery passes the config it kept as `fallback`; never save `state().config` or a copy of it;
-it blocks on the disk and the keychain, so views never call it on the event loop: they
-`await shell.save_config(change, message=None) -> bool`, which runs it through `run.io_bound`
-and then toasts `message` when given; a save that raises is logged, toasted as
-`wording.SAVE_FAILED` and returns False, so callers keep their dialog open or put back what
-they drew),
-`await sync(progress=NullProgress())` (shared by concurrent callers, runs through
-`run.io_bound`), `await resync(progress=NullProgress())` (waits for a running sync, then
-`store.clear(budget)` and a full sync as the shared sync task; the activity log stays),
-`await reset(paths)` (Settings "Reset all data": waits for a running sync, forgets the
-config so no new one starts, `delete_local_data(paths)` through `run.io_bound`, then
-`load()` in a `finally`, also when deleting failed), `sync_in_background()`, `stale` / `invalidate()` (call after every write to YNAB: marks the
-store stale and starts a background sync; during a sync it asks for one more round when the
-running one ends) and `fresh(max_age) -> bool` (synced within `max_age`, not stale, not
-syncing, and no activity entry other than a sync logged after `last_sync`, which is how the
-app learns of `yul load` / `yul reconcile`; it reads the store, so Reconcile calls it through
-`run.io_bound` before showing the store),
-`await budget_accounts() -> list[StoredAccount]` (store once synced, YNAB before).
-(`default_bucket(account_type: str) -> Bucket` lives in `web/accounts.py`.)
+`state()` (`web/state.py`) is the app's shared state: config, client, store, formatter,
+loaders and the sync. See the docstrings in `web/state.py`. Views never save `state().config`
+or a copy of it: every config save is `await shell.save_config(change, message=None) -> bool`,
+which runs `state().update_config(change)` through `run.io_bound`, toasts `message`, and on a
+failure toasts `wording.SAVE_FAILED` and returns False.
 
 Theme (`web/theme.py`): `SERIES` / `SERIES_LIGHT` (6 colours: DESIGN's three, the
 `#eda100`, a violet and a pink; `--series-1..6` in CSS), `ACCENT` (gradient start and end), `GOOD`, `WARN`, `BAD` (+ `_LIGHT`),
@@ -879,6 +727,17 @@ use `components.button` rather than raw `ui.button` (Quasar's colours are off th
 Never name a class `xs`, `sm`, `md`, `lg` or `xl`: Quasar hides those outside their
 breakpoint (`button(small=True)` uses `small`). `.yul-page` stretches to the full content
 width whatever its content.
+
+### 3.3 Other rules
+
+- Views call `core/` and `store/` only. Blocking calls (YNAB, parsing, config saves, store
+  writes) run through `run.io_bound` so the UI stays responsive.
+- Uploaded files go to a `TemporaryDirectory` owned by the page; removed on commit or
+  discard.
+- `local_data.py` lists and deletes what yul stores (config dirs, store, the web
+  preferences directory `web.storage_dir()`); `yul config reset` and Settings "Reset all
+  data" share it.
+- Visual language is DESIGN.md next to this file.
 
 ### 3.4 Activity log entries
 
@@ -929,7 +788,7 @@ Home, Net worth and the Settings Net worth tab read through these. A mapping tha
 left out or closed account is kept in the config; `net_worth` skips targets it does not
 count.
 
-### 3.4.2 Home (as built)
+### 3.4.2 Home
 
 `load_home(store, config, loaders, today) -> HomeData` reads everything once per visit
 through `run.io_bound`; Home never calls YNAB.
@@ -962,185 +821,26 @@ sync problem before the first sync stays the banner above the grid (`first-sync`
 `last_imports_line(data, today)` is `"Last imports · Cobee never · Sabadell 12 Oct"`
 (`today`, `yesterday`, `N days ago` under 14 days, then `short_date`), `None` without banks.
 
-Layout: `.yul-home` grid (main 1.55fr + side, one column under 1000px). Main, staggered:
-hero, `section.yul-home-block` Import (title `.yul-section`, dropzone, muted line),
-`section.yul-home-block.yul-needs` Needs you (title, `.yul-attn` grid or the quiet line).
-`.yul-needs` is an inline size container: `.yul-attn` has 3 equal columns from 640px, 2
-from 420px, else 1. Side: Recent activity.
-
 Markers: `home` (grid), `first-sync`, `hero`, `net-worth`, `net-worth-delta`, `sparkline`,
 `home-import`, `dropzone`, `last-imports`, `needs-you`, `attention` (the card grid, only
 when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-waiting`,
 `activity`, `activity-item`, `activity-message`, `activity-empty`.
 
-### 3.6 Net worth view (as built)
+### 3.5 Markers of the other views
 
-- Counted accounts are `web.accounts.effective_accounts()` (3.4.1); the `track_balance`
-  ("by hand") ones have their pencil always shown and get the age pill. When every account
-  is left out the view shows an empty state (`no-tracked`) that opens Settings › Accounts. Balances come from `store.accounts()`
-  (an account the store does not know counts as 0), netting from `config.debt_mappings`.
-  Store reads (`load_snapshot`, the series, the drawer) run through `run.io_bound`.
-- Ranges: `range_start(key, today, earliest)` uses calendar months (`1M` on 31 Mar is
-  28 Feb) and is clamped to the first transaction of the counted accounts, which is also
-  what `All` means. The series is one `net_worth_series` call per range; grouping and the
-  account chips regroup it without reading the store again.
-- "By account" picks with chips (`yul-chipc`, marker `pick-{account_id}`), one per counted
-  account in table order (`table_order`), above them "Accounts · n of 6" (`pick-count`).
-  Up to `MAX_PICKED = 6`; the default is the `DEFAULT_PICKED = 4` largest after netting,
-  debt left out. A picked chip is `on` with a `yul-swatch` in `var(--series-{slot + 1})`;
-  at the limit the others are `off` with the title "Remove one to add another" and ignore
-  clicks.
-- Chart (`components/history_chart.py`): amounts go to the browser in currency units and
-  the tick, end label and tooltip formatters are JavaScript built from the budget's
-  `currency_format`, so compact ticks follow the budget's symbol position (`90K€` for a
-  symbol after the number, `€90K` before). Every series always carries the same keys
-  (the area is transparent rather than absent) because NiceGUI merges an option into the
-  previous one when the series count does not change. Total uses `palette.accent[0]`; by
-  type `SERIES[0..2]`; by account (`SERIES[0..5]`) the colour slot of each picked account is kept while it
-  stays picked and a newly picked one takes the first free slot (`assign_slots`).
-- A 1s `ui.timer` re-renders the view when `(last_sync, syncing, sync_error)` changes and
-  syncing is over (first sync, the sync after adjustments, a sync from the top bar chip),
-  keeping an open balance editor and what was typed in it; the same tick restyles the charts when
-  `theme.is_dark()` changes. With no accounts in the store the view shows "First sync
-  running…" and starts a background sync if none is running.
-- Adjustments, one account at a time: every row has a pencil (`edit-{account_id}`, shown on
-  hover, always and accent coloured on "by hand" rows). It turns the balance cell into an
-  input (`balance-input-{account_id}`) prefilled with the raw (not netted) stored balance,
-  a ✓ (`accept-{account_id}`) and a ✗ (`cancel-{account_id}`); Enter is ✓, Escape is ✗,
-  and opening another row closes the first. ✓ is the confirmation (no `shell.confirm`):
-  the text is parsed with `parse_amount_to_milliunits` and the budget's separators
-  ("Not an amount" under the input otherwise, `balance-hint-{account_id}`); the same
-  balance as shown toasts "No change"; else one `run.io_bound` job reads the live balance
-  (`client.account(budget_id, account_id).balance`, the store may lag behind YNAB),
-  `build_adjustments` against it and `create_adjustments` (nothing when YNAB already has
-  the wanted balance: "No change", invalidate). Then one `store.log(kind="adjustment")`
-  through `run.io_bound` with the adjustment actually made, `state().invalidate()`,
-  re-render, toast "{name} set to {new} ({signed difference})". A YNAB error is toasted
-  through `ynab_error_message` and the editor stays open with what was typed.
-- The account drawer is a `ui.dialog` with `position=right full-height` (a `ui.drawer`
-  cannot live inside `ui.sub_pages`).
-- Tests seed the store through `Store.sync` with the `ynab_api` stub answering
-  (`serve()` in `tests/web/views/test_networth.py`); no write API was added to `Store`.
+#### Net worth
 
-### 3.7 Onboarding as built (`views/onboarding/`)
+Markers: `no-tracked`, `pick-{account_id}`, `pick-count`, `edit-{account_id}`,
+`balance-input-{account_id}`, `accept-{account_id}`, `cancel-{account_id}`,
+`balance-hint-{account_id}`.
 
-- `STEPS = ("Token", "Budget", "Banks", "Done")`, one `Wizard` per page. `refresh()` redraws
-  the rail and the step and runs only on a change of step; selection and state changes
-  update elements in place (`pick_budget` toggles `on` on the kept tiles, `show_message`,
-  `update_footer`, `fill_loaders`, `fill_done`).
-- The config is written as `LatestConfig(api_key, budget, loaders, accounts=[])`: an empty
-  `accounts` list means every open account counts. Loaders map to any open, not deleted
-  account of the budget (`AccountOption`), `guess_loader_account` preselects the one named
-  after the bank.
-- Continue from Budget sets the step to Banks and awaits `load_budget()` (`client.budget`
-  and `client.accounts` through `run.io_bound`); Finish is disabled until it succeeded.
-- Finish: `draft().save()` through `run.io_bound`, `state().reload()`, step Done, then `await
-  state().sync(LineProgress(label, client))`, the same shared task the sync chip uses.
-  `LineProgress` implements `core.progress.Progress`: the store calls it from the worker
-  thread, it hands each message to the event loop (`call_soon_threadsafe`) and sets the
-  label inside the captured client; `copy_line` rewords and groups figures. Errors are
-  shown with `copy_error_message` (`ynab_error_message` for YNAB answers).
-- Markers: `token-input`, `check-token`, `token-lost`, `wizard-message`, `wizard-next`,
-  `wizard-back`, `budget-{id}`, `loading-accounts`, `accounts-error`, `accounts-retry`,
-  `loader-{key}`, `first-copy`, `copy-progress`, `copy-error`, `copy-retry`, `open-yul`.
+#### Onboarding
 
-### 3.3 Other rules
+Markers: `token-input`, `check-token`, `token-lost`, `wizard-message`, `wizard-next`,
+`wizard-back`, `budget-{id}`, `loading-accounts`, `accounts-error`, `accounts-retry`,
+`loader-{key}`, `first-copy`, `copy-progress`, `copy-error`, `copy-retry`, `open-yul`.
 
-- Views call `core/` and `store/` only. Blocking calls (YNAB, parsing, config saves, store
-  writes) run through `run.io_bound` so the UI stays responsive.
-- Uploaded files go to a `TemporaryDirectory` owned by the page; removed on commit or
-  discard.
-- Import (`views/import_/`) keeps one `ImportFlow` per tab. Its temporary directory goes
-  when the commit ends, on "Import more", when the last file is removed, when the view is
-  opened again, or when the client is deleted. A file with the same bytes as one already in
-  the flow (`ImportFile.digest`, `data.same_file`) is unsupported with "Already in this
-  import as <name>" and never detected. Each file is detected on its own
-  (`detect_loaders([path])` through `io_bound`, which applies the options saved for the
-  bank, as for `yul load auto`). Every option
-  of the loader gets a select on the row, starting from the resolved value, so the saved
-  defaults can be changed per file. A file of a bank turned off in Settings (`enabled` is
-  false) is unsupported with the reason. A loader without an account gets a select of the
-  open budget accounts (`state().budget_accounts()`, which also names the account on every
-  row, whether or not it has settings); the choice is saved
-  to the config when the import is confirmed. Files with nothing new are shown in Done but
-  not committed or logged. Files dropped during Review restart the flow, and files dropped
-  during the commit are turned away with a toast. Whatever fails during the commit, the
-  flow accepts drops again afterwards; a failure outside one file's YNAB call is toasted
-  as `wording.IMPORT_FAILED`.
-- Settings "Banks" (`views/settings/banks.py`): one card per `LoaderSpec` (`bank_logo`, a switch
-  for `LoaderConfig.enabled`, the summary line from `bank_summary()`, a "Settings" button).
-  The card is `live` when the bank is on and `off` (muted) otherwise, with no status pill; a
-  bank without an entry in `config.loaders` is muted and its summary ("Pick the YNAB account
-  its statements go to.") is in `yul-warn`. The button opens a dialog with the account
-  select and `option_control` per option; saving writes `loaders[name]` (non default
-  options only) and turns a bank on the first time. When the chosen account is already the
-  account of other banks in `config.loaders`, `shared_account_hint()` shows a `yul-warn` line
-  under the select (`bank-shared-{key}`, hidden otherwise) naming them; it does not block
-  Save. Turning on a bank that has no account opens the dialog. Only the changed card is redrawn. `components.bank_logo(key, title,
-  size)` shows `static/logos/<key>.svg` on a white `size` x `2 * size` tile, or the bank's
-  monogram when yul ships no logo for that key. Logos follow the rule in DESIGN.md
-  (`viewBox="0 0 120 60"`, padding inside the SVG).
-- Settings "Accounts" (`views/settings/accounts.py`, `AccountCards`): a lede (`accounts-lede`) and
-  one card (`account-card-{id}`) per open budget account (`settings.common.open_accounts()`, the
-  configured ones when YNAB cannot be reached), in a `yul-section` per bucket
-  (`bucket-section-{bucket}`; Cash, Savings, Assets, Debt). Each card starts from
-  `accounts.account_settings()` with the name and type of the budget. A card has the name
-  and a "Counted in net worth" switch (`account-{id}`, `TrackedAccount.counted`, on by
-  default; the card is `live` when on, `off` when left out), the bucket as four
-  `yul-pill click` pills (group `bucket-{id}`, each `bucket-{id}-{bucket}`) and the
-  "balance by hand" pencil toggle (`by-hand-{id}`, `TrackedAccount.track_balance`). Every
-  change saves at once (toast "Accounts saved", or "Left out of net worth" / "Counted in
-  net worth" for the switch): `config.accounts` keeps the entries of accounts without a
-  card and gets one entry per card that differs from `accounts.default_account()`, so an
-  account back at its defaults loses its entry. Debt mappings are never touched here. A
-  bucket change redraws the sections; the other changes redraw one card.
-- Settings "Net worth": the debts and the accounts they can be netted from are the counted
-  ones (`effective_accounts` over `open_accounts()`). Saving keeps the mappings of debts the
-  tab does not list (left out or closed) and replaces the rest.
-- Visual language is DESIGN.md next to this file.
-- `local_data.py` lists and deletes what yul stores (config dirs, store, the web
-  preferences directory `web.storage_dir()`); `yul config reset`
-  and Settings "Reset all data" share it. `config.budget.budget_from_plan` builds a `Budget`.
-- Tests (`tests/web/`): fixtures `guest` (browser without the session) and `user` (with
-  the cookie) build the app through `web.app.build` after the config fixtures, with the YNAB
-  client stubbed by `ynab_api`. Request fixtures that change the config before `user`.
-  `tests.helpers.web.fresh_nicegui()` wraps NiceGUI's global reset, which otherwise unloads
-  `ynab_unlinked` from `sys.modules`. `nicegui.testing.user_plugin` is loaded in the root
-  conftest (pytest refuses `pytest_plugins` elsewhere) and `pytest-asyncio` runs with
-  `asyncio_mode = "auto"`. `guest` also
-  gives every test a fresh `AppState` (the module global is reset), so a sync a view
-  started in one test cannot leak its task or error into the next. Views that read the
-  store are tested by filling it through `Store.sync` with the `ynab_api` stub and
-  setting `state().last_sync` (see `seed` in `tests/web/views/test_reconcile.py`).
+#### Settings
 
-### 3.5 Reconcile as built (`views/reconcile/`)
-
-- Reads the store only: `Store.unreconciled` joined with `Store.accounts`, open accounts,
-  cards in the store's name order, rows newest first. Before rendering it awaits
-  `state().sync()` when `state().last_sync` is None or older than 10 minutes; a failed sync
-  toasts and shows what the store has (an error empty state if the store was never synced).
-- Scope pills: "since {last_reconciliation_date - RECONCILE_BUFFER_DAYS}" (7, the `yul reconcile -b` default,
-  only offered when the config has a date) and "all time". Rows locked in this visit stay
-  hidden when the scope changes, even before the background sync catches up.
-- Bank balance: `parse_amount_to_milliunits` with the budget's separators. "find the gap"
-  highlights rows whose effect on the cleared balance equals the difference (an uncleared
-  row counts its amount, a cleared one minus its amount), then pairs (hash lookup, linear)
-  when no single row does.
-- Lock (per account or all): `shell.confirm`, then `core.reconcile.reconcile` through
-  `run.io_bound` with the stored rows themselves (a `StoredTransaction` is a
-  `ReconcileRow`). Once YNAB answered, the rows are drawn locked, `invalidate()`
-  runs, `store.log("reconcile", "Reconciled n transactions in m accounts", {"count",
-  "accounts": [{"id", "name", "count"}]})` through `run.io_bound`, and only then
-  `last_reconciliation_date = next_reconciliation_date(locked dates, dates of the rows still
-  pending in the current scope that the user could pick)` (an uncleared row with "include
-  uncleared" off does not hold it back; `yul reconcile` follows the same rule) is saved through `shell.save_config()`, so a failed save
-  (toasted by it) leaves the log and the sync done; `busy` is reset in a `finally`.
-  The store itself is not written by the view. Errors go through
-  `wording.ynab_error_message` ("Nothing was locked. …") and leave config, log and rows
-  untouched. A timeout is different: YNAB may have applied the lock before the answer was
-  lost, so it toasts `LOCK_TIMED_OUT` and calls `invalidate()` to sync and check.
-- Wording: header "4 accounts · 17 transactions not reconciled", card
-  button "Lock n transactions" (DESIGN), footer "Lock n transactions in m accounts" with
-  "Deselect all" (or "Select all" when nothing is selected) and "Lock all"; done footer
-  "n transactions locked · logged in activity", "Lock k more" when selected rows remain,
-  primary "See net worth".
+Markers: `bank-shared-{key}`, `accounts-lede`, `account-card-{id}`, `bucket-section-{bucket}`,
+`account-{id}`, `bucket-{id}`, `bucket-{id}-{bucket}`, `by-hand-{id}`.

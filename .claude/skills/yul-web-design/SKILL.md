@@ -14,8 +14,10 @@ tells you which one answers what, and the rules you must not reinvent.
 | Tokens, type, motion, charts, component list | `DESIGN.md` section 4 |
 | Names, signatures, markers, activity log shapes, how views talk to `core/` and `store/` | `ARCHITECTURE.md` in this folder, section 3 |
 
-`ARCHITECTURE.md` is "as built": when you deviate, update it
-in the same change. Never update a document to describe something you did not build.
+`ARCHITECTURE.md` is the contract, not a narration of the code: it fixes names,
+signatures, markers, activity log shapes and the rules the code cannot express; the
+docstrings and the tests say how the rest works. When you deviate from it, update it in the
+same change. Never update a document to describe something you did not build.
 
 ## Rules that are not up for debate
 
