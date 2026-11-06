@@ -2,7 +2,6 @@ import asyncio
 import datetime as dt
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
@@ -217,7 +216,6 @@ async def test_a_write_during_a_sync_runs_one_more_sync_after_it(
     await running
 
     assert ynab.calls == ["delta", "delta"]
-    assert not app_state.stale
     background.assert_called_once()
 
 
@@ -228,26 +226,6 @@ async def test_without_a_write_a_sync_runs_once(app_state: AppState, ynab_api: Y
     await app_state.sync()
 
     assert ynab.calls == ["delta"]
-
-
-def test_banks_are_discovered_once(app_state: AppState, mocker: MockerFixture):
-    discover = mocker.patch("ynab_unlinked.web.state.loaders", return_value=[MagicMock()])
-    app_state.loaders = []
-
-    app_state.reload()
-    app_state.reload()
-    app_state.load()
-
-    discover.assert_called_once()
-
-
-def test_a_reload_for_the_same_budget_reads_no_database(app_state: AppState, mocker: MockerFixture):
-    last_sync = mocker.spy(Store, "last_sync")
-
-    app_state.reload()
-
-    last_sync.assert_not_called()
-    assert app_state.last_sync is not None
 
 
 def test_update_config_applies_the_change_to_the_file_not_to_the_old_copy(config: str):

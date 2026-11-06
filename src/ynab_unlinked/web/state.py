@@ -56,12 +56,11 @@ class AppState:
         self.token_lost: LatestConfig | None = None
         """A config whose token left the keychain: onboarding asks for the token, keeps the rest."""
         self.sync_error: str | None = None
-        self.stale = False
-        """A view wrote to YNAB after the last sync started, so the store lags behind."""
         self._store: Store | None = None
         self._sync_task: asyncio.Task[SyncResult | None] | None = None
-        self._rerun = False
-        """Something was written to YNAB while the running sync was already under way."""
+        self._written = False
+        """Something was written to YNAB since the current sync round started, if any: the
+        store lags behind until the next round."""
 
     @property
     def store(self) -> Store:
@@ -101,21 +100,18 @@ class AppState:
         Also forgets the open store, for when its file may have been deleted.
         """
         self._store = None
-        self._read_config(keep_last_sync=False)
+        self._read_config()
 
     def reload(self) -> None:
-        """Pick up a config that was just saved.
+        """Pick up a config that was just saved, keeping the open store.
 
-        Keeps the open store and, for the same budget, the time of the last sync, so a save
-        costs no database work on the event loop.
+        Reads the store for the time of the last sync, so it blocks: the app runs it off the
+        event loop.
         """
-        self._read_config(keep_last_sync=True)
+        self._read_config()
 
-    def _read_config(self, *, keep_last_sync: bool) -> None:
-        previous_budget = None if self.config is None else self.config.budget.id
-        if not self.loaders:
-            # The banks yul knows never change while it runs: discover them once
-            self.loaders = loaders()
+    def _read_config(self) -> None:
+        self.loaders = loaders()
         self.load_error = None
         self.token_lost = None
         try:
@@ -141,8 +137,6 @@ class AppState:
             date_format=config.budget.date_format,
             currency_format=config.budget.currency_format,
         )
-        if keep_last_sync and previous_budget == config.budget.id:
-            return
         try:
             self.last_sync = self.store.last_sync(config.budget.id)
         except StoreError as error:
@@ -222,9 +216,9 @@ class AppState:
     async def _sync_rounds(self, progress: Progress) -> SyncResult | None:
         """Sync, and once more each time `invalidate()` was called while syncing."""
         while True:
-            self._rerun = False
+            self._written = False
             result = await self._sync(progress)
-            if not self._rerun:
+            if not self._written:
                 return result
 
     def fresh(self, max_age: dt.timedelta) -> bool:
@@ -234,7 +228,7 @@ class AppState:
         (`activity.py`) newer than the last sync. That reads the store, so it blocks: call it
         through `run.io_bound`.
         """
-        if self.stale or self.syncing or self.last_sync is None:
+        if self._written or self.syncing or self.last_sync is None:
             return False
         if dt.datetime.now(dt.UTC) - self.last_sync > max_age:
             return False
@@ -250,18 +244,14 @@ class AppState:
     def invalidate(self) -> None:
         """Call after writing to YNAB: the next view that needs fresh data syncs first.
 
-        Starts the sync right away too, so it is usually done before the user gets there.
+        Starts the sync right away too, so it is usually done before the user gets there. A
+        sync already running may have fetched before the write: one more round runs after it.
         """
-        self.stale = True
-        if self.syncing:
-            # The running sync may have fetched before the write: run one more after it
-            self._rerun = True
+        self._written = True
         self.sync_in_background()
 
     async def _sync(self, progress: Progress) -> SyncResult | None:
         config, client = self.require()
-        # A write during this sync sets it again, and the next `fresh()` syncs once more
-        self.stale = False
         try:
             # In the worker: the first use opens the store, which must not block the loop
             result = await run.io_bound(lambda: self.store.sync(client, config.budget.id, progress))

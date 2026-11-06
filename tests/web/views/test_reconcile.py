@@ -403,13 +403,12 @@ async def test_a_store_written_to_since_the_last_sync_is_synced_again(
     seed(fresh=True)
     ynab_api.api("transactions").get_transactions.reset_mock()
     # What Import, a lock and a balance update leave behind
-    state().stale = True
+    state().invalidate()
 
     await open_reconcile(user)
 
     await user.should_see("2 accounts · 5 transactions not reconciled")
     ynab_api.api("transactions").get_transactions.assert_called()
-    assert not state().stale
 
 
 def stored(id_: str, amount: int, cleared: TransactionClearedStatus) -> StoredTransaction:
