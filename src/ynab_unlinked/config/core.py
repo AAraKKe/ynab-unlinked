@@ -123,25 +123,21 @@ def _load_current() -> Config | None:
 
 
 @contextmanager
-def edit_config(fallback: LATEST_CONFIG_TYPE | None = None) -> Generator[LATEST_CONFIG_TYPE]:
+def edit_config() -> Generator[LATEST_CONFIG_TYPE]:
     """Change the config on disk in a block: read again, change what the block yields, save.
 
     The file is read again first, so what another process (the CLI or the app) saved since
     this one loaded its copy is kept: each writer only changes what its block touches.
-    `fallback` is changed instead when there is no file yet. Nothing is saved when the block
-    raises.
+    Without a file it raises `ConfigError`. Nothing is saved when the block raises.
 
     The read, the change and the save hold a lock, in this process and on `config.json.lock`
     next to the file, so two saves at once (two threads of the app, or the app and the CLI)
     take turns and each keeps what the other changed. Do not nest it.
     """
     with _edit_lock, file_lock(lock_path()):
-        if LATEST_CONFIG_TYPE.exists():
-            config = LATEST_CONFIG_TYPE.load()
-        elif fallback is not None:
-            config = fallback.model_copy(deep=True)
-        else:
+        if not LATEST_CONFIG_TYPE.exists():
             raise ConfigError("There is no config to change yet. Run `yul setup` first.")
+        config = LATEST_CONFIG_TYPE.load()
         yield config
         config.save()
 
@@ -152,11 +148,9 @@ def lock_path() -> Path:
     return path.with_name(f"{path.name}.lock")
 
 
-def update_config(
-    change: Callable[[LATEST_CONFIG_TYPE], None], fallback: LATEST_CONFIG_TYPE | None = None
-) -> LATEST_CONFIG_TYPE:
+def update_config(change: Callable[[LATEST_CONFIG_TYPE], None]) -> LATEST_CONFIG_TYPE:
     """`edit_config` as a call: apply `change` to the config on disk; returns what was saved."""
-    with edit_config(fallback) as config:
+    with edit_config() as config:
         change(config)
     return config
 

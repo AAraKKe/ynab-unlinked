@@ -5,7 +5,6 @@ from collections.abc import Callable
 import pytest
 from nicegui import ui
 from nicegui.testing.user import User
-from pytest_mock import MockerFixture
 from ynab import (
     AccountsResponse,
     AccountsResponseData,
@@ -260,33 +259,25 @@ async def test_a_token_gone_from_the_keychain_is_asked_for_and_the_rest_is_kept(
 
 
 @pytest.mark.version("V4")
-@pytest.mark.parametrize("file_gone", [False, True], ids=["saved", "file-gone"])
-async def test_recovering_the_token_keeps_the_config_without_its_file_and_toasts_a_failed_save(
+async def test_a_recovered_token_whose_config_file_is_gone_is_not_saved(
     ynab: YnabClientStub,
     memory_keychain: MemoryKeyring,
     config_v4: LatestConfig,
     config_files: ConfigFiles,
     user: User,
-    mocker: MockerFixture,
-    file_gone: bool,
 ):
     config_v4.save()  # the token moves to the keychain
     memory_keychain.passwords.clear()
     state().reload()
     await user.open("/")
     await user.should_see(marker="token-lost")
-    if file_gone:
-        # The kept config is the fallback of this one save, so the budget and banks survive
-        config_files.path("V4").unlink()
-    else:
-        mocker.patch.object(LatestConfig, "save", side_effect=OSError("disk full"))
+    # `yul config reset` meanwhile: a save must not bring the config and the token back
+    config_files.path("V4").unlink()
 
     user.find(marker="token-input").type("my-new-token")
     user.find(marker="check-token").click()
 
-    if file_gone:
-        await user.should_see(marker="nav-home", retries=20)
-        assert LatestConfig.load().loaders == config_v4.loaders
-    else:
-        await user.should_see(SAVE_FAILED, retries=20)
-        await user.should_see(marker="token-lost")
+    await user.should_see(SAVE_FAILED, retries=20)
+    await user.should_see(marker="token-lost")
+    assert not config_files.path("V4").exists()
+    assert memory_keychain.passwords == {}

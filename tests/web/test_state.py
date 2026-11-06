@@ -290,23 +290,6 @@ def test_a_save_after_a_reset_from_the_cli_brings_nothing_back(
     assert app.store.activity(budget_id) == []
 
 
-def test_only_an_explicit_fallback_is_saved_when_the_file_is_gone(
-    config: str, config_files: ConfigFiles
-):
-    app = AppState()
-    app.load()
-    kept = app.require()[0]
-    config_files.path("V4").unlink()
-
-    def set_token(saved: LatestConfig) -> None:
-        saved.api_key = "recovered-token"
-
-    app.update_config(set_token, fallback=kept)
-
-    assert LatestConfig.load().api_key == "recovered-token"
-    assert app.require()[0].api_key == "recovered-token"
-
-
 @pytest.mark.version("missing")
 def test_update_config_without_any_config_is_an_error(config: str, config_files: ConfigFiles):
     app = AppState()

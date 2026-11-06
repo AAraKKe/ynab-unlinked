@@ -149,9 +149,7 @@ class AppState:
             self.last_sync = None
             self.sync_error = str(error)
 
-    def update_config(
-        self, change: Callable[[LatestConfig], None], fallback: LatestConfig | None = None
-    ) -> LatestConfig:
+    def update_config(self, change: Callable[[LatestConfig], None]) -> LatestConfig:
         """Apply `change` to the config on disk, save it and reload; returns the saved config.
 
         The file is read again first, so what the CLI saved while the app was open (a bank's
@@ -159,16 +157,15 @@ class AppState:
 
         Without a file it raises `ConfigError` and loads the state again, which drops the
         app to onboarding: `yul config reset` ran while the app was open, and a save must
-        not bring the config and the token back. Only onboarding passes `fallback` (the
-        config whose token it recovers), which is changed and saved instead.
+        not bring the config and the token back.
 
         It blocks on the disk and the keychain: views call it through `shell.save_config`,
         which runs it off the event loop. Nothing is saved when `change` raises.
         """
-        if self.config is None and fallback is None and not LatestConfig.exists():
+        if self.config is None and not LatestConfig.exists():
             raise NotConfiguredError()
         try:
-            with edit_config(fallback=fallback) as config:
+            with edit_config() as config:
                 change(config)
         except ConfigError:
             self.load()

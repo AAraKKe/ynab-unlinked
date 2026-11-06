@@ -411,8 +411,8 @@ class ConfigV4(BaseModel):
 ```python
 # config/core.py, exported from ynab_unlinked.config
 @contextmanager
-def edit_config(fallback: LatestConfig | None = None) -> Generator[LatestConfig]
-def update_config(change: Callable[[LatestConfig], None], fallback=None) -> LatestConfig
+def edit_config() -> Generator[LatestConfig]                  # ConfigError without a file
+def update_config(change: Callable[[LatestConfig], None]) -> LatestConfig
 def switch_budget(config: LatestConfig, budget: Budget) -> None
 ```
 

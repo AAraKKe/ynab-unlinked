@@ -278,18 +278,10 @@ def test_a_failing_edit_saves_nothing(config: str, config_files: ConfigFiles):
 
 
 @pytest.mark.version("missing")
-def test_editing_without_a_config_file_changes_the_fallback_or_fails(
-    config: str, config_files: ConfigFiles
-):
+def test_editing_without_a_config_file_fails(config: str, config_files: ConfigFiles):
     with pytest.raises(ConfigError, match="yul setup"):
         update_config(lambda saved: None)
     assert not config_files.v2.exists()
-
-    fallback = ConfigV4.model_validate_json(assets.read_text("config_V4/config.json"))
-    saved = update_config(lambda saved: setattr(saved, "api_key", "new-token"), fallback)
-
-    assert ConfigV4.load().api_key == saved.api_key == "new-token"
-    assert fallback.api_key == "my-api-key", "The fallback itself is not changed"
 
 
 def _with_budget_settings() -> ConfigV4:
