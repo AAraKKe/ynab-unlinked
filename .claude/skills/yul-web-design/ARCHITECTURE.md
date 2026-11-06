@@ -591,8 +591,7 @@ web/
       data.py          Status, ImportFile, same_file, mark_repeated, take_candidate,
                        account_label, problem_text, option_choices, read_file,
                        chosen_accounts, done_summary, import_log
-      view.py          ImportFlow (lifecycle, detection, steps Files and Review) and the view
-      commit.py        commit(flow): step Done, commit_files, save_accounts, log
+      view.py          ImportFlow (lifecycle, detection, the three steps, commit and log) and the view
       rows.py          draw_row(flow, item): a file row of step Files and its body
       tables.py        badge, plan_table, transactions_table
       cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
@@ -601,8 +600,7 @@ web/
                        open_transactions, has_anything), LOCK_TIMED_OUT, parse_bank_balance, lock_confirmation,
                        lock_log, lock_checkpoint, pending_title
       groups.py        Row, AccountGroup: the selection and the elements that show it
-      view.py          ReconcileView and the view
-      lock.py          lock(view, groups): confirm, reconcile, log, checkpoint (3.5)
+      view.py          ReconcileView (with the lock: confirm, reconcile, log, checkpoint) and the view
       footer.py        selection / done / locking footers
     networth/          /networth    history chart, buckets, accounts, balance updates, drawer
       data.py          RANGES, MAX_PICKED, range_start, last_set, by_hand_pill, assign_slots,

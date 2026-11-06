@@ -16,6 +16,7 @@ from nicegui import run, ui
 from ynab import TransactionClearedStatus
 
 from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.core.reconcile import reconcile
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import StoredAccount, StoredTransaction
 from ynab_unlinked.web import shell
@@ -31,20 +32,24 @@ from ynab_unlinked.web.components import (
 from ynab_unlinked.web.components.controls import pill_group, switch
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.reconcile import footer
-from ynab_unlinked.web.views.reconcile import lock as lock_step
 from ynab_unlinked.web.views.reconcile.data import (
     ALL_TIME,
+    LOCK_TIMED_OUT,
     SINCE,
     SYNC_MAX_AGE,
     UNCLEARED_SKIPPED,
     ReconcileData,
     gap_candidates,
+    lock_checkpoint,
+    lock_confirmation,
+    lock_log,
     parse_bank_balance,
     pending_title,
     scope_start,
 )
 from ynab_unlinked.web.views.reconcile.groups import AccountGroup, Row
 from ynab_unlinked.web.wording import plural, short_date, ynab_error_message
+from ynab_unlinked.ynab_api.errors import Failure, classify
 
 
 class ReconcileView:
@@ -413,7 +418,67 @@ class ReconcileView:
     # ---- lock ----------------------------------------------------------------------------
 
     async def lock(self, groups: Sequence[AccountGroup]) -> None:
-        await lock_step.lock(self, groups)
+        """Lock the rows selected in `groups`, behind one confirmation."""
+        if self.busy:
+            return
+        batches = [(group, rows) for group in groups if (rows := group.to_lock())]
+        if not batches:
+            return
+        count = sum(len(rows) for _, rows in batches)
+        locked = [(group.account, [row.transaction for row in rows]) for group, rows in batches]
+        if not await shell.confirm(*lock_confirmation(locked)):
+            return
+
+        self.busy = True
+        self.refresh()
+        if self.footer is not None:
+            self.footer.clear()
+            with self.footer:
+                footer.locking(count)
+        rows_to_lock = [row.transaction for _, rows in batches for row in rows]
+        try:
+            config, client = state().require()
+            await run.io_bound(reconcile, client, config.budget.id, rows_to_lock)
+        except Exception as error:
+            self.busy = False
+            if classify(error).failure is Failure.TIMED_OUT:
+                # The answer was lost, not necessarily the lock: sync to see what YNAB has
+                shell.notify(LOCK_TIMED_OUT, "warn")
+                state().invalidate()
+            else:
+                shell.notify(f"Nothing was locked. {ynab_error_message(error)}", "error")
+            self.refresh()
+            return
+
+        next_date = lock_checkpoint(
+            [row.transaction for _, rows in batches for row in rows],
+            [row.transaction for group in self.groups for row in group.pending()],
+            include_uncleared=self.include_uncleared,
+        )
+        # YNAB changed: show it, log it and sync before anything that can still fail
+        try:
+            for _, rows in batches:
+                for row in rows:
+                    row.locked = True
+                    row.selected = False
+                    self.locked_ids.add(row.transaction.id)
+                    self.paint_row(row)
+            self.last_locked = count
+            state().invalidate()
+            message, log_details = lock_log(locked)
+            await run.io_bound(
+                state().store.log, config.budget.id, "reconcile", message, log_details
+            )
+            if next_date is not None:
+
+                def set_last_reconciliation(saved: LatestConfig) -> None:
+                    saved.last_reconciliation_date = next_date
+
+                await shell.save_config(set_last_reconciliation)
+        finally:
+            self.busy = False
+            self.refresh()
+        shell.notify(f"{plural(count, 'transaction')} locked in YNAB")
 
 
 @shell.view(

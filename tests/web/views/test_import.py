@@ -374,7 +374,7 @@ async def test_a_failed_commit_leaves_the_flow_open_to_new_drops(
         )
     else:
         mocker.patch(
-            "ynab_unlinked.web.views.import_.commit.import_log", side_effect=RuntimeError("boom")
+            "ynab_unlinked.web.views.import_.view.import_log", side_effect=RuntimeError("boom")
         )
     notify = mocker.spy(shell, "notify")
 
