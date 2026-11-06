@@ -198,25 +198,3 @@ def import_log(
     }
     message = f"Imported {plural(result.created, 'transaction')} to {account_name} from {file}"
     return message, details
-
-
-__all__ = [
-    "FILE_COLORS",
-    "OTHER_FILE_COLOR",
-    "STEPS",
-    "YEARS_OFFERED",
-    "ImportFile",
-    "Status",
-    "account_label",
-    "chosen_accounts",
-    "done_summary",
-    "file_color",
-    "import_log",
-    "mark_repeated",
-    "option_choices",
-    "parse_file",
-    "problem_text",
-    "read_file",
-    "same_file",
-    "take_candidate",
-]

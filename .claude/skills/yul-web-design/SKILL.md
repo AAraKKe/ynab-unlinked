@@ -86,8 +86,8 @@ same change. Never update a document to describe something you did not build.
   view: what two views share lives in one of these.
 - A view with data to shape is a package (`views/home/`, `import_/`, `onboarding/`,
   `reconcile/`, `networth/`, `settings/`): `data.py` is pure, no NiceGUI even through its
-  imports, and is tested directly; the render modules draw; `__init__` re-exports what tests
-  import. Keep each file under about 500 lines.
+  imports, and is tested directly; the render modules draw; `__init__` holds the docstring
+  only, tests import from the modules. Keep each file under about 500 lines.
 
 ## Tests
 

@@ -66,6 +66,3 @@ def _cells(transaction: Transaction, formatter: Formatter) -> None:
         ui.label(transaction.payee)
     with ui.element("td").classes("r num"):
         ui.label(formatter.format_amount(transaction.amount))
-
-
-__all__ = ["badge", "plan_table", "transactions_table"]

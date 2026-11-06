@@ -27,8 +27,7 @@ from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked import keychain
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.views.onboarding import copy_line
-from ynab_unlinked.web.wording import SAVE_FAILED
+from ynab_unlinked.web.wording import SAVE_FAILED, copy_line
 
 pytestmark = pytest.mark.version("missing")
 

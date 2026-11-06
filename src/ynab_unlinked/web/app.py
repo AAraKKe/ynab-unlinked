@@ -43,14 +43,14 @@ def build(token: str, port: int) -> Callable[[], Any]:
     """
     # Imported here so their @shell.view registrations run whenever the app is built
     from ynab_unlinked.web import views
-    from ynab_unlinked.web.views import onboarding
+    from ynab_unlinked.web.views.onboarding.view import page as onboarding_page
 
     views.register()
     app.add_middleware(TokenGuard, token=token, port=port)
     app.add_static_files(theme.STATIC_ROUTE, STATIC_DIR)
     theme.install()
     ui.button.default_props("no-caps")
-    ui.page(shell.ONBOARDING_PATH, title="yul · setup")(onboarding.page)
+    ui.page(shell.ONBOARDING_PATH, title="yul · setup")(onboarding_page)
     return shell.root
 
 

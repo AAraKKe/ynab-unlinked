@@ -4,10 +4,3 @@ A full screen page outside the shell: a centered glass card with the step rail o
 `data` holds the steps (no NiceGUI), `progress` the copy's progress line and `view` the
 wizard and its page.
 """
-
-from __future__ import annotations
-
-from ynab_unlinked.web.views.onboarding.view import page
-from ynab_unlinked.web.wording import copy_line
-
-__all__ = ["copy_line", "page"]

@@ -24,8 +24,7 @@ from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store, StoredTransaction
 from ynab_unlinked.web.state import AppState, state
-from ynab_unlinked.web.views.reconcile import gap_candidates
-from ynab_unlinked.web.views.reconcile.data import LOCK_TIMED_OUT
+from ynab_unlinked.web.views.reconcile.data import LOCK_TIMED_OUT, gap_candidates
 from ynab_unlinked.web.wording import SAVE_FAILED
 
 pytestmark = pytest.mark.version("V4")

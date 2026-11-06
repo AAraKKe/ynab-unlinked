@@ -585,7 +585,7 @@ web/
       view.py          Wizard and page()
     Every view with data to shape is a package: data.py is pure (no NiceGUI, not even
     through its imports: web.accounts, web.buckets, web.paths, web.wording are NiceGUI-free)
-    and unit testable; the other modules draw. __init__ re-exports the names tests use.
+    and unit testable; the other modules draw; __init__ holds the docstring only.
     home/              /            hero, import (drop zone, last imports), needs you, activity (3.4.2)
       data.py          LoaderDue, HomeData, load_home, last_set_by_hand, relative_time, last_imports_line,
                        message_markup, Attention, attention_items

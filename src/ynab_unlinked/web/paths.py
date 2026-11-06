@@ -9,12 +9,3 @@ RECONCILE_PATH = "/reconcile"
 NETWORTH_PATH = "/networth"
 SETTINGS_PATH = "/settings"
 ONBOARDING_PATH = "/onboarding"
-
-__all__ = [
-    "HOME_PATH",
-    "IMPORT_PATH",
-    "NETWORTH_PATH",
-    "ONBOARDING_PATH",
-    "RECONCILE_PATH",
-    "SETTINGS_PATH",
-]

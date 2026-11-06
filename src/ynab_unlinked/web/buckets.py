@@ -46,6 +46,3 @@ SETTINGS_ORDER = (Bucket.CASH, Bucket.SAVINGS, Bucket.ASSETS, Bucket.DEBT)
 """Settings › Accounts: its sections and the bucket pills of every card."""
 SERIES_BUCKETS = tuple(bucket for bucket in NET_WORTH_ORDER if STYLES[bucket].slot is not None)
 """The buckets with a series in the "by type" chart."""
-
-
-__all__ = ["NET_WORTH_ORDER", "SERIES_BUCKETS", "SETTINGS_ORDER", "STYLES", "BucketStyle"]

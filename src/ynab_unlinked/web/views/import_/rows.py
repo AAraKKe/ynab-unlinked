@@ -155,6 +155,3 @@ def draw_body(flow: ImportFlow, item: ImportFile) -> None:
         plan_table(item.plan, flow.formatter())
     elif candidate.transactions is not None:
         transactions_table(candidate.transactions, flow.formatter())
-
-
-__all__ = ["draw_row"]

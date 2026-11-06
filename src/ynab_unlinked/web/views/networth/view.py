@@ -443,6 +443,3 @@ class NetWorthView:
 )
 async def networth_view() -> None:
     await NetWorthView().render()
-
-
-__all__ = ["NetWorthView", "networth_view"]

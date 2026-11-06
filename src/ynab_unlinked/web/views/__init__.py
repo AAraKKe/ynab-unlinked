@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 
-_VIEW_MODULES = ("home", "import_", "networth", "reconcile", "settings")
+_VIEW_MODULES = ("home.view", "import_.view", "networth.view", "reconcile.view", "settings")
 
 
 def register() -> None:

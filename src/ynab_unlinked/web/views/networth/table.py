@@ -290,6 +290,3 @@ class AccountsTable:
         await self.refresh()
         with self.root:
             shell.notify(f"{name} set to {new} ({difference})")
-
-
-__all__ = ["AccountsTable"]

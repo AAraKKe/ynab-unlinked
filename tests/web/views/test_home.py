@@ -17,7 +17,14 @@ from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import Adjustments, DebtMapping, LatestConfig, TrackedAccount
 from ynab_unlinked.store import Activity, Store, StoredAccount, StoredTransaction
 from ynab_unlinked.web.state import AppState, state
-from ynab_unlinked.web.views import home
+from ynab_unlinked.web.views.home import view as home_view
+from ynab_unlinked.web.views.home.data import (
+    last_set_by_hand,
+    load_home,
+    message_markup,
+    relative_time,
+)
+from ynab_unlinked.web.wording import short_date
 from ynab_unlinked.ynab_api import Client
 
 pytestmark = pytest.mark.version("V4")
@@ -339,7 +346,7 @@ async def test_the_last_imports_line_lists_the_banks_in_registry_order(
     # The day the import was logged on this computer: 40 days of UTC time can cross a
     # daylight saving change and land on another local day than 40 calendar days ago
     forty_days_ago = (now() - dt.timedelta(days=40)).astimezone().date()
-    expected = expected.replace("{40 days ago}", home.short_date(forty_days_ago, dt.date.today()))
+    expected = expected.replace("{40 days ago}", short_date(forty_days_ago, dt.date.today()))
 
     # BBVA is not set up in the config and the "test" loader is not a bank yul ships
     assert _text(user, "last-imports") == expected
@@ -498,7 +505,7 @@ async def test_the_top_bar_import_button_opens_the_import_view(store: Store, use
 async def test_home_waits_for_the_first_sync_and_then_shows_the_budget(
     budget: LatestConfig, user: User, mocker: MockerFixture, store_file: Path
 ):
-    mocker.patch.object(home.view, "SYNC_POLL_SECONDS", 0.05)
+    mocker.patch.object(home_view, "SYNC_POLL_SECONDS", 0.05)
     syncing = mocker.patch.object(AppState, "syncing", new_callable=PropertyMock)
     syncing.return_value = True
 
@@ -525,14 +532,14 @@ async def test_home_waits_for_the_first_sync_and_then_shows_the_budget(
 )
 def test_relative_time_for_recent_entries(ago: dt.timedelta, expected: str):
     current = now()
-    assert home.relative_time(current - ago, current) == expected
+    assert relative_time(current - ago, current) == expected
 
 
 def test_relative_time_shows_the_day_for_older_entries_and_the_year_when_it_differs():
     now = dt.datetime(2026, 11, 3, 12, tzinfo=dt.UTC)
 
-    assert home.relative_time(dt.datetime(2026, 10, 29, 12, tzinfo=dt.UTC), now) == "29 Oct"
-    assert home.relative_time(dt.datetime(2025, 12, 30, 12, tzinfo=dt.UTC), now) == "30 Dec 2025"
+    assert relative_time(dt.datetime(2026, 10, 29, 12, tzinfo=dt.UTC), now) == "29 Oct"
+    assert relative_time(dt.datetime(2025, 12, 30, 12, tzinfo=dt.UTC), now) == "30 Dec 2025"
 
 
 @pytest.mark.parametrize(
@@ -560,7 +567,7 @@ def test_relative_time_shows_the_day_for_older_entries_and_the_year_when_it_diff
 def test_activity_message_markup(kind: str, message: str, details: dict, expected: str):
     entry = Activity(at=now(), kind=kind, message=message, details=details)
 
-    assert home.message_markup(entry) == expected
+    assert message_markup(entry) == expected
 
 
 def by_hand(id: str, days: int, *, payee: str = "Shop", memo: str | None = None):
@@ -589,9 +596,7 @@ def test_a_balance_set_by_hand_dates_from_its_newest_adjustment(
 ):
     settings = Adjustments(payee="Saldo", memo="Set by hand")
 
-    last = home.last_set_by_hand(
-        transactions, settings, None if logged is None else days_ago(logged)
-    )
+    last = last_set_by_hand(transactions, settings, None if logged is None else days_ago(logged))
 
     assert last == (None if expected is None else days_ago(expected))
 
@@ -617,6 +622,6 @@ async def test_an_adjustment_made_before_the_settings_changed_still_dates_the_ba
     )
     budget.adjustments = Adjustments(payee="Saldo", memo="Set by hand")
 
-    data = home.load_home(store, budget, [], dt.date.today())
+    data = load_home(store, budget, [], dt.date.today())
 
     assert data.stale == ["Broker"]

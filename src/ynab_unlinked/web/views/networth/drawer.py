@@ -70,6 +70,3 @@ def _transaction_row(formatter: Formatter, transaction: StoredTransaction) -> No
                 ui.label(transaction.memo).classes("yul-faint yul-small yul-nw-memo")
         amount = ui.label(formatter.format_amount_milli(transaction.amount))
         amount.classes("yul-num yul-nw-tx-amount")
-
-
-__all__ = ["account_drawer"]

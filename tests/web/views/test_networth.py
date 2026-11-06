@@ -27,8 +27,8 @@ from ynab_unlinked.core.balances import Adjustment
 from ynab_unlinked.store import Store, StoredTransaction
 from ynab_unlinked.web import theme
 from ynab_unlinked.web.state import AppState, state
-from ynab_unlinked.web.views import networth
-from ynab_unlinked.web.views.networth import by_hand_pill, last_set, range_start
+from ynab_unlinked.web.views.networth import data as networth_data
+from ynab_unlinked.web.views.networth.data import by_hand_pill, last_set, range_start
 from ynab_unlinked.ynab_api import Client
 
 pytestmark = pytest.mark.version("V4")
@@ -596,7 +596,7 @@ async def test_at_the_limit_unpicked_chips_say_why_they_cannot_be_added(
     seeded: Store, no_sync, user: User, monkeypatch: pytest.MonkeyPatch
 ):
     # The fixture has five accounts; a limit of four is reached by the default pick
-    monkeypatch.setattr(networth.data, "MAX_PICKED", 4)
+    monkeypatch.setattr(networth_data, "MAX_PICKED", 4)
     await open_networth(user)
     grouping = user.find(marker="grouping").elements.pop()
     assert isinstance(grouping, ui.select)

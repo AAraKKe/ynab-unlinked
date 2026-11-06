@@ -236,13 +236,3 @@ def set_options(chart: ui.echart, options: dict[str, Any]) -> None:
     current.clear()
     current.update(options)
     chart.update()
-
-
-__all__ = [
-    "CHART_HEIGHT",
-    "ChartSeries",
-    "history_chart",
-    "history_options",
-    "money_js",
-    "set_options",
-]

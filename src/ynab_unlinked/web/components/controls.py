@@ -75,6 +75,3 @@ def switch(label: str, value: bool, on_change: Callable[[bool], Any]) -> ui.elem
     element.on("keydown.space.prevent", toggle)
     show()
     return element
-
-
-__all__ = ["pill_group", "switch"]
