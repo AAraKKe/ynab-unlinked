@@ -60,9 +60,3 @@ def record_threads(mocker: MockerFixture, owner: type, method: str) -> list[str]
 
     mocker.patch.object(owner, method, record)
     return threads
-
-
-def off_the_event_loop(threads: list[str], calls: int | None = None) -> bool:
-    """Whether `calls` calls (at least one by default) ran, none of them on the main thread."""
-    ran = len(threads) == calls if calls is not None else bool(threads)
-    return ran and threading.main_thread().name not in threads

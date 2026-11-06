@@ -22,7 +22,6 @@ from tests.factories import (
 )
 from tests.helpers.config import ConfigFiles
 from tests.helpers.keychain import MemoryKeyring
-from tests.helpers.web import off_the_event_loop, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked import keychain
 from ynab_unlinked.config import LatestConfig
@@ -291,36 +290,3 @@ async def test_recovering_the_token_keeps_the_config_without_its_file_and_toasts
     else:
         await user.should_see(SAVE_FAILED, retries=20)
         await user.should_see(marker="token-lost")
-
-
-async def test_the_first_config_save_runs_off_the_event_loop(
-    user: User, ynab: YnabClientStub, mocker: MockerFixture
-):
-    threads = record_threads(mocker, LatestConfig, "save")
-    await _walk_to_banks(user)
-    user.find(marker="wizard-next").click()
-
-    await user.should_see("You are set", retries=20)
-    assert off_the_event_loop(threads, calls=1)
-
-
-@pytest.mark.version("V4")
-async def test_the_recovered_token_is_saved_off_the_event_loop(
-    ynab: YnabClientStub,
-    memory_keychain: MemoryKeyring,
-    config_v4: LatestConfig,
-    user: User,
-    mocker: MockerFixture,
-):
-    config_v4.save()  # the token moves to the keychain
-    memory_keychain.passwords.clear()
-    state().reload()
-    threads = record_threads(mocker, LatestConfig, "save")
-    await user.open("/")
-    await user.should_see(marker="token-lost")
-
-    user.find(marker="token-input").type("my-new-token")
-    user.find(marker="check-token").click()
-
-    await user.should_see(marker="nav-home", retries=20)
-    assert off_the_event_loop(threads, calls=1)

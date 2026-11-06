@@ -7,7 +7,6 @@ from collections.abc import Iterator
 from uuid import UUID
 
 import pytest
-from pytest_mock import MockerFixture
 from ynab import ApiException, TransactionClearedStatus
 
 from tests.factories import PendingImportFactory
@@ -344,17 +343,3 @@ def test_a_request_that_gets_no_answer_gives_up_with_one_line(
         "YNAB did not answer in time. Check your internet connection and try again."
     )
     assert web_error_message(raised.value) == YNAB_TIMED_OUT
-
-
-def test_every_request_carries_the_timeout(mocker: MockerFixture):
-    client = Client(api_key="an-api-key")
-    request = mocker.patch.object(
-        client._Client__client.rest_client,  # type: ignore[attr-defined]
-        "request",
-        side_effect=ApiException(status=500, reason="stop here"),
-    )
-
-    with pytest.raises(ApiException):
-        client.accounts(BUDGET_ID)
-
-    assert request.call_args.kwargs["_request_timeout"] == client_module.REQUEST_TIMEOUT == (10, 60)

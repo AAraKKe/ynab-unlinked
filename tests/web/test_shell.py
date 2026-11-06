@@ -1,14 +1,18 @@
 import datetime as dt
+import threading
 from pathlib import Path
 
 import pytest
 from nicegui import ui
 from nicegui.elements.upload_files import SmallFileUpload
 from nicegui.testing.user import User
+from pytest_mock import MockerFixture
 from ynab import ApiException
 
 from tests.factories import AccountFactory, TransactionDetailFactory
+from tests.helpers.web import record_threads
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.state import state
@@ -188,3 +192,16 @@ async def test_a_sync_from_the_chip_leaves_the_import_view_alone(
 
     await user.should_see("1 transaction loaded from YNAB", retries=20)
     await user.should_see("tarjeta.xlsx", marker="file-1")
+
+
+@pytest.mark.version("V4")
+async def test_a_config_save_runs_off_the_event_loop(user: User, mocker: MockerFixture):
+    """The file and the keychain can block: every view saves through here, and a save on the
+    event loop would freeze every open page."""
+    threads = record_threads(mocker, LatestConfig, "save")
+    await user.open("/")
+
+    assert await shell.save_config(lambda config: None)
+
+    assert threads
+    assert threading.main_thread().name not in threads
