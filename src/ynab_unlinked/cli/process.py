@@ -10,7 +10,7 @@ from ynab_unlinked.cli.context_object import YnabUnlinkedContext
 from ynab_unlinked.cli.display import CliProgress, bullet_list, confirm, console, info, question
 from ynab_unlinked.cli.utils import display_import_table, display_transaction_table
 from ynab_unlinked.config import LatestConfig, update_config
-from ynab_unlinked.core.importing import build_import_plan, commit_import_plan, parse_transactions
+from ynab_unlinked.core.importing import build_import_plan, commit_import_plan
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.ynab_api.client import Client
@@ -75,7 +75,7 @@ def process_transactions(
     config = context.config
 
     try:
-        parsed_input = parse_transactions(entity, input_file)
+        parsed_input = entity.parse(input_file)
     except ParsingError as e:
         display.error(f"Error when parsing {e.input_file}")
         display.console().print(f"  Message: {escape(e.message)}")

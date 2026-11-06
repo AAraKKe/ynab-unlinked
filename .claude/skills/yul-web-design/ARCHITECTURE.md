@@ -103,9 +103,6 @@ class ImportResult:
     created: int
     duplicate_import_ids: tuple[str, ...]
 
-def parse_transactions(entity: Entity, input_file: Path) -> list[Transaction]
-    # wraps entity.parse, lets ParsingError propagate
-
 IMPORT_BUFFER_DAYS = 15     # also the `yul load --buffer` default and YnabUnlinkedContext's
 
 def build_import_plan(
@@ -592,7 +589,7 @@ web/
       view.py          the page (hero with count_up, spark_options, activity, banner)
     import_/           /import      Files -> Review -> Done on core.detect and core.importing
       data.py          Status, ImportFile, same_file, mark_repeated, take_candidate,
-                       account_label, problem_text, option_choices, parse_file, read_file,
+                       account_label, problem_text, option_choices, read_file,
                        chosen_accounts, done_summary, import_log
       view.py          ImportFlow (lifecycle, detection, steps Files and Review) and the view
       commit.py        commit(flow): step Done, commit_files, save_accounts, log

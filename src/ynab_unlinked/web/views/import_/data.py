@@ -13,7 +13,7 @@ from typing import Any
 
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.core.detect import Candidate, Detection
-from ynab_unlinked.core.importing import ImportPlan, ImportResult, parse_transactions
+from ynab_unlinked.core.importing import ImportPlan, ImportResult
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
 from ynab_unlinked.models import Transaction
 from ynab_unlinked.web.wording import plural
@@ -147,17 +147,13 @@ def option_choices(option: LoaderOption, current: str, today: dt.date) -> list[s
     return [current]
 
 
-def parse_file(spec: LoaderSpec, path: Path, options: dict[str, str]) -> list[Transaction]:
-    """Read the file with the bank and these option values. Blocking: run it through io_bound."""
-    return parse_transactions(spec.build(options), path)
-
-
 def read_file(
     spec: LoaderSpec, path: Path, options: dict[str, str]
 ) -> tuple[tuple[Transaction, ...] | None, str | None]:
-    """`parse_file`, as (transactions, None) or (None, why it failed). Blocking."""
+    """Read the file with the bank and these option values, as (transactions, None) or
+    (None, why it failed). Blocking: run it through io_bound."""
     try:
-        return tuple(parse_file(spec, path, options) or ()), None
+        return tuple(spec.build(options).parse(path) or ()), None
     except Exception as error:
         return None, str(error)
 

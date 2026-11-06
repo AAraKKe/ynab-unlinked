@@ -11,7 +11,6 @@ from pathlib import Path
 from ynab import TransactionClearedStatus
 
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
-from ynab_unlinked.entities import Entity
 from ynab_unlinked.models import PendingImport, Transaction, assign_import_ids
 from ynab_unlinked.ynab_api.client import Client
 
@@ -72,11 +71,6 @@ def unique_files(files: Sequence[Path]) -> tuple[list[Path], list[tuple[Path, Pa
         seen[digest] = input_file
         unique.append(input_file)
     return unique, copies
-
-
-def parse_transactions(entity: Entity, input_file: Path) -> list[Transaction]:
-    """Read the export with the entity's parser. A `ParsingError` reaches the caller."""
-    return entity.parse(input_file)
 
 
 def build_import_plan(

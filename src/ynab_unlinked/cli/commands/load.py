@@ -273,11 +273,10 @@ def auto(
 def _parse(input_file: Path, candidate: Candidate) -> list[Transaction]:
     from rich.markup import escape
 
-    from ynab_unlinked.core.importing import parse_transactions
     from ynab_unlinked.exceptions import ParsingError
 
     try:
-        return parse_transactions(candidate.loader.build(candidate.options), input_file)
+        return candidate.loader.build(candidate.options).parse(input_file)
     except ParsingError as e:
         # Detection parsed the file already, so this only happens if it changed meanwhile
         display.error(escape(f"{input_file.name} could not be read: {e.message}"))
