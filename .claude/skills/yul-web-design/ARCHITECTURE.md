@@ -525,7 +525,7 @@ web/
                        run(port: int | None, open_browser: bool, announce=None)
   state.py             AppState / state(): config, client, store, formatter, loaders, last_sync
   accounts.py          effective_accounts() / by_hand_accounts() / effective_nettings():
-                       what Home, Net worth and Settings count (3.4.1); STALE_AFTER_DAYS
+                       what Home, Net worth and Settings count (3.4.1); last_set_by_hand(), STALE_AFTER_DAYS
   buckets.py           STYLES (BucketStyle: title, group_title, series slot, colour per bucket),
                        NET_WORTH_ORDER, SETTINGS_ORDER, SERIES_BUCKETS
   wording.py           pure (no NiceGUI): plural (re-exported from ynab_unlinked.text),
@@ -575,7 +575,7 @@ web/
     through its imports: web.accounts, web.buckets, web.paths, web.wording are NiceGUI-free)
     and unit testable; the other modules draw; __init__ holds the docstring only.
     home/              /            hero, import (drop zone, last imports), needs you, activity (3.4.2)
-      data.py          LoaderDue, HomeData, load_home, last_set_by_hand, relative_time, last_imports_line,
+      data.py          LoaderDue, HomeData, load_home, relative_time, last_imports_line,
                        message_markup, Attention, attention_items
       view.py          the page (hero with count_up, spark_options, activity, banner)
     import_/           /import      Files -> Review -> Done on core.detect and core.importing
@@ -594,7 +594,7 @@ web/
       view.py          ReconcileView (with the lock: confirm, reconcile, log, checkpoint) and the view
       footer.py        selection / done / locking footers
     networth/          /networth    history chart, buckets, accounts, balance updates, drawer
-      data.py          RANGES, MAX_PICKED, range_start, last_set, by_hand_pill, assign_slots,
+      data.py          RANGES, MAX_PICKED, range_start, by_hand_pill, assign_slots,
                        Snapshot, load_snapshot, table_order, default_picked, parse_balance,
                        set_balance (the one write: live balance, build and create the adjustment)
       view.py          NetWorthView (hero, ranges, chips, buckets, drawer loading) and the view
@@ -749,7 +749,7 @@ full, brought changes or removed ghosts (one runs at every start). Home reads: t
 `reconcile` (hero change since), the newest `import` per `details["loader"]` (the last
 imports line, 3.4.2) and the newest `adjustment` per `details["account_id"]` (when a balance
 kept by hand was last set, with the transactions carrying the payee or the memo of the
-adjustment settings: `last_set_by_hand`, so a settings change does not hide older ones). It ignores `config` entries. Home has no setup card: every open
+adjustment settings: `web.accounts.last_set_by_hand`, which Net worth's age pill uses too, so a settings change does not hide older ones). It ignores `config` entries. Home has no setup card: every open
 account counts from the start (3.4.1).
 
 ### 3.4.1 Which accounts count
@@ -768,6 +768,10 @@ def by_hand_accounts(config, stored) -> list[TrackedAccount]
     # effective_accounts() with track_balance: the pencil always shown, the age pill, the
     # Home "stale balances" card
 def effective_nettings(config) -> tuple[DebtNetting, ...]   # config.debt_mappings, always
+def logged_adjustments(store, budget_id) -> dict[str, date]   # newest `adjustment` entry's day
+def last_set_by_hand(transactions, settings: Adjustments, logged: date | None) -> date | None
+    # newest adjustment (payee or memo of the settings, or logged), else newest transaction:
+    # Home's stale card and Net worth's age pill
 ```
 
 Home, Net worth and the Settings Net worth tab read through these. A mapping that names a

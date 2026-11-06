@@ -1,9 +1,17 @@
+import datetime as dt
+
 import pytest
+from ynab import TransactionClearedStatus
 
 from ynab_unlinked.buckets import Bucket
-from ynab_unlinked.config import DebtMapping, LatestConfig, TrackedAccount
-from ynab_unlinked.store import StoredAccount
-from ynab_unlinked.web.accounts import by_hand_accounts, effective_accounts, effective_nettings
+from ynab_unlinked.config import Adjustments, DebtMapping, LatestConfig, TrackedAccount
+from ynab_unlinked.store import StoredAccount, StoredTransaction
+from ynab_unlinked.web.accounts import (
+    by_hand_accounts,
+    effective_accounts,
+    effective_nettings,
+    last_set_by_hand,
+)
 
 pytestmark = pytest.mark.version("V4")
 
@@ -74,3 +82,51 @@ def test_a_config_entry_defaults_to_counted():
     )
 
     assert entry.counted is True
+
+
+def days_ago(days: int) -> dt.date:
+    return dt.date.today() - dt.timedelta(days=days)
+
+
+def by_hand(id: str, days: int, *, payee: str = "Shop", memo: str | None = None):
+    return StoredTransaction(
+        id=id,
+        account_id="broker",
+        date=days_ago(days),
+        amount=0,
+        cleared=TransactionClearedStatus.RECONCILED,
+        approved=True,
+        deleted=False,
+        payee_name=payee,
+        category_name=None,
+        import_id=None,
+        memo=memo,
+        transfer_account_id=None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("transactions", "logged", "expected"),
+    [
+        pytest.param([], None, None, id="nothing-yet"),
+        pytest.param([by_hand("d", 2)], None, 2, id="no-adjustment-the-newest-transaction"),
+        pytest.param(
+            [by_hand("a", 40, payee="Saldo"), by_hand("d", 2)], None, 40, id="by-the-payee"
+        ),
+        pytest.param(
+            [by_hand("a", 40, memo="Set by hand"), by_hand("d", 2)], None, 40, id="by-the-memo"
+        ),
+        # Made before the payee and the memo changed: only the log still knows it
+        pytest.param(
+            [by_hand("a", 40, payee="Old payee"), by_hand("d", 2)], 40, 40, id="logged-by-yul"
+        ),
+    ],
+)
+def test_a_balance_set_by_hand_dates_from_its_newest_adjustment(
+    transactions: list[StoredTransaction], logged: int | None, expected: int | None
+):
+    settings = Adjustments(payee="Saldo", memo="Set by hand")
+
+    last = last_set_by_hand(transactions, settings, None if logged is None else days_ago(logged))
+
+    assert last == (None if expected is None else days_ago(expected))

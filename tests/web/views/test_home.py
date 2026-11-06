@@ -19,7 +19,6 @@ from ynab_unlinked.store import Activity, Store, StoredAccount, StoredTransactio
 from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views.home import view as home_view
 from ynab_unlinked.web.views.home.data import (
-    last_set_by_hand,
     load_home,
     message_markup,
     relative_time,
@@ -568,37 +567,6 @@ def test_activity_message_markup(kind: str, message: str, details: dict, expecte
     entry = Activity(at=now(), kind=kind, message=message, details=details)
 
     assert message_markup(entry) == expected
-
-
-def by_hand(id: str, days: int, *, payee: str = "Shop", memo: str | None = None):
-    return dataclasses.replace(transaction(id, "broker", days_ago(days), 0, payee=payee), memo=memo)
-
-
-@pytest.mark.parametrize(
-    ("transactions", "logged", "expected"),
-    [
-        pytest.param([], None, None, id="nothing-yet"),
-        pytest.param([by_hand("d", 2)], None, 2, id="no-adjustment-the-newest-transaction"),
-        pytest.param(
-            [by_hand("a", 40, payee="Saldo"), by_hand("d", 2)], None, 40, id="by-the-payee"
-        ),
-        pytest.param(
-            [by_hand("a", 40, memo="Set by hand"), by_hand("d", 2)], None, 40, id="by-the-memo"
-        ),
-        # Made before the payee and the memo changed: only the log still knows it
-        pytest.param(
-            [by_hand("a", 40, payee="Old payee"), by_hand("d", 2)], 40, 40, id="logged-by-yul"
-        ),
-    ],
-)
-def test_a_balance_set_by_hand_dates_from_its_newest_adjustment(
-    transactions: list[StoredTransaction], logged: int | None, expected: int | None
-):
-    settings = Adjustments(payee="Saldo", memo="Set by hand")
-
-    last = last_set_by_hand(transactions, settings, None if logged is None else days_ago(logged))
-
-    assert last == (None if expected is None else days_ago(expected))
 
 
 async def test_an_adjustment_made_before_the_settings_changed_still_dates_the_balance(

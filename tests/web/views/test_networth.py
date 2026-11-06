@@ -24,11 +24,11 @@ from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
 from ynab_unlinked.core.balances import Adjustment
-from ynab_unlinked.store import Store, StoredTransaction
+from ynab_unlinked.store import Store
 from ynab_unlinked.web import theme
 from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views.networth import data as networth_data
-from ynab_unlinked.web.views.networth.data import by_hand_pill, last_set, range_start
+from ynab_unlinked.web.views.networth.data import by_hand_pill, range_start
 from ynab_unlinked.ynab_api import Client
 
 pytestmark = pytest.mark.version("V4")
@@ -262,39 +262,6 @@ async def test_every_account_has_a_pencil_shown_always_on_by_hand_ones(
     assert texts(user, f"age-{INDEXA}") == "by hand · 9 days ago"
     assert texts(user, f"age-{IBKR}") == "stale · 41 days ago"
     assert "warn" in user.find(marker=f"age-{IBKR}").elements.pop().classes
-
-
-def _transaction(day: dt.date, payee: str) -> StoredTransaction:
-    return StoredTransaction(
-        id=f"{day}{payee}",
-        account_id=INDEXA,
-        date=day,
-        amount=1000,
-        cleared=TransactionClearedStatus.CLEARED,
-        approved=True,
-        deleted=False,
-        payee_name=payee,
-        category_name=None,
-        import_id=None,
-        memo=None,
-        transfer_account_id=None,
-    )
-
-
-@pytest.mark.parametrize(
-    ("payees", "expected_days_ago"),
-    [
-        ([(40, ADJUSTMENT_PAYEE), (3, "Dividend")], 40),
-        ([(40, "Starting Balance"), (3, "Dividend")], 3),
-        ([], None),
-    ],
-    ids=["latest-adjustment-wins", "latest-transaction-without-adjustments", "no-history"],
-)
-def test_a_by_hand_balance_was_last_set_by_its_latest_adjustment(payees, expected_days_ago):
-    transactions = [_transaction(ago(days), payee) for days, payee in payees]
-
-    expected = None if expected_days_ago is None else ago(expected_days_ago)
-    assert last_set(transactions, ADJUSTMENT_PAYEE) == expected
 
 
 @pytest.mark.parametrize(

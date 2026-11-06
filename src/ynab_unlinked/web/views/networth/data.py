@@ -30,7 +30,7 @@ from ynab_unlinked.core.balances import (
     parse_amount_to_milliunits,
 )
 from ynab_unlinked.formatter import Formatter
-from ynab_unlinked.store import Store, StoredAccount, StoredTransaction
+from ynab_unlinked.store import Store, StoredAccount
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
 from ynab_unlinked.web.buckets import NET_WORTH_ORDER
@@ -74,14 +74,6 @@ def range_start(key: str, today: dt.date, earliest: dt.date) -> dt.date:
         case _:
             start = earliest
     return min(max(start, earliest), today)
-
-
-def last_set(transactions: Sequence[StoredTransaction], payee: str) -> dt.date | None:
-    """When a by hand balance was last set: the latest adjustment, else the latest transaction."""
-    if not transactions:
-        return None
-    adjustments = [t.date for t in transactions if t.payee_name == payee]
-    return max(adjustments) if adjustments else max(t.date for t in transactions)
 
 
 def age_text(days: int) -> str:
@@ -168,8 +160,11 @@ def load_snapshot(store: Store, config: LatestConfig, today: dt.date) -> Snapsho
     )
     amounts = store.daily_amounts(budget_id, [a.id for a in tracked]) if tracked else {}
     earliest = min((a.days[0][0] for a in amounts.values() if a.days), default=today)
+    logged = tracking.logged_adjustments(store, budget_id)
     by_hand = {
-        a.id: last_set(store.transactions(budget_id, account_id=a.id), config.adjustments.payee)
+        a.id: tracking.last_set_by_hand(
+            store.transactions(budget_id, account_id=a.id), config.adjustments, logged.get(a.id)
+        )
         for a in tracked
         if a.track_balance
     }

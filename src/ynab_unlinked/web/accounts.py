@@ -9,14 +9,15 @@ No NiceGUI here: the views' pure data modules count accounts through it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import datetime as dt
+from collections.abc import Iterable, Sequence
 
 from ynab import AccountType
 
 from ynab_unlinked.buckets import Bucket, bucket_for
-from ynab_unlinked.config import LatestConfig, TrackedAccount
+from ynab_unlinked.config import Adjustments, LatestConfig, TrackedAccount
 from ynab_unlinked.core.balances import DebtNetting
-from ynab_unlinked.store import StoredAccount
+from ynab_unlinked.store import Store, StoredAccount, StoredTransaction
 
 STALE_AFTER_DAYS = 30
 """A balance set by hand is stale once it is older than this: Home's card, Net worth's pill."""
@@ -80,3 +81,34 @@ def effective_nettings(config: LatestConfig) -> tuple[DebtNetting, ...]:
         DebtNetting(debt_account_id=mapping.debt_account_id, mapped_to=tuple(mapping.mapped_to))
         for mapping in config.debt_mappings
     )
+
+
+def last_set_by_hand(
+    transactions: Sequence[StoredTransaction], settings: Adjustments, logged: dt.date | None
+) -> dt.date | None:
+    """When a balance kept by hand was last set: the newest adjustment, else the newest
+    transaction, None when the account has none.
+
+    An adjustment is a transaction with the payee or the memo of the adjustment settings, or
+    one yul logged for the account (`logged`, the day of the newest `adjustment` entry), so
+    the ones made before the settings changed still count.
+    """
+    adjusted = [
+        t.date for t in transactions if t.payee_name == settings.payee or t.memo == settings.memo
+    ]
+    if logged is not None:
+        adjusted.append(logged)
+    if adjusted:
+        return max(adjusted)
+    return max((t.date for t in transactions), default=None)
+
+
+def logged_adjustments(store: Store, budget_id: str) -> dict[str, dt.date]:
+    """The day of the newest adjustment yul logged, per account id."""
+    days: dict[str, dt.date] = {}
+    for entry in store.activity(budget_id, limit=None, kind="adjustment"):
+        account_id = entry.details.get("account_id")
+        if isinstance(account_id, str):
+            day = entry.at.astimezone().date()
+            days[account_id] = max(day, days.get(account_id, day))
+    return days

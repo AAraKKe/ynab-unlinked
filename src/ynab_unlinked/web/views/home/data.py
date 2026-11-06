@@ -14,11 +14,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ynab_unlinked.config import Adjustments, LatestConfig
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.core.balances import AccountBalance, net_worth
 from ynab_unlinked.core.history import TOTAL, Point, net_worth_series
 from ynab_unlinked.entities.registry import LoaderSpec
-from ynab_unlinked.store import Activity, Store, StoredTransaction
+from ynab_unlinked.store import Activity, Store
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
 from ynab_unlinked.web.paths import NETWORTH_PATH, RECONCILE_PATH
@@ -66,37 +66,6 @@ def _local_day(moment: dt.datetime) -> dt.date:
     return moment.astimezone().date()
 
 
-def last_set_by_hand(
-    transactions: Sequence[StoredTransaction], settings: Adjustments, logged: dt.date | None
-) -> dt.date | None:
-    """When a balance kept by hand was last set: the newest adjustment, else the newest
-    transaction, None when the account has none.
-
-    An adjustment is a transaction with the payee or the memo of the adjustment settings, or
-    one yul logged for the account (`logged`, the day of the newest `adjustment` entry), so
-    the ones made before the settings changed still count.
-    """
-    adjusted = [
-        t.date for t in transactions if t.payee_name == settings.payee or t.memo == settings.memo
-    ]
-    if logged is not None:
-        adjusted.append(logged)
-    if adjusted:
-        return max(adjusted)
-    return max((t.date for t in transactions), default=None)
-
-
-def _logged_adjustments(store: Store, budget_id: str) -> dict[str, dt.date]:
-    """The day of the newest adjustment yul logged, per account id."""
-    days: dict[str, dt.date] = {}
-    for entry in store.activity(budget_id, limit=None, kind="adjustment"):
-        account_id = entry.details.get("account_id")
-        if isinstance(account_id, str):
-            day = _local_day(entry.at)
-            days[account_id] = max(day, days.get(account_id, day))
-    return days
-
-
 def load_home(
     store: Store,
     config: LatestConfig,
@@ -141,12 +110,12 @@ def load_home(
     unreconciled = [t for t in store.unreconciled(budget_id) if t.account_id in open_ids]
 
     stale: list[str] = []
-    logged = _logged_adjustments(store, budget_id)
+    logged = tracking.logged_adjustments(store, budget_id)
     for account in tracking.by_hand_accounts(config, accounts.values()):
         stored = accounts.get(account.id)
         if stored is not None and stored.closed:
             continue
-        latest = last_set_by_hand(
+        latest = tracking.last_set_by_hand(
             store.transactions(budget_id, account_id=account.id),
             config.adjustments,
             logged.get(account.id),
