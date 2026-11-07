@@ -1,4 +1,5 @@
 import datetime as dt
+import re
 
 import pytest
 
@@ -52,7 +53,8 @@ def test_every_option_of_a_bank_is_an_option_of_its_command(yul: CliRunner, key:
     result = yul("load", key, "--help", env={"COLUMNS": "200"})
 
     assert result.exit_code == 0, result.output
-    assert flag in result.output
+    # On GitHub Actions Rich forces colour and styles `--lang` as `-` and `-lang` separately
+    assert flag in re.sub(r"\x1b\[[0-9;]*m", "", result.output)
 
 
 def test_an_option_that_takes_a_year_rejects_anything_else(yul: CliRunner, tmp_path):
