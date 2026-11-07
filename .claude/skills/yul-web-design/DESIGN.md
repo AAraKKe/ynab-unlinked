@@ -82,8 +82,12 @@ A three step flow with a horizontal stepper at the top. Steps advance on their o
    be removed. Every option of the bank (Sabadell year, Cobee language) is a small select
    on the row, prefilled with the saved default or the detected value, so the defaults
    from Settings can be changed per file. The step ends with "Review n files".
-2. **Review**. One card per file: header (loader, account, new / total), a transaction
-   table with already imported rows dimmed and tagged, new rows with a green tick. A
+2. **Review**. One card per file: header (loader, account, "n left out" when some are, new
+   / total), a transaction table with already imported rows dimmed and tagged ("already in
+   YNAB", or "matched in YNAB" for a row YNAB matched with a reconciled transaction entered
+   by hand), new rows with a green tag and a ghost "Leave out", and rows left out crossed
+   out with "Include again". Leaving a row out is saved on this computer at once (toast, no
+   dialog) and later imports of the same statement show it crossed out without asking. A
    summary bar sticks to the bottom: "3 files · 41 transactions · 29 new" and the button
    "Import 29 transactions". Options: import as cleared (default) or reconciled.
 3. **Done**. Per file progress bars that fill as YNAB answers, then a success card:
@@ -138,8 +142,9 @@ without the ceremony.
 
 Tabs: **Connection** (masked token with reveal and change, budget change, config version
 and path), **Banks**, **Accounts**, **Net worth** (debt -> accounts mapping with a visual
-picker), **Data & privacy** (what is stored where, store size, last sync, "Resync from
-scratch", "Reset all data" with confirmation).
+picker), **Data & privacy** (what is stored where, store size, last sync, the rows left
+out of imports with "Include again" on each, "Resync from scratch", "Reset all data" with
+confirmation).
 
 - **Banks**: a grid of cards, one per bank: its logo, a switch in the header and a
   "Settings" cog in the footer that opens the account and default options in a dialog (the

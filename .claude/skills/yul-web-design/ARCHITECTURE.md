@@ -80,11 +80,21 @@ implementation built on `display.process`; the web passes one that updates the p
 ### 2.2 Importing (`core/importing.py`)
 
 ```python
+class RowStatus(StrEnum):
+    NEW            # sent on commit
+    IN_YNAB        # YNAB holds its import id (or the legacy id)
+    MATCHED        # YNAB holds it only through a match onto a reconciled transaction
+    EXCLUDED       # in the store's registry of rows left out: never sent
+
 @dataclass(frozen=True)
 class ImportRow:
     transaction: Transaction
     import_id: str
-    already_imported: bool
+    already_imported: bool        # IN_YNAB or MATCHED
+    matched: bool = False
+    excluded: bool = False
+    @property
+    def status(self) -> RowStatus: ...    # already_imported wins over excluded
 
 @dataclass(frozen=True)
 class ImportPlan:
@@ -92,11 +102,15 @@ class ImportPlan:
     account_id: str
     input_file: Path
     rows: tuple[ImportRow, ...]
+    unknown_matches: int = 0      # survivors pointing at a transaction the copy lacks
 
     @property
-    def new_rows(self) -> tuple[ImportRow, ...]: ...
+    def new_rows(self) -> tuple[ImportRow, ...]: ...     # status NEW only
     @property
-    def already_imported_count(self) -> int: ...
+    def already_imported_count(self) -> int: ...         # IN_YNAB + MATCHED
+    def with_status(self, status: RowStatus) -> tuple[ImportRow, ...]: ...
+    def include(self, import_ids: Collection[str]) -> ImportPlan: ...  # excluded=False
+    def exclude(self, import_ids: Collection[str]) -> ImportPlan: ...  # excluded=True
 
 @dataclass(frozen=True)
 class ImportResult:
@@ -108,10 +122,16 @@ IMPORT_BUFFER_DAYS = 15     # also the `yul load --buffer` default and YnabUnlin
 def build_import_plan(
     client: Client, budget_id: str, account_id: str, entity_name: str,
     input_file: Path, transactions: list[Transaction], buffer_days: int = IMPORT_BUFFER_DAYS,
-    progress: Progress = NullProgress(),
+    progress: Progress = NullProgress(), store: Store | None = None,
 ) -> ImportPlan
     # assigns import ids (models.assign_import_ids), fetches YNAB transactions for the
     # account since min(date) - buffer, marks already_imported by import_id or legacy id.
+    # With the budget copy (`store`) also: MATCHED when a live listed transaction without an
+    # import id has `matched_transaction_id` pointing at a transaction the copy holds with
+    # the row's import id (YNAB writes no import id onto a reconciled transaction it matches,
+    # and hides the imported one: 404, left out of listings, only the delta has it), and
+    # EXCLUDED for the rows in `store.excluded(budget_id, account_id)`. No amount or date
+    # heuristic: a row neither rule catches is left out by hand (the registry).
     # An empty `transactions` returns a plan with no rows without calling YNAB.
 
 def file_digest(input_file: Path) -> str            # SHA-256 of the bytes
@@ -470,7 +490,8 @@ class Store:
     def last_sync(self, budget_id: str) -> dt.datetime | None           # aware, UTC; when the
         # sync started fetching, so a write logged during the fetch counts as newer
     def clear(self, budget_id: str | None = None, *, activity: bool = False) -> None
-        # forgets the copy (rows, accounts, knowledge); the activity log only with activity=True
+        # forgets the copy (rows, accounts, knowledge); the activity log only with activity=True;
+        # the rows left out of imports always stay (deleted with the file by a reset)
     def log(self, budget_id: str, kind: str, message: str,
             details: Mapping[str, Any] | None = None, *, at: dt.datetime | None = None) -> None
         # kinds and their details: section 3.4. `at` (aware) backdates an entry, default now
@@ -478,12 +499,24 @@ class Store:
                  kind: str | None = None) -> list[Activity]
         # newest first; limit None = all; kind keeps one kind only
     def last_activity(self, budget_id: str) -> dt.datetime | None   # when the newest entry was logged
+    def import_ids(self, budget_id: str, transaction_ids: Iterable[str]) -> dict[str, str]
+        # id -> import id of those transactions, deleted and ghost rows included
+    def exclude(self, budget_id: str, row: ExcludedRow) -> None      # replaces the same key
+    def include(self, budget_id: str, account_id: str, import_id: str) -> bool  # False: not there
+    def excluded(self, budget_id: str, account_id: str | None = None) -> list[ExcludedRow]
+        # the registry of rows left out of imports, newest row date first
     def last_import_per_loader(self, budget_id: str) -> dict[str, dt.datetime]
         # newest `import` entry per `details.loader`, one GROUP BY query (Home's last imports)
     def daily_amounts(self, budget_id: str,
                       account_ids: Iterable[str] | None = None) -> dict[str, DailyAmounts]
         # per account: its stored balance and the sum of its non deleted transactions per
         # day, in one query (GROUP BY account, date UNION the accounts). Feeds core.history.
+
+@dataclass(frozen=True)
+class ExcludedRow:          # table excluded_rows (migration 0005), key (budget, account, import id)
+    account_id: str; import_id: str             # import id only, never the legacy id
+    date: dt.date; amount: int; payee: str      # milliunits; for showing it only
+    excluded_at: dt.datetime | None = None      # set by the store
 
 @dataclass(frozen=True)
 class DailyAmounts:
@@ -586,10 +619,13 @@ web/
     import_/           /import      Files -> Review -> Done on core.detect and core.importing
       data.py          Status, ImportFile, same_file, mark_repeated, take_candidate,
                        account_label, problem_text, option_choices, read_file,
-                       chosen_accounts, done_summary, import_log
-      view.py          ImportFlow (lifecycle, detection, the three steps, commit and log) and the view
+                       chosen_accounts, done_summary, import_log, left_out_count,
+                       unknown_matches_note, excluded_row, LEFT_OUT_NOTE
+      view.py          ImportFlow (lifecycle, detection, the three steps, leave out / include,
+                       commit and log) and the view
       rows.py          draw_row(flow, item): a file row of step Files and its body
-      tables.py        badge, plan_table, transactions_table
+      tables.py        badge, plan_table(plan, formatter, key, actions=None), RowActions,
+                       transactions_table
       cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
     reconcile/         /reconcile   per account cleared vs bank balance, lock
       data.py          scope_start, gap_candidates, ReconcileData (read,
@@ -615,6 +651,7 @@ web/
       accounts.py      AccountCards (the Accounts tab), BY_HAND_HINT
       networth.py      debt mappings (mapping_row) and adjustment settings, CLEARED_LABELS
       privacy.py       Data & privacy: what is kept where, resync, reset; token_wording()
+      left_out.py      the rows left out of imports under Data & privacy, "Include again"
 ```
 
 ### 3.1 Running and security
@@ -738,13 +775,17 @@ that number in the message and shows `file` in mono.
 
 | kind | message | details |
 |---|---|---|
-| `import` | `Imported {plural(created, "transaction")} to {account_name} from {file}` | `loader` (config key), `account_id`, `account_name`, `file`, `created`, `duplicates`, `skipped` |
+| `import` | `Imported {plural(created, "transaction")} to {account_name} from {file}`, plus ` · {excluded} left out` when excluded > 0 (`text.import_message`) | `loader` (config key), `account_id`, `account_name`, `file`, `created`, `duplicates`, `skipped` (already in YNAB, matched included), `matched`, `excluded` |
+| `exclude` | `Left {payee} ({amount}, {date}) out of imports to {account_name}` | `account_id`, `account_name`, `import_id`, `date` (ISO), `amount` (milliunits), `payee` |
+| `include` | `Included {payee} ({amount}, {date}) in imports to {account_name} again` | as `exclude` |
 | `reconcile` | `Reconciled {count} transactions in {n} accounts` | `count`, `accounts: [{id, name, count}]` |
 | `adjustment` | `Balance of {account_name} set to {new} ({signed amount})` | `account_id`, `account_name`, `old`, `new`, `amount` (milliunits) |
 | `sync` | `Synced · {changes} changes from YNAB`, plus ` · {ghosts} stale removed` when ghosts > 0 | `changes`, `full`, `ghosts` (only when > 0) |
 | `config` | free text | free |
 
 Amounts in messages are formatted with `state().formatter`; in details they are milliunits.
+`exclude` and `include` come from `web.wording.left_out_entry`, logged by the Import review
+and Settings › Data & privacy after the registry write, both through `run.io_bound`.
 The CLI writes `import` (after each committed file of `yul load <bank>` and `yul load auto`)
 and `reconcile` (after `yul reconcile` locks) with the same shapes through
 `ynab_unlinked.activity`, at `store_path()`; a store it cannot open only warns. The app's
@@ -838,4 +879,11 @@ Markers: `token-input`, `check-token`, `token-lost`, `wizard-message`, `wizard-n
 #### Settings
 
 Markers: `bank-shared-{key}`, `accounts-lede`, `account-card-{id}`, `bucket-section-{bucket}`,
-`account-{id}`, `bucket-{id}`, `bucket-{id}-{bucket}`, `by-hand-{id}`.
+`account-{id}`, `bucket-{id}`, `bucket-{id}-{bucket}`, `by-hand-{id}`, `left-out` (the list
+of rows left out of imports), `left-out-{index}`, `include-again-{index}`, `left-out-empty`.
+
+#### Import
+
+Review rows: `row-status-{file key}-{index}` (new, already in YNAB, matched in YNAB, left
+out), `leave-out-{file key}-{index}` on a new row, `include-{file key}-{index}` on a row left
+out, `review-left-out-{file key}` and `review-left-out` (footer) when rows are left out.
