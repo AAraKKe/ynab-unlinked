@@ -25,7 +25,14 @@ from ynab import (
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.core.progress import Progress
-from ynab_unlinked.store import DailyAmounts, Store, StoredAccount, StoredTransaction, StoreError
+from ynab_unlinked.store import (
+    DailyAmounts,
+    ExcludedRow,
+    Store,
+    StoredAccount,
+    StoredTransaction,
+    StoreError,
+)
 from ynab_unlinked.store.migrations import SCHEMA_VERSION
 from ynab_unlinked.store.store import (
     BUSY_TIMEOUT_SECONDS,
@@ -197,6 +204,7 @@ def test_sync_stores_every_field_the_app_reads(store: Store, client: Client, yna
         import_id="YNAB:-250000:2025-05-01:1",
         memo="Monthly saving",
         transfer_account_id=SAVINGS,
+        matched_transaction_id="t0",
     )
     serve(ynab_api, ([transfer], 10))
 
@@ -216,6 +224,7 @@ def test_sync_stores_every_field_the_app_reads(store: Store, client: Client, yna
             import_id="YNAB:-250000:2025-05-01:1",
             memo="Monthly saving",
             transfer_account_id=str(SAVINGS),
+            matched_transaction_id="t0",
         )
     ]
 
@@ -290,6 +299,45 @@ def test_sync_tombstones_the_import_ynab_merged_into_a_manual_transaction(
 
     assert (first.ghosts_removed, second.ghosts_removed) == (0, 1)
     assert ids(store.unreconciled(BUDGET_ID)) == ["manual"]
+    assert sorted(c.kwargs["transaction_id"] for c in endpoint.call_args_list) == [
+        "imported",
+        "manual",
+    ]
+
+
+def test_sync_tombstones_the_import_ynab_merged_into_a_reconciled_transaction(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    # A reconciled transaction takes no import id when matched: the survivor only points at
+    # the import through matched_transaction_id, and the import is gone (404) without a delta
+    serve(
+        ynab_api,
+        (
+            [
+                TransactionDetailFactory(id="imported", import_id=MERGED_IMPORT_ID),
+                TransactionDetailFactory(id="manual", cleared=RECONCILED),
+            ],
+            10,
+        ),
+        (
+            [
+                TransactionDetailFactory(
+                    id="manual", cleared=RECONCILED, matched_transaction_id="imported"
+                ),
+                TransactionDetailFactory(
+                    id="imported", import_id=MERGED_IMPORT_ID, matched_transaction_id="manual"
+                ),
+            ],
+            15,
+        ),
+    )
+    endpoint = answer_exists(ynab_api, missing={"imported"})
+    first = store.sync(client, BUDGET_ID)
+
+    second = store.sync(client, BUDGET_ID)
+
+    assert (first.ghosts_removed, second.ghosts_removed) == (0, 1)
+    assert ids(store.transactions(BUDGET_ID)) == ["manual"]
     assert sorted(c.kwargs["transaction_id"] for c in endpoint.call_args_list) == [
         "imported",
         "manual",
@@ -804,16 +852,13 @@ def test_activity_filters_by_kind_and_orders_backdated_entries_by_time(store: St
     assert [a.message for a in store.activity(BUDGET_ID, limit=1, kind="sync")] == ["not an import"]
 
 
-def test_last_activity_is_the_newest_entry_of_the_budget_leaving_out_a_kind(store: Store):
+def test_last_activity_is_the_newest_entry_of_the_budget(store: Store):
     assert store.last_activity(BUDGET_ID) is None
     store.log(BUDGET_ID, "import", "a file", at=dt.datetime(2025, 5, 1, 10, tzinfo=dt.UTC))
     store.log(BUDGET_ID, "sync", "a sync", at=dt.datetime(2025, 5, 2, 10, tzinfo=dt.UTC))
     store.log(OTHER_BUDGET_ID, "import", "elsewhere", at=dt.datetime(2025, 5, 3, tzinfo=dt.UTC))
 
     assert store.last_activity(BUDGET_ID) == dt.datetime(2025, 5, 2, 10, tzinfo=dt.UTC)
-    assert store.last_activity(BUDGET_ID, other_than="sync") == dt.datetime(
-        2025, 5, 1, 10, tzinfo=dt.UTC
-    )
 
 
 def test_last_import_per_loader_is_the_newest_import_of_each_bank_in_the_budget(store: Store):
@@ -842,3 +887,104 @@ def test_last_import_per_loader_is_the_newest_import_of_each_bank_in_the_budget(
         "cobee": at(3, 21) + dt.timedelta(minutes=30),
     }
     assert store.last_import_per_loader("unknown") == {}
+
+
+def left_out(
+    import_id: str, day: int, account_id: str = "checking", payee: str = "Maya"
+) -> ExcludedRow:
+    return ExcludedRow(
+        account_id=account_id,
+        import_id=import_id,
+        date=dt.date(2025, 5, day),
+        amount=-18_380,
+        payee=payee,
+    )
+
+
+@freeze_time("2025-05-15 10:00:00")
+def test_rows_left_out_are_kept_per_budget_and_account_newest_row_first(store: Store):
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-02:1", 2))
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12))
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12, "savings"))
+    store.exclude(OTHER_BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12))
+
+    assert [(r.account_id, r.import_id) for r in store.excluded(BUDGET_ID)] == [
+        ("checking", "YNAB:-18380:2025-05-12:1"),
+        ("savings", "YNAB:-18380:2025-05-12:1"),
+        ("checking", "YNAB:-18380:2025-05-02:1"),
+    ]
+    [newest, _] = store.excluded(BUDGET_ID, "checking")
+    assert newest == ExcludedRow(
+        account_id="checking",
+        import_id="YNAB:-18380:2025-05-12:1",
+        date=dt.date(2025, 5, 12),
+        amount=-18_380,
+        payee="Maya",
+        excluded_at=dt.datetime(2025, 5, 15, 10, tzinfo=dt.UTC),
+    )
+
+
+def test_a_row_left_out_twice_is_kept_once(store: Store):
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12, payee="Maya"))
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12, payee="Maya mobile ltd"))
+
+    assert [r.payee for r in store.excluded(BUDGET_ID)] == ["Maya mobile ltd"]
+
+
+def test_including_a_row_again_only_takes_back_that_row(store: Store):
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12))
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12, "savings"))
+
+    assert store.include(BUDGET_ID, "checking", "YNAB:-18380:2025-05-12:1")
+    assert not store.include(BUDGET_ID, "checking", "YNAB:-18380:2025-05-12:1")
+
+    assert [r.account_id for r in store.excluded(BUDGET_ID)] == ["savings"]
+
+
+@pytest.mark.parametrize(
+    "clear",
+    [
+        pytest.param(lambda store: store.clear(BUDGET_ID), id="a-resync"),
+        pytest.param(lambda store: store.clear(activity=True), id="clearing-everything"),
+    ],
+)
+def test_clearing_the_budget_copy_keeps_the_rows_left_out(store: Store, clear):
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12))
+
+    clear(store)
+
+    assert len(store.excluded(BUDGET_ID)) == 1
+
+
+def test_import_ids_finds_the_transactions_ynab_hides_after_a_match(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    serve(
+        ynab_api,
+        (
+            [
+                TransactionDetailFactory(id="ghost", import_id="YNAB:-18380:2025-05-12:1"),
+                TransactionDetailFactory(id="gone", import_id="YNAB:-5000:2025-05-14:1"),
+                TransactionDetailFactory(id="by-hand", import_id=None),
+            ],
+            10,
+        ),
+        (
+            [
+                TransactionDetailFactory(
+                    id="gone", import_id="YNAB:-5000:2025-05-14:1", deleted=True
+                )
+            ],
+            20,
+        ),
+        accounts=[AccountFactory()],
+    )
+    store.sync(client, BUDGET_ID)
+    store.sync(client, BUDGET_ID)
+
+    assert store.import_ids(BUDGET_ID, ["ghost", "gone", "by-hand", "unknown"]) == {
+        "ghost": "YNAB:-18380:2025-05-12:1",
+        "gone": "YNAB:-5000:2025-05-14:1",
+    }
+    assert store.import_ids(OTHER_BUDGET_ID, ["ghost"]) == {}
+    assert store.import_ids(BUDGET_ID, []) == {}

@@ -20,8 +20,6 @@ from ynab_unlinked.core.reconcile import RECONCILE_BUFFER_DAYS, next_reconciliat
 from ynab_unlinked.store import Store, StoredAccount, StoredTransaction
 from ynab_unlinked.web.wording import plural
 
-SYNC_MAX_AGE = dt.timedelta(minutes=10)
-
 SINCE = "since"
 ALL_TIME = "all"
 LOCK_TIMED_OUT = (

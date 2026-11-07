@@ -10,9 +10,16 @@ from ynab_unlinked.cli.context_object import YnabUnlinkedContext
 from ynab_unlinked.cli.display import CliProgress, bullet_list, confirm, console, info, question
 from ynab_unlinked.cli.utils import display_import_table, display_transaction_table
 from ynab_unlinked.config import LatestConfig, update_config
-from ynab_unlinked.core.importing import build_import_plan, commit_import_plan
+from ynab_unlinked.core.importing import (
+    ImportPlan,
+    RowStatus,
+    build_import_plan,
+    commit_import_plan,
+)
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.exceptions import ParsingError
+from ynab_unlinked.store import Store, store_path
+from ynab_unlinked.text import plural
 from ynab_unlinked.ynab_api.client import Client
 
 
@@ -52,6 +59,35 @@ def get_or_prompt_account_id(
         update_config(lambda saved: saved.set_entity_account(entity_name, account_id))
 
     return account_id
+
+
+def open_store(yes: bool) -> Store | None:
+    """The budget copy, where the rows left out of imports and the matches YNAB hides are.
+
+    A store that cannot be opened only warns, like the activity log, since the table is
+    shown before anything is sent. With `--yes` nobody looks at it, so it stops the command
+    instead of sending rows the user asked never to send.
+    """
+    try:
+        return Store(store_path())
+    except Exception as error:
+        message = f"Could not open the rows left out of imports on this computer: {error}"
+        if yes:
+            display.error(message)
+            raise typer.Exit(1) from error
+        display.warning(f"{message}. Every row is shown as if none was left out.")
+        return None
+
+
+def plan_notes(plan: ImportPlan) -> None:
+    """Warn about matches this computer cannot resolve (`ImportPlan.unknown_matches`)."""
+    if plan.unknown_matches:
+        display.warning(
+            f"{plural(plan.unknown_matches, 'transaction')} of this account "
+            f"{'was' if plan.unknown_matches == 1 else 'were'} matched in YNAB with one this "
+            "computer has no copy of, so a row shown as new may already be there. Open "
+            "`yul app` to update the copy, or leave the row out there."
+        )
 
 
 def process_transactions(
@@ -97,6 +133,7 @@ def process_transactions(
     client = Client(config.api_key)
     budget_id = config.budget.id
 
+    store = open_store(context.yes)
     with CliProgress() as progress:
         plan = build_import_plan(
             client,
@@ -107,15 +144,19 @@ def process_transactions(
             transactions=parsed_input,
             buffer_days=context.buffer,
             progress=progress,
+            store=store,
         )
 
     display_import_table(plan.rows, context.formatter)
+    plan_notes(plan)
 
     if not plan.new_rows:
         info("🎉 All done! Nothing to do.")
         return
 
     display.info(f"Transactions to import:       {len(plan.new_rows)}")
+    if left_out := len(plan.with_status(RowStatus.EXCLUDED)):
+        display.info(f"Left out:                     {left_out}")
 
     if not context.yes and not confirm("Do you want to continue and create the transactions?"):
         return
@@ -147,6 +188,8 @@ def process_transactions(
         created=result.created,
         duplicates=len(result.duplicate_import_ids),
         skipped=plan.already_imported_count,
+        matched=len(plan.with_status(RowStatus.MATCHED)),
+        excluded=left_out,
     )
 
     created = result.created

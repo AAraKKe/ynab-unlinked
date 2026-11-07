@@ -131,10 +131,15 @@ def auto(
     from ynab import TransactionClearedStatus
 
     from ynab_unlinked.activity import log_import
-    from ynab_unlinked.cli.process import get_or_prompt_account_id
+    from ynab_unlinked.cli.process import get_or_prompt_account_id, open_store, plan_notes
     from ynab_unlinked.cli.utils import display_import_table, display_transaction_table
     from ynab_unlinked.core.detect import detect_loaders
-    from ynab_unlinked.core.importing import build_import_plan, commit_import_plan, unique_files
+    from ynab_unlinked.core.importing import (
+        RowStatus,
+        build_import_plan,
+        commit_import_plan,
+        unique_files,
+    )
     from ynab_unlinked.ynab_api.client import Client
 
     ctx = load_context(context)
@@ -196,6 +201,7 @@ def auto(
     client = Client(ctx.config.api_key)
     budget_id = ctx.config.budget.id
 
+    store = open_store(ctx.yes)
     plans: list[ImportPlan] = []
     for (input_file, candidate), account_id in zip(chosen, account_ids, strict=True):
         transactions = _parse(input_file, candidate)
@@ -210,15 +216,19 @@ def auto(
                     transactions=transactions,
                     buffer_days=ctx.buffer,
                     progress=progress,
+                    store=store,
                 )
             )
 
     for plan, (input_file, candidate) in zip(plans, chosen, strict=True):
         display.console().rule(f"{input_file.name}: {candidate.loader.title}")
         display_import_table(plan.rows, ctx.formatter)
+        plan_notes(plan)
+        excluded = len(plan.with_status(RowStatus.EXCLUDED))
         display.info(
             f"{len(plan.new_rows)} to import into {_account_name(plan.account_id, ctx)}, "
             f"{plan.already_imported_count} already in YNAB"
+            + (f", {excluded} left out" if excluded else "")
         )
 
     to_import = [plan for plan in plans if plan.new_rows]
@@ -253,6 +263,8 @@ def auto(
             created=result.created,
             duplicates=len(result.duplicate_import_ids),
             skipped=plan.already_imported_count,
+            matched=len(plan.with_status(RowStatus.MATCHED)),
+            excluded=len(plan.with_status(RowStatus.EXCLUDED)),
         )
         created[plan.account_id] = created.get(plan.account_id, 0) + result.created
         duplicates.extend(result.duplicate_import_ids)

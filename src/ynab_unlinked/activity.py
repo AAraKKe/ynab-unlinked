@@ -14,7 +14,7 @@ from typing import Any
 from ynab_unlinked.cli import display
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store, store_path
-from ynab_unlinked.text import plural
+from ynab_unlinked.text import import_message, plural
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +55,14 @@ def log_import(
     created: int,
     duplicates: int,
     skipped: int,
+    matched: int,
+    excluded: int,
 ) -> None:
-    """One `import` entry; `loader` is the config key of the bank (`Entity.name()`)."""
+    """One `import` entry; `loader` is the config key of the bank (`Entity.name()`).
+
+    `matched` counts the rows of `skipped` YNAB holds through a match only, `excluded` the
+    rows the user left out of imports.
+    """
     if (store := _open_store()) is None:
         return
     account_name = _account_name(store, config, account_id)
@@ -64,7 +70,7 @@ def log_import(
         store,
         config.budget.id,
         "import",
-        f"Imported {plural(created, 'transaction')} to {account_name} from {file}",
+        import_message(created, account_name, file, excluded),
         {
             "loader": loader,
             "account_id": account_id,
@@ -73,6 +79,8 @@ def log_import(
             "created": created,
             "duplicates": duplicates,
             "skipped": skipped,
+            "matched": matched,
+            "excluded": excluded,
         },
     )
 

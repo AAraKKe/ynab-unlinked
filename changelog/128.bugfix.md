@@ -1,0 +1,1 @@
+A row YNAB matched with a reconciled transaction entered by hand is no longer imported again, and any row can be left out of imports for good from the app's review (Settings › Data & privacy lists them).

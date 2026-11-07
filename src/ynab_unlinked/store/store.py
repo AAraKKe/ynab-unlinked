@@ -51,6 +51,8 @@ class StoredTransaction:
     import_id: str | None
     memo: str | None
     transfer_account_id: str | None
+    matched_transaction_id: str | None = None
+    """The transaction YNAB matched this one with; the other row is merged away."""
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,21 @@ class Activity:
     kind: str
     message: str
     details: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ExcludedRow:
+    """A row of a bank export the user left out of imports to an account."""
+
+    account_id: str
+    import_id: str
+    """The registry's key with the account: the same row of a later export has the same id."""
+    date: dt.date
+    amount: int
+    """Milliunits."""
+    payee: str
+    excluded_at: dt.datetime | None = None
+    """When it was left out; None on a row not saved yet."""
 
 
 @dataclass(frozen=True)
@@ -196,12 +213,15 @@ class Store:
         `import_id` and points at the imported one through `matched_transaction_id`, and the
         imported id simply disappears: GET /transactions/{id} answers 404, yet no delta ever
         reports it as deleted. The store keeps both rows, and the ghost shows up as "to
-        reconcile" forever.
+        reconcile" forever. A reconciled transaction takes no import id when matched (YNAB
+        leaves a reconciled transaction as it is): then only `matched_transaction_id` ties the
+        survivor to the merged import.
 
         After such a merge the store holds two or more non deleted rows with the same
-        `(account_id, import_id)`, and only one of them still exists in YNAB. So every id of
-        those groups is checked against YNAB and the missing ones become tombstones, like a
-        delete from YNAB. A group where every row exists (a match not approved yet) is left
+        `(account_id, import_id)`, counting a row without an import id under the id of the
+        non deleted row it points at, and only one of them still exists in YNAB. So every id
+        of those groups is checked against YNAB and the missing ones become tombstones, like
+        a delete from YNAB. A group where every row exists (a match not approved yet) is left
         alone. Without duplicate groups no request is made, so a normal sync costs nothing.
 
         The merge always changes the surviving row, so only groups holding a row of
@@ -216,13 +236,19 @@ class Store:
         """
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT t.id, t.account_id, t.import_id FROM transactions t JOIN ("
-                "  SELECT account_id, import_id FROM transactions"
-                "  WHERE budget_id = ? AND deleted = 0 AND import_id IS NOT NULL"
+                "WITH keyed AS ("
+                "  SELECT t.id, t.account_id, COALESCE(t.import_id, m.import_id) AS import_id"
+                "  FROM transactions t LEFT JOIN transactions m"
+                "    ON m.budget_id = t.budget_id AND m.id = t.matched_transaction_id"
+                "    AND m.deleted = 0"
+                "  WHERE t.budget_id = ? AND t.deleted = 0"
+                ") "
+                "SELECT k.id, k.account_id, k.import_id FROM keyed k JOIN ("
+                "  SELECT account_id, import_id FROM keyed WHERE import_id IS NOT NULL"
                 "  GROUP BY account_id, import_id HAVING COUNT(*) > 1"
-                ") d ON t.account_id = d.account_id AND t.import_id = d.import_id "
-                "WHERE t.budget_id = ? AND t.deleted = 0 ORDER BY t.id",
-                (budget_id, budget_id),
+                ") d ON k.account_id = d.account_id AND k.import_id = d.import_id "
+                "ORDER BY k.id",
+                (budget_id,),
             ).fetchall()
             left_over = {
                 (row["account_id"], row["import_id"])
@@ -352,7 +378,8 @@ class Store:
         conn.executemany(
             "INSERT OR REPLACE INTO transactions (budget_id, id, account_id, date, amount, "
             "cleared, approved, deleted, payee_name, category_name, import_id, memo, "
-            "transfer_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "transfer_account_id, matched_transaction_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     budget_id,
@@ -368,6 +395,7 @@ class Store:
                     t.import_id,
                     t.memo,
                     None if t.transfer_account_id is None else str(t.transfer_account_id),
+                    None if t.matched_transaction_id is None else str(t.matched_transaction_id),
                 )
                 for t in transactions
             ],
@@ -519,7 +547,8 @@ class Store:
         """Forget the copy of a budget, or of every budget when none is given.
 
         The next sync of a cleared budget is a full one. The activity log stays (it is what
-        yul did, not a copy of YNAB) unless `activity` is True.
+        yul did, not a copy of YNAB) unless `activity` is True. The rows left out of imports
+        always stay: they are the user's choice, deleted with the store file.
         """
         with self._connect() as conn:
             self._forget(conn, budget_id)
@@ -550,15 +579,12 @@ class Store:
                 (budget_id, _timestamp(at), kind, message, json.dumps(dict(details or {}))),
             )
 
-    def last_activity(self, budget_id: str, *, other_than: str | None = None) -> dt.datetime | None:
-        """When the newest activity entry was logged, leaving out those of kind `other_than`."""
-        query = "SELECT max(at) AS at FROM activity WHERE budget_id = ?"
-        params = [budget_id]
-        if other_than is not None:
-            query += " AND kind != ?"
-            params.append(other_than)
+    def last_activity(self, budget_id: str) -> dt.datetime | None:
+        """When the newest activity entry of the budget was logged."""
         with self._connect() as conn:
-            row = conn.execute(query, params).fetchone()
+            row = conn.execute(
+                "SELECT max(at) AS at FROM activity WHERE budget_id = ?", (budget_id,)
+            ).fetchone()
         return None if row["at"] is None else dt.datetime.fromisoformat(row["at"])
 
     def last_import_per_loader(self, budget_id: str) -> dict[str, dt.datetime]:
@@ -603,6 +629,72 @@ class Store:
             for row in rows
         ]
 
+    def import_ids(self, budget_id: str, transaction_ids: Iterable[str]) -> dict[str, str]:
+        """The import id of each of these transactions that has one, deleted ones included.
+
+        A transaction YNAB matched away is hidden from its listings and answers 404, but the
+        copy still holds it with the import id it was created with.
+        """
+        ids = list(transaction_ids)
+        if not ids:
+            return {}
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, import_id FROM transactions WHERE budget_id = ? AND "
+                f"import_id IS NOT NULL AND id IN ({', '.join('?' * len(ids))})",
+                [budget_id, *ids],
+            ).fetchall()
+        return {row["id"]: row["import_id"] for row in rows}
+
+    def exclude(self, budget_id: str, row: ExcludedRow) -> None:
+        """Leave `row` out of every import to its account from now on."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO excluded_rows (budget_id, account_id, import_id, date, "
+                "amount, payee, excluded_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    budget_id,
+                    row.account_id,
+                    row.import_id,
+                    row.date.isoformat(),
+                    row.amount,
+                    row.payee,
+                    _timestamp(row.excluded_at),
+                ),
+            )
+
+    def include(self, budget_id: str, account_id: str, import_id: str) -> bool:
+        """Import the row again from now on. False when it was not left out."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM excluded_rows WHERE budget_id = ? AND account_id = ? "
+                "AND import_id = ?",
+                (budget_id, account_id, import_id),
+            )
+        return cursor.rowcount > 0
+
+    def excluded(self, budget_id: str, account_id: str | None = None) -> list[ExcludedRow]:
+        """The rows left out of imports to the budget, or to one account, newest row first."""
+        query = "SELECT * FROM excluded_rows WHERE budget_id = ?"
+        params = [budget_id]
+        if account_id is not None:
+            query += " AND account_id = ?"
+            params.append(account_id)
+        query += " ORDER BY date DESC, payee, import_id"
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [
+            ExcludedRow(
+                account_id=row["account_id"],
+                import_id=row["import_id"],
+                date=dt.date.fromisoformat(row["date"]),
+                amount=row["amount"],
+                payee=row["payee"],
+                excluded_at=dt.datetime.fromisoformat(row["excluded_at"]),
+            )
+            for row in rows
+        ]
+
 
 def _stored_transaction(row: sqlite3.Row) -> StoredTransaction:
     return StoredTransaction(
@@ -618,4 +710,5 @@ def _stored_transaction(row: sqlite3.Row) -> StoredTransaction:
         import_id=row["import_id"],
         memo=row["memo"],
         transfer_account_id=row["transfer_account_id"],
+        matched_transaction_id=row["matched_transaction_id"],
     )

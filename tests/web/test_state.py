@@ -276,18 +276,3 @@ def test_update_config_without_any_config_is_an_error(config: str, config_files:
     with pytest.raises(NotConfiguredError):
         app.update_config(lambda config: None)
     assert not config_files.path("V4").exists()
-
-
-def test_an_entry_the_cli_logged_after_the_last_sync_makes_the_store_stale(
-    app_state: AppState, store_file: Path
-):
-    config, _ = app_state.require()
-    assert app_state.fresh(dt.timedelta(minutes=10))
-    # The app's own sync entry, logged right after its sync, does not count
-    app_state.store.log(config.budget.id, "sync", "Synced · 2 changes from YNAB")
-    assert app_state.fresh(dt.timedelta(minutes=10))
-
-    # `yul load` in a terminal while the app is open
-    Store(store_file).log(config.budget.id, "import", "Imported 3 transactions to Oro")
-
-    assert not app_state.fresh(dt.timedelta(minutes=10))

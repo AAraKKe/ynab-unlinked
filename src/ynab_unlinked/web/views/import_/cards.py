@@ -13,8 +13,8 @@ from ynab_unlinked.core.importing import ImportResult
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button, check, glass_card, pill, spinner
-from ynab_unlinked.web.views.import_.data import ImportFile, done_summary
-from ynab_unlinked.web.views.import_.tables import badge, plan_table
+from ynab_unlinked.web.views.import_.data import ImportFile, done_summary, left_out_count
+from ynab_unlinked.web.views.import_.tables import RowActions, badge, plan_table
 from ynab_unlinked.web.wording import plural
 
 
@@ -53,12 +53,15 @@ def review_footer(
 ) -> None:
     """The sticky footer of Review: the totals, "import as reconciled", Back and Import."""
     new = sum(len(item.plan.new_rows) for item in ready if item.plan)
+    left_out = sum(left_out_count(item.plan) for item in ready if item.plan)
     accounts = {item.account_id for item in ready if item.plan and item.plan.new_rows}
     with ui.element("div").classes("yul-foot").mark("review-footer"):
         with ui.element("div").classes("yul-grow yul-foot-stat"):
             ui.label(
                 f"{plural(new, 'new transaction')} in {plural(len(accounts), 'account')}"
             ).style("font-weight:600").mark("review-summary")
+            if left_out:
+                ui.label(f"{left_out} left out").classes("yul-muted").mark("review-left-out")
             switch = ui.switch("import as reconciled", value=reconciled).mark("reconciled")
             switch.on_value_change(lambda e: on_reconciled(bool(e.value)))
         button("Back", kind="ghost", on_click=on_back).mark("back")
@@ -69,8 +72,10 @@ def review_footer(
             go.disable()
 
 
-def review_card(item: ImportFile, account_name: str, formatter: Formatter) -> None:
-    """A ready file in Review: its bank, account and file, the count and its rows."""
+def review_card(
+    item: ImportFile, account_name: str, formatter: Formatter, actions: RowActions
+) -> None:
+    """A ready file in Review: its bank, account and file, the counts and its rows."""
     assert item.plan is not None and item.candidate is not None
     with glass_card().classes("yul-imp-card").mark(f"review-{item.key}"):
         with ui.element("div").classes("yul-row").style("margin-bottom:8px"):
@@ -79,10 +84,12 @@ def review_card(item: ImportFile, account_name: str, formatter: Formatter) -> No
             pill(f"→ {account_name}")
             ui.label(item.name).classes("yul-faint yul-small")
             ui.element("span").classes("yul-grow")
+            if left_out := left_out_count(item.plan):
+                pill(f"{left_out} left out").mark(f"review-left-out-{item.key}")
             pill(f"{len(item.plan.new_rows)} new / {len(item.plan.rows)}", "acc").mark(
                 f"review-count-{item.key}"
             )
-        plan_table(item.plan, formatter)
+        plan_table(item.plan, formatter, item.key, actions)
 
 
 @dataclass(frozen=True)
@@ -141,13 +148,20 @@ def progress_card(item: ImportFile, account_name: str) -> Progress:
 
 
 def done_card(
-    created: int, duplicates: int, skipped: int, failed: int, on_more: Callable[[], Any]
+    created: int,
+    duplicates: int,
+    skipped: int,
+    failed: int,
+    left_out: int,
+    on_more: Callable[[], Any],
 ) -> None:
     """What the commit did, with Reconcile next and "Import more"."""
     with glass_card().classes("yul-imp-done").mark("done-card"):
         check(big=True)
         ui.label(f"{plural(created, 'transaction')} imported").classes("yul-h2").mark("done-title")
-        ui.label(done_summary(duplicates, skipped, failed)).classes("yul-lede").mark("done-summary")
+        ui.label(done_summary(duplicates, skipped, failed, left_out)).classes("yul-lede").mark(
+            "done-summary"
+        )
         with ui.element("div").classes("yul-row").style("justify-content:center"):
             button(
                 "Reconcile these accounts",

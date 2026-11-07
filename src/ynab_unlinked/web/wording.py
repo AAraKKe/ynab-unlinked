@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+from typing import Any, Literal
 
 from ynab import ApiException, PlanSummary
 
+from ynab_unlinked.formatter import Formatter
+from ynab_unlinked.store import ExcludedRow
 from ynab_unlinked.text import plural
 from ynab_unlinked.ynab_api.errors import Failure, classify
 
@@ -85,3 +88,30 @@ def budget_caption(budget: PlanSummary) -> str:
         open_accounts = [a for a in budget.accounts if not a.closed and not a.deleted]
         parts.append(plural(len(open_accounts), "account"))
     return " · ".join(parts)
+
+
+def left_out_entry(
+    kind: Literal["exclude", "include"],
+    row: ExcludedRow,
+    account_name: str,
+    formatter: Formatter,
+) -> tuple[str, dict[str, Any]]:
+    """The activity entry of a row left out of imports, or included again (ARCHITECTURE 3.4)."""
+    what = (
+        f"{row.payee} ({formatter.format_amount_milli(row.amount)}, "
+        f"{formatter.format_date(row.date)})"
+    )
+    message = (
+        f"Left {what} out of imports to {account_name}"
+        if kind == "exclude"
+        else f"Included {what} in imports to {account_name} again"
+    )
+    details: dict[str, Any] = {
+        "account_id": row.account_id,
+        "account_name": account_name,
+        "import_id": row.import_id,
+        "date": row.date.isoformat(),
+        "amount": row.amount,
+        "payee": row.payee,
+    }
+    return message, details

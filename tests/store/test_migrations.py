@@ -57,6 +57,26 @@ def test_the_ghost_repair_groups_rows_through_the_import_id_index(tmp_path: Path
     assert "transactions_by_import_id" in plan
 
 
+def test_a_store_of_schema_3_gets_an_empty_registry_of_rows_left_out_and_keeps_its_log(
+    tmp_path: Path,
+):
+    path = tmp_path / "store.sqlite"
+    with closing(sqlite3.connect(path)) as old:
+        apply(old, MIGRATIONS[:3])
+        old.execute(
+            "INSERT INTO activity (budget_id, at, kind, message, details) "
+            "VALUES ('budget', '2025-05-01T10:00:00.000000+00:00', 'import', 'kept', '{}')"
+        )
+        old.commit()
+
+    store = Store(path)
+
+    assert store.excluded("budget") == []
+    assert [entry.message for entry in store.activity("budget")] == ["kept"]
+    with closing(sqlite3.connect(path)) as upgraded:
+        assert version_of(upgraded) == SCHEMA_VERSION
+
+
 def test_only_the_scripts_the_store_has_not_seen_run(conn: sqlite3.Connection):
     scripts = (
         Migration(1, "0001_a.sql", "CREATE TABLE a (id INTEGER);"),

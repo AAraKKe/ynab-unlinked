@@ -13,9 +13,16 @@ from typing import Any
 
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.core.detect import Candidate, Detection
-from ynab_unlinked.core.importing import ImportPlan, ImportResult
+from ynab_unlinked.core.importing import (
+    ImportPlan,
+    ImportResult,
+    ImportRow,
+    RowStatus,
+)
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
-from ynab_unlinked.models import Transaction
+from ynab_unlinked.models import Transaction, milliunits
+from ynab_unlinked.store import ExcludedRow
+from ynab_unlinked.text import import_message
 from ynab_unlinked.web.wording import plural
 
 STEPS = ("Files", "Review", "Done")
@@ -167,13 +174,49 @@ def chosen_accounts(items: Sequence[ImportFile]) -> list[tuple[str, str]]:
     ]
 
 
-def done_summary(duplicates: int, skipped: int, failed: int) -> str:
-    """The line under the Done title: duplicates YNAB rejected, rows skipped, files failed."""
+LEFT_OUT_NOTE = (
+    "Rows you leave out are remembered on this computer and stay out of later imports until "
+    "you include them again, here or in Settings › Data & privacy."
+)
+
+
+def left_out_count(plan: ImportPlan) -> int:
+    """Rows the user left out of imports."""
+    return len(plan.with_status(RowStatus.EXCLUDED))
+
+
+def unknown_matches_note(plan: ImportPlan) -> str | None:
+    """Why a row shown as new may already be in YNAB (`ImportPlan.unknown_matches`)."""
+    if not (count := plan.unknown_matches):
+        return None
+    return (
+        f"{plural(count, 'transaction')} of this account {'was' if count == 1 else 'were'} "
+        "matched in YNAB with one the budget copy does not have yet, so a row shown as new may "
+        "already be there. Sync and import again, or leave the row out."
+    )
+
+
+def excluded_row(account_id: str, row: ImportRow) -> ExcludedRow:
+    """What the store keeps of a row the user leaves out."""
+    return ExcludedRow(
+        account_id=account_id,
+        import_id=row.import_id,
+        date=row.transaction.date,
+        amount=milliunits(row.transaction.amount),
+        payee=row.transaction.payee,
+    )
+
+
+def done_summary(duplicates: int, skipped: int, failed: int, left_out: int = 0) -> str:
+    """The line under the Done title: duplicates YNAB rejected, rows skipped and left out,
+    files failed."""
     lede = (
         f"YNAB rejected {duplicates} as duplicate{'' if duplicates == 1 else 's'}. "
         f"{skipped} {'was' if skipped == 1 else 'were'} already there and "
         f"{'was' if skipped == 1 else 'were'} skipped."
     )
+    if left_out:
+        lede += f" {left_out} {'was' if left_out == 1 else 'were'} left out."
     if failed:
         lede += f" {plural(failed, 'file')} failed, see above."
     return lede
@@ -191,6 +234,8 @@ def import_log(
         "created": result.created,
         "duplicates": len(result.duplicate_import_ids),
         "skipped": plan.already_imported_count,
+        "matched": len(plan.with_status(RowStatus.MATCHED)),
+        "excluded": left_out_count(plan),
     }
-    message = f"Imported {plural(result.created, 'transaction')} to {account_name} from {file}"
+    message = import_message(result.created, account_name, file, details["excluded"])
     return message, details

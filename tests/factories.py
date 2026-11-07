@@ -19,6 +19,7 @@ from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.core.balances import AccountBalance
 from ynab_unlinked.core.importing import ImportRow
 from ynab_unlinked.models import PendingImport, Transaction
+from ynab_unlinked.store import StoredAccount, StoredTransaction
 
 # Matches the `today` fixture so factory built objects line up with frozen time
 DEFAULT_DATE = dt.date(2025, 5, 15)
@@ -108,6 +109,42 @@ class TransactionDetailFactory(Factory):
     payee_id = None
     import_id = None
     subtransactions = factory.LazyFunction(list)
+
+
+class StoredTransactionFactory(Factory):
+    """A transaction as the budget copy keeps it, in the ...00a account. `amount` in milliunits."""
+
+    class Meta:
+        model = StoredTransaction
+
+    id = "t1"
+    account_id = "00000000-0000-0000-0000-00000000000a"
+    date = DEFAULT_DATE
+    amount = -10000
+    cleared = TransactionClearedStatus.CLEARED
+    approved = False
+    deleted = False
+    payee_name = "Mercadona"
+    category_name = None
+    import_id = None
+    memo = None
+    transfer_account_id = None
+
+
+class StoredAccountFactory(Factory):
+    """An open account as the budget copy keeps it, the ...00a one."""
+
+    class Meta:
+        model = StoredAccount
+
+    id = "00000000-0000-0000-0000-00000000000a"
+    name = "Checking"
+    type = "checking"
+    closed = False
+    on_budget = True
+    balance = 0
+    cleared_balance = 0
+    uncleared_balance = 0
 
 
 class AccountFactory(Factory):
