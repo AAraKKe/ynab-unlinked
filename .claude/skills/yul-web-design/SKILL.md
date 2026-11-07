@@ -79,7 +79,7 @@ same change. Never update a document to describe something you did not build.
   `shell.pending_uploads` / `shell.on_drop`, `shell.refresh_view`, and every view path
   (`shell.HOME_PATH`, `RECONCILE_PATH`, `NETWORTH_PATH`, `SETTINGS_PATH`, ...).
 - `state()`: config, client, store, `require_formatter()` (the one way to the formatter),
-  loaders, `sync()`, `invalidate()`, `fresh(max_age)`, `budget_accounts()`.
+  loaders, `sync()`, `invalidate()`, `budget_accounts()`.
 - `web.wording` (`plural`, `short_date`, `human_size`, `ynab_error_message`, ...),
   `web.ynab` (`fetch_budgets`, `load_budget`, `fallback_accounts`), `web.buckets` (title and
   colour of each bucket), `web.accounts.STALE_AFTER_DAYS`. A view never imports another

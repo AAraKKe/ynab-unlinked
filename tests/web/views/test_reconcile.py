@@ -85,7 +85,8 @@ TRANSACTIONS = [
 def seed(ynab_api: YnabClientStub, store_file: Path, config_v4: LatestConfig) -> Seed:
     """Fill the store through a sync with the stubbed YNAB, as `yul app` would.
 
-    `fresh=True` also tells the app the store was just synced, so the view does not sync again.
+    `fresh=True` also records the sync in the app, as the sync at start does: the view syncs
+    again when it opens and finds nothing new, and a failed sync still has a copy to show.
     """
     budget_id = config_v4.budget.id
 
@@ -397,18 +398,31 @@ async def test_a_stale_store_is_synced_before_showing_anything(
     ynab_api.api("transactions").get_transactions.assert_called()
 
 
-async def test_a_store_written_to_since_the_last_sync_is_synced_again(
+async def test_a_store_synced_a_moment_ago_is_synced_again_when_the_view_opens(
     user: User, seed: Seed, ynab_api: YnabClientStub
 ):
+    # A match or a delete made in YNAB since must not show up as a transaction to lock
     seed(fresh=True)
     ynab_api.api("transactions").get_transactions.reset_mock()
-    # What Import, a lock and a balance update leave behind
-    state().invalidate()
 
     await open_reconcile(user)
 
     await user.should_see("2 accounts · 5 transactions not reconciled")
     ynab_api.api("transactions").get_transactions.assert_called()
+
+
+async def test_a_failed_sync_shows_the_last_copy_and_says_so(
+    user: User, seed: Seed, ynab_api: YnabClientStub
+):
+    seed(fresh=True)
+    ynab_api.api("transactions").get_transactions.side_effect = ApiException(
+        status=500, reason="Internal Server Error"
+    )
+
+    await open_reconcile(user)
+
+    await user.should_see("Showing the last sync", retries=20)
+    await user.should_see("2 accounts · 5 transactions not reconciled")
 
 
 def stored(id_: str, amount: int, cleared: TransactionClearedStatus) -> StoredTransaction:

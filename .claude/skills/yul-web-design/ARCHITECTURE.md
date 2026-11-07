@@ -169,7 +169,8 @@ RECONCILE_BUFFER_DAYS = 7
 `cli/commands/reconcile.py` and the Textual app keep working on top of these. The two
 frontends read from different places on purpose: `yul reconcile` asks YNAB live
 (`reconciliation_overview`), the app reads the budget copy (`Store.unreconciled`, synced
-first when older than 10 minutes or after a write). Both use the same scope rule and
+first every time the view opens, so a match or a delete made in YNAB a moment ago is not
+listed; a failed sync shows the last copy with a toast). Both use the same scope rule and
 `reconcile()`, so they differ only by what YNAB changed since the last sync.
 
 ### 2.4 Loaders and detection (`entities/`, `core/detect.py`)
@@ -425,6 +426,7 @@ class StoredTransaction:
     id: str; account_id: str; date: dt.date; amount: int; cleared: TransactionClearedStatus
     approved: bool; deleted: bool; payee_name: str | None; category_name: str | None
     import_id: str | None; memo: str | None; transfer_account_id: str | None
+    matched_transaction_id: str | None = None   # the row YNAB merged this one with
 
 @dataclass(frozen=True)
 class StoredAccount:
@@ -454,7 +456,11 @@ class Store:
         # flagged, replaces the budget's accounts (closed kept, deleted skipped), stores the
         # new server_knowledge (never a lower one than stored), all in one SQLite transaction.
         # A 409 on a delta forgets the budget's rows and knowledge and redoes a full fetch once.
-        # Then runs the ghost repair (below) and reports it in ghosts_removed.
+        # Then runs the ghost repair and reports it in ghosts_removed: a match approved in
+        # YNAB hides the imported row (404) without a delta tombstone, so the rows that share
+        # an import id, or point at one through matched_transaction_id, are checked with
+        # transaction_exists and the missing ones flagged deleted (50 ids a sync, the rest
+        # kept in ghost_checks for the next one).
     def accounts(self, budget_id: str) -> list[StoredAccount]        # sorted by name
     def transactions(self, budget_id: str, *, account_id: str | None = None,
                      since: dt.date | None = None, until: dt.date | None = None,
@@ -471,10 +477,9 @@ class Store:
     def activity(self, budget_id: str, limit: int | None = 20, *,
                  kind: str | None = None) -> list[Activity]
         # newest first; limit None = all; kind keeps one kind only
-    def last_activity(self, budget_id: str, *, other_than: str | None = None) -> dt.datetime | None
+    def last_activity(self, budget_id: str) -> dt.datetime | None   # when the newest entry was logged
     def last_import_per_loader(self, budget_id: str) -> dict[str, dt.datetime]
         # newest `import` entry per `details.loader`, one GROUP BY query (Home's last imports)
-        # when the newest entry was logged, leaving out one kind (`fresh` leaves out "sync")
     def daily_amounts(self, budget_id: str,
                       account_ids: Iterable[str] | None = None) -> dict[str, DailyAmounts]
         # per account: its stored balance and the sum of its non deleted transactions per

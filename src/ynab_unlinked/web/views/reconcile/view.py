@@ -36,7 +36,6 @@ from ynab_unlinked.web.views.reconcile.data import (
     ALL_TIME,
     LOCK_TIMED_OUT,
     SINCE,
-    SYNC_MAX_AGE,
     UNCLEARED_SKIPPED,
     ReconcileData,
     gap_candidates,
@@ -82,11 +81,13 @@ class ReconcileView:
             self.data = data
 
     async def ensure_fresh(self) -> bool:
-        """Sync the store when it is older than ten minutes or something was written to YNAB
-        since (an import, a lock, a balance update). False if it was never synced."""
+        """Sync the budget copy with YNAB before showing it, whatever its age.
+
+        A match or a delete made in YNAB minutes ago must not show up as a transaction to
+        lock, and a delta sync is one request. False if the copy was never synced; a failed
+        sync keeps the last one, with a toast.
+        """
         current = state()
-        if await run.io_bound(current.fresh, SYNC_MAX_AGE):
-            return True
         try:
             await current.sync()
         except Exception as error:

@@ -1,9 +1,8 @@
 name: PR Checks
 
 on:
+  # Every pull request, whatever its base: a PR stacked on a feature branch is checked too
   pull_request:
-    branches:
-      - main
     types: [opened, synchronize, reopened, edited]
 
 jobs:
