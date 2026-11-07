@@ -16,6 +16,7 @@ import dataclasses
 from collections.abc import Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Literal
 
 from nicegui import background_tasks, context, run, ui
 from ynab import TransactionClearedStatus
@@ -25,12 +26,14 @@ from ynab_unlinked.core.detect import Candidate, detect_loaders
 from ynab_unlinked.core.importing import (
     ImportPlan,
     ImportResult,
+    ImportRow,
     build_import_plan,
     commit_import_plan,
     file_digest,
 )
 from ynab_unlinked.entities.registry import loaders
 from ynab_unlinked.formatter import Formatter
+from ynab_unlinked.store import ExcludedRow
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import set_class
 from ynab_unlinked.web.components.dropzone import dropzone
@@ -50,14 +53,17 @@ from ynab_unlinked.web.views.import_.data import (
     Status,
     account_label,
     chosen_accounts,
+    excluded_row,
     import_log,
+    left_out_count,
     mark_repeated,
     problem_text,
     read_file,
     take_candidate,
 )
 from ynab_unlinked.web.views.import_.rows import draw_row
-from ynab_unlinked.web.wording import IMPORT_FAILED, plural, ynab_error_message
+from ynab_unlinked.web.views.import_.tables import RowActions
+from ynab_unlinked.web.wording import IMPORT_FAILED, left_out_entry, plural, ynab_error_message
 
 _FLOW_KEY = "yul.import_flow"
 
@@ -79,6 +85,7 @@ class ImportFlow:
         self.drop_area: ui.element | None = None
         self.file_list: ui.element | None = None
         self.footer: ui.element | None = None
+        self.review_boxes: dict[int, ui.element] = {}
 
     # ---- lifecycle -----------------------------------------------------------------------
 
@@ -235,21 +242,28 @@ class ImportFlow:
             return
 
         config, client = state().require()
+        store = state().store
+        account_id = item.account_id
         item.version += 1
         version = item.version
         item.status = Status.PLANNING
         item.plan = None
         self.refresh(item)
-        try:
-            plan = await run.io_bound(
-                build_import_plan,
+        transactions = candidate.transactions
+
+        def plan_file() -> ImportPlan:
+            return build_import_plan(
                 client,
                 config.budget.id,
-                item.account_id,
+                account_id,
                 candidate.loader.name,
                 item.path,
-                list(candidate.transactions),
+                list(transactions),
+                store=store,
             )
+
+        try:
+            plan = await run.io_bound(plan_file)
         except Exception as error:
             if version != item.version:
                 return
@@ -361,19 +375,81 @@ class ImportFlow:
         self.set_step(1)
         assert self.content is not None
         self.content.clear()
-        self.footer = None
+        self.review_boxes = {}
         with self.content, ui.element("div").classes("yul-stagger"):
             for item in ready:
-                assert item.plan is not None
-                review_card(item, self.account_name(item.plan.account_id), self.formatter())
+                self.review_boxes[item.key] = ui.element("div")
         with self.content:
+            self.footer = ui.element("div")
+        for item in ready:
+            self.draw_review_card(item)
+        self.draw_review_footer()
+
+    def draw_review_card(self, item: ImportFile) -> None:
+        if (box := self.review_boxes.get(item.key)) is None or item.plan is None:
+            return
+        box.clear()
+        actions = RowActions(
+            leave_out=lambda row: self.leave_out(item, row),
+            include=lambda row: self.include(item, row),
+        )
+        with box:
+            review_card(item, self.account_name(item.plan.account_id), self.formatter(), actions)
+
+    def draw_review_footer(self) -> None:
+        if self.footer is None or self.step != 1:
+            return
+        self.footer.clear()
+        with self.footer:
             review_footer(
-                ready,
+                self.ready,
                 reconciled=self.reconciled,
                 on_reconciled=lambda on: setattr(self, "reconciled", on),
                 on_back=self.show_files,
                 on_import=self.commit,
             )
+
+    async def leave_out(self, item: ImportFile, row: ImportRow) -> None:
+        """Leave the row out of this import and of every later one to the account."""
+        if item.plan is None or self.committing:
+            return
+        excluded = excluded_row(item.plan.account_id, row)
+        if not await self.note_left_out("exclude", excluded):
+            return
+        item.plan = item.plan.exclude({row.import_id})
+        self.draw_review_card(item)
+        self.draw_review_footer()
+        shell.notify(f"{row.transaction.payee} left out of imports")
+
+    async def include(self, item: ImportFile, row: ImportRow) -> None:
+        """Send a row left out before, in this import and the later ones."""
+        if item.plan is None or self.committing:
+            return
+        if not await self.note_left_out("include", excluded_row(item.plan.account_id, row)):
+            return
+        item.plan = item.plan.include({row.import_id})
+        self.draw_review_card(item)
+        self.draw_review_footer()
+        shell.notify(f"{row.transaction.payee} included in imports again")
+
+    async def note_left_out(self, kind: Literal["exclude", "include"], row: ExcludedRow) -> bool:
+        """Save the choice on this computer and log it. False, after a toast, when it failed."""
+        config, _ = state().require()
+        store = state().store
+        message, details = left_out_entry(
+            kind, row, self.account_name(row.account_id), self.formatter()
+        )
+
+        try:
+            if kind == "exclude":
+                await run.io_bound(store.exclude, config.budget.id, row)
+            else:
+                await run.io_bound(store.include, config.budget.id, row.account_id, row.import_id)
+            await run.io_bound(store.log, config.budget.id, kind, message, details)
+        except Exception as error:
+            shell.notify(f"Could not save it on this computer: {error}", "error")
+            return False
+        return True
 
     # ---- step 3: done --------------------------------------------------------------------
 
@@ -411,12 +487,13 @@ class ImportFlow:
                 progress[item.key] = progress_card(item, self.account_name(item.plan.account_id))
             done_area = ui.element("div")
 
-        created = duplicates = skipped = failed = 0
+        created = duplicates = skipped = failed = left_out = 0
         for item in ready:
             assert item.plan is not None and item.candidate is not None
             plan = item.plan
             card = progress[item.key]
             skipped += plan.already_imported_count
+            left_out += left_out_count(plan)
             if not plan.new_rows:
                 card.nothing_new()
                 continue
@@ -441,7 +518,7 @@ class ImportFlow:
 
         self.close()
         with done_area:
-            done_card(created, duplicates, skipped, failed, self.reset)
+            done_card(created, duplicates, skipped, failed, left_out, self.reset)
         if created:
             # Reconcile and Net worth sync before showing the store again
             state().invalidate()

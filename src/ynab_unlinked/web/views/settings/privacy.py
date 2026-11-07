@@ -1,4 +1,5 @@
-"""Settings › Data & privacy: what yul keeps on this computer, resync, and reset everything."""
+"""Settings › Data & privacy: what yul keeps on this computer, the rows left out of imports,
+resync, and reset everything."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from ynab_unlinked.local_data import local_data_paths
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.views.settings import left_out
 from ynab_unlinked.web.views.settings.common import kv
 from ynab_unlinked.web.wording import human_size, ynab_error_message
 
@@ -29,7 +31,7 @@ def token_wording() -> str:
     return "In the settings file, since no keychain was found on this computer."
 
 
-def render(page: Settings) -> None:
+async def render(page: Settings) -> None:
     current = state()
     current.require()
     path = current.store.path
@@ -49,7 +51,10 @@ def render(page: Settings) -> None:
         with ui.element("div").classes("yul-muted yul-small"):
             ui.label("The budget, banks, account settings and adjustment settings.")
             ui.label("A copy of the budget's transactions and accounts, and a log of what yul did.")
+            ui.label("The rows of your statements you left out of imports.")
             ui.label("Nothing leaves this computer except calls to api.ynab.com.")
+
+    await left_out.render(page)
 
     with ui.element("div").classes("yul-row").style("margin-top:14px;gap:8px"):
         resync = button("Resync from scratch", small=True).mark("resync")

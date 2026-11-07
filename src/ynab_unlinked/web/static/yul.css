@@ -367,6 +367,10 @@ body.body--light .q-menu .q-item--active { color: var(--accent-solid); }
 body.body--light .yul-hand.on { color: var(--accent-solid); }
 .yul-hand svg { width: 15px; height: 15px; }
 
+/* ---- data & privacy: the rows left out of imports (views/settings/left_out.py) ---- */
+.yul-left-out { margin-top: 22px; }
+.yul-left-out .yul-imp-table { margin-top: 8px; }
+
 /* ---- onboarding (and the chips of rule 6, Net worth by account) ---- */
 .yul-onb { min-height: 100vh; width: 100%; display: grid; place-items: center; padding: 24px; }
 .yul-wiz { width: min(640px, 100%); display: grid; grid-template-columns: 150px minmax(0, 1fr); padding: 0; overflow: hidden; animation: yul-enter .3s var(--ease) both; }
@@ -614,6 +618,9 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-imp-table .r { text-align: right; }
 .yul-imp-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .yul-imp-table tr.dim td { color: var(--text-3); }
+.yul-imp-table tr.out td { color: var(--text-3); }
+.yul-imp-table tr.out td:not(:last-child) { text-decoration: line-through; }
+.yul-imp-notes { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
 .yul-imp-note { color: var(--text-2); font-size: 12.5px; margin-bottom: 8px; }
 .yul-imp-card { margin-bottom: 10px; padding: 14px 16px; }
 .yul-imp-done { text-align: center; padding: 28px; }
