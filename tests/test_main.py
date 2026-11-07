@@ -22,7 +22,7 @@ BUDGET_ID = UUID("00000000-0000-0000-0000-000000000001")
 def answers(mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch):
     """Stubs YNAB and the API key prompt so the setup flow can run unattended."""
     monkeypatch.setattr("getpass.getpass", lambda *args, **kwargs: "the-api-key")
-    client = mocker.patch("ynab_unlinked.utils.Client")
+    client = mocker.patch("ynab_unlinked.cli.utils.Client")
     client.return_value.budgets.return_value = [PlanSummary(id=BUDGET_ID, name="My Budget")]
     client.return_value.budget.return_value = PlanDetailFactory(id=BUDGET_ID)
     return client
@@ -37,7 +37,7 @@ def test_setup_persists_the_answers_it_collects(yul: CliRunner, config_files: Co
     assert stored["api_key"] == "the-api-key"
     assert stored["budget"]["id"] == str(BUDGET_ID)
     assert stored["budget"]["date_format"] == "DD/MM/YYYY"
-    assert stored["version"] == "V3"
+    assert stored["version"] == "V4"
 
 
 @pytest.mark.usefixtures("answers")
@@ -46,4 +46,29 @@ def test_a_command_that_needs_a_config_runs_setup_first(yul: CliRunner, config_f
 
     assert result.exit_code == 0, result.output
     assert config_files.v2.is_file(), "The command ran without ever storing a config"
-    assert "the-api-key" in result.output
+    assert json.loads(config_files.read())["api_key"] == "the-api-key"
+    # `config show` masks the token
+    assert "the-api-key" not in result.output
+
+
+@pytest.mark.version("V4")
+@pytest.mark.usefixtures("answers")
+@pytest.mark.parametrize(
+    ("command", "answers_given", "replaced"),
+    [
+        ("setup", "n\n", False),
+        ("setup", "y\n1\n", True),
+        ("setup --yes", "1\n", True),
+    ],
+    ids=["declined", "confirmed", "yes-flag"],
+)
+def test_setup_asks_before_replacing_an_existing_config(
+    yul: CliRunner, config_files: ConfigFiles, command: str, answers_given: str, replaced: bool
+):
+    result = yul(command, input=answers_given, env=WIDE_TERMINAL)
+
+    assert result.exit_code == 0, result.output
+    stored = json.loads(config_files.read())
+    assert (stored["api_key"] == "the-api-key") is replaced
+    assert ("sabadell" in stored["loaders"]) is not replaced
+    assert ("Replace the current config?" in result.output) is ("--yes" not in command)

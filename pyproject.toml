@@ -5,32 +5,28 @@ build-backend = "hatchling.build"
 [project]
 name = "ynab-unlinked"
 dynamic = ["version"]
-description = ''
+description = "Import bank statement exports into YNAB from the command line or a local web app"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
 keywords = []
 authors = [{ name = "Juanpe Araque", email = "juanpe@committhatline.com" }]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: End Users/Desktop",
   "Intended Audience :: Developers",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
-  # This is mostly because the config is handled. Once updated
-  # should be usable in any OS.
-  # https://github.com/AAraKKe/ynab-unlinked/issues/1
+  # The ones CI runs on; the keychain and the paths come from keyring and platformdirs
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
   "ynab==4.4.1",
   "typer==0.27.3",
-  "rapidfuzz==3.14.6",
-  "unidecode==1.4.0",
   "html-text==0.7.1",
   "pdfplumber==0.11.10",
   "pydantic==2.14.1",
@@ -39,7 +35,11 @@ dependencies = [
   "pyexcel-xls==0.7.1",
   "pyexcel-xlsx==0.6.1",
   "textual==8.2.8",
+  "keyring==25.7.0",
 ]
+
+[project.optional-dependencies]
+web = ["nicegui==3.19.0"]
 
 [project.scripts]
 yul = "ynab_unlinked.main:main"
@@ -60,12 +60,14 @@ installer = "uv"
 # ------ Development Environment ------
 [tool.hatch.envs.dev]
 installer = "uv"
+features = ["web"]
 extra-dependencies = [
   "ruff==0.15.12",
   "pyright==1.1.409",
   "pytest==9.0.3",
   "pytest-cov==7.1.0",
   "pytest-mock==3.15.1",
+  "pytest-asyncio==1.4.1",
   "factory_boy==3.3.3",
   "freezegun==1.5.5",
 ]
@@ -74,7 +76,9 @@ extra-dependencies = [
 format-check = "ruff format --check"
 lint = "ruff check"
 type-check = "pyright src"
-check = ["- lint", "- format-check", "- type-check"]
+check = ["lint", "format-check", "type-check"]
+# Runs every check even when an earlier one fails, for a full report
+check-all = ["- lint", "- format-check", "- type-check"]
 format = "ruff format"
 lint-fix = "ruff check --fix --unsafe-fixes"
 fix = ["format", "lint-fix"]
@@ -82,6 +86,8 @@ cov = ["pytest --cov=src --cov-report term-missing:skip-covered tests {args:}"]
 
 
 [tool.pyright]
+# `src` is checked in strict mode; tests stay at the default level.
+strict = ["src"]
 exclude = [
   "**/.vscode/**",
   "**/__pycache__/**",
@@ -140,6 +146,9 @@ docstring-code-format = true
 addopts = "-ra"
 testpaths = "tests"
 markers = ["version: used to identify the Config version used in the test"]
+# The web app tests drive NiceGUI's simulated user, which is async
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source_pkgs = ["ynab_unlinked"]

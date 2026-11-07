@@ -6,13 +6,14 @@ import pytest
 
 from tests.factories import AccountFactory
 from tests.helpers import assets
+from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
-from ynab_unlinked.context_object import YnabUnlinkedContext
+from ynab_unlinked.config import get_config
 from ynab_unlinked.entities.bbva.bbva import BBVA
 from ynab_unlinked.exceptions import ParsingError
 
-pytestmark = [pytest.mark.version("V3"), pytest.mark.usefixtures("config")]
+pytestmark = [pytest.mark.version("V4"), pytest.mark.usefixtures("config")]
 
 XLSX_STATEMENT = "bbva/bbva.xlsx"
 PDF_STATEMENT = "bbva/bbva.pdf"
@@ -47,17 +48,17 @@ def account_prompt(ynab_api: YnabClientStub):
     ],
 )
 def test_an_xlsx_statement_becomes_transactions(
-    context_obj: YnabUnlinkedContext, position: int, date: dt.date, payee: str, amount: float
+    position: int, date: dt.date, payee: str, amount: float
 ):
-    transactions = BBVA().parse(assets.path(XLSX_STATEMENT), context_obj)
+    transactions = BBVA().parse(assets.path(XLSX_STATEMENT))
 
     assert len(transactions) == 17
     assert (transactions[position].date, transactions[position].payee) == (date, payee)
     assert transactions[position].amount == amount
 
 
-def test_a_pdf_statement_becomes_transactions(context_obj: YnabUnlinkedContext):
-    transactions = BBVA().parse(assets.path(PDF_STATEMENT), context_obj)
+def test_a_pdf_statement_becomes_transactions():
+    transactions = BBVA().parse(assets.path(PDF_STATEMENT))
 
     # The date and the concept carry a second line, the settlement date and the spending
     # category, and neither the header repeated on page two nor the total are transactions
@@ -69,21 +70,21 @@ def test_a_pdf_statement_becomes_transactions(context_obj: YnabUnlinkedContext):
     ]
 
 
-def test_a_pdf_without_a_transaction_table_is_reported(context_obj: YnabUnlinkedContext):
+def test_a_pdf_without_a_transaction_table_is_reported():
     with pytest.raises(ParsingError) as error:
-        BBVA().parse(assets.path("parsers/no_table.pdf"), context_obj)
+        BBVA().parse(assets.path("parsers/no_table.pdf"))
 
     assert "No transaction table" in error.value.message
 
 
-def test_a_pdf_row_with_a_blank_cell_is_not_a_transaction(context_obj: YnabUnlinkedContext):
-    transactions = BBVA().parse(assets.path("bbva/bbva_blank_cell.pdf"), context_obj)
+def test_a_pdf_row_with_a_blank_cell_is_not_a_transaction():
+    transactions = BBVA().parse(assets.path("bbva/bbva_blank_cell.pdf"))
 
     assert [t.payee for t in transactions] == ["Netflix.com"]
 
 
-def test_a_charge_over_a_thousand_euros_is_imported(context_obj: YnabUnlinkedContext):
-    transactions = BBVA().parse(assets.path("bbva/bbva_large_amount.pdf"), context_obj)
+def test_a_charge_over_a_thousand_euros_is_imported():
+    transactions = BBVA().parse(assets.path("bbva/bbva_large_amount.pdf"))
 
     assert [t.amount for t in transactions] == [-1234.56]
 
@@ -96,37 +97,44 @@ def test_a_charge_over_a_thousand_euros_is_imported(context_obj: YnabUnlinkedCon
         pytest.param(".doc", id="a-format-the-tool-knows-nothing-about"),
     ],
 )
-def test_a_file_bbva_cannot_read_is_reported(
-    context_obj: YnabUnlinkedContext, tmp_path: Path, suffix: str
-):
+def test_a_file_bbva_cannot_read_is_reported(tmp_path: Path, suffix: str):
     input_file = tmp_path / f"statement{suffix}"
     input_file.touch()
 
     with pytest.raises(ParsingError) as error:
-        BBVA().parse(input_file, context_obj)
+        BBVA().parse(input_file)
 
     assert "pdf" in error.value.message
     assert "xlsx" in error.value.message
 
 
-def test_the_load_command_asks_for_an_account_and_shows_the_transactions(
-    yul: CliRunner, account_prompt
-):
+def test_the_load_command_asks_for_an_open_account(yul: CliRunner, account_prompt, ynab_api):
+    ynab_api.api("transactions").get_transactions_by_account.return_value.data.transactions = []
+
     result = yul(
-        "load",
-        "--show",
-        "bbva",
-        str(assets.path(PDF_STATEMENT)),
-        input="1\n",
-        env={"COLUMNS": "200"},
+        "load", "bbva", str(assets.path(PDF_STATEMENT)), input="1\nn\n", env={"COLUMNS": "200"}
     )
 
     assert result.exit_code == 0, result.output
     # Closed accounts are not offered, so the only choice is the open one
     assert "Old Card" not in result.output
     assert "Account selected: BBVA Credit Card" in result.output
+    assert "Netflix.com" in result.output
+
+
+def test_the_load_command_shows_the_transactions_without_asking_for_an_account(
+    yul: CliRunner, account_prompt
+):
+    # It used to ask and save the account first, so a --show mapped the bank for good
+    result = yul("load", "--show", "bbva", str(assets.path(PDF_STATEMENT)), env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0, result.output
+    assert "Lets select the account" not in result.output
     assert "11/07/2025" in result.output
     assert "Netflix.com" in result.output
+    saved = get_config()
+    assert saved is not None
+    assert saved.entity("BBVA Credit Card") is None
 
 
 def test_the_load_command_reports_a_statement_it_cannot_parse(yul: CliRunner, account_prompt):
@@ -140,3 +148,62 @@ def test_the_load_command_reports_a_statement_it_cannot_parse(yul: CliRunner, ac
 
     assert result.exit_code == 1
     assert "No transaction table was found" in result.output
+
+
+def test_an_amount_that_does_not_parse_is_reported(tmp_path: Path):
+    input_file = write_xls(
+        tmp_path / "bbva.xlsx", bbva_sheet([("02/05/2025", "MERCADONA", "doce euros")])
+    )
+
+    with pytest.raises(ParsingError) as error:
+        BBVA().parse(input_file)
+
+    assert error.value.message == "the row of 02/05/2025 MERCADONA: 'doce euros' is not an amount"
+
+
+def test_an_xlsx_with_typed_date_cells_keeps_every_row(tmp_path: Path):
+    # Saved again from a spreadsheet app, the dates are date cells and read as datetimes
+    input_file = write_xls(
+        tmp_path / "bbva.xlsx",
+        bbva_sheet(
+            [
+                (dt.datetime(2025, 5, 2), "MERCADONA", -12.5),  # type: ignore[list-item]
+                (dt.date(2025, 5, 3), "ZARA", -30.0),  # type: ignore[list-item]
+            ]
+        ),
+    )
+
+    transactions = BBVA().parse(input_file)
+
+    assert [(t.date, t.payee, t.amount) for t in transactions] == [
+        (dt.date(2025, 5, 2), "MERCADONA", -12.5),
+        (dt.date(2025, 5, 3), "ZARA", -30.0),
+    ]
+
+
+@pytest.mark.parametrize(
+    "date",
+    [
+        pytest.param("2025-05-02", id="another-format"),
+        pytest.param("31/02/2025", id="a-day-that-does-not-exist"),
+    ],
+)
+def test_a_row_with_an_amount_and_a_date_that_does_not_parse_is_reported(tmp_path: Path, date: str):
+    input_file = write_xls(
+        tmp_path / "bbva.xlsx",
+        bbva_sheet([("01/05/2025", "ZARA", -30.0), (date, "MERCADONA", -12.5)]),
+    )
+
+    with pytest.raises(ParsingError) as error:
+        BBVA().parse(input_file)
+
+    assert error.value.message == f"the row of MERCADONA -12.5: {date} is not a date"
+
+
+def test_a_row_without_a_date_or_an_amount_is_still_skipped(tmp_path: Path):
+    input_file = write_xls(
+        tmp_path / "bbva.xlsx",
+        [*bbva_sheet([("01/05/2025", "ZARA", -30.0)]), ["", "Total", "", "", -30.0, "€", ""]],
+    )
+
+    assert [t.payee for t in BBVA().parse(input_file)] == ["ZARA"]
