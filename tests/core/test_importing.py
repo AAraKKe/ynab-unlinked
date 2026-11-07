@@ -6,7 +6,12 @@ import pytest
 from ynab import TransactionClearedStatus, TransactionDetail
 
 from tests.core.conftest import BUDGET_ID
-from tests.factories import ImportRowFactory, TransactionDetailFactory, TransactionFactory
+from tests.factories import (
+    ImportRowFactory,
+    StoredTransactionFactory,
+    TransactionDetailFactory,
+    TransactionFactory,
+)
 from tests.helpers.store import upsert
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.core.importing import (
@@ -18,7 +23,7 @@ from ynab_unlinked.core.importing import (
     unique_files,
 )
 from ynab_unlinked.models import PendingImport, Transaction, assign_import_ids
-from ynab_unlinked.store import ExcludedRow, Store, StoredTransaction
+from ynab_unlinked.store import ExcludedRow, Store
 from ynab_unlinked.ynab_api import Client
 
 ACCOUNT_ID = "00000000-0000-0000-0000-00000000000a"
@@ -244,23 +249,15 @@ def survivor(**fields) -> TransactionDetail:
 
 def copied(store: Store, *transactions: TransactionDetail) -> None:
     """The budget copy as the delta left it: yul's transaction with its import id."""
-    upsert(store, BUDGET_ID, transactions=[stored(t) for t in transactions])
-
-
-def stored(t: TransactionDetail) -> StoredTransaction:
-    return StoredTransaction(
-        id=t.id,
-        account_id=ACCOUNT_ID,
-        date=t.var_date,
-        amount=t.amount,
-        cleared=t.cleared,
-        approved=t.approved,
-        deleted=t.deleted,
-        payee_name=t.payee_name,
-        category_name=None,
-        import_id=t.import_id,
-        memo=t.memo,
-        transfer_account_id=None,
+    upsert(
+        store,
+        BUDGET_ID,
+        transactions=[
+            StoredTransactionFactory(
+                id=t.id, amount=t.amount, deleted=t.deleted, import_id=t.import_id
+            )
+            for t in transactions
+        ],
     )
 
 

@@ -1,3 +1,4 @@
+import datetime as dt
 from pathlib import Path
 
 import pytest
@@ -5,7 +6,7 @@ from pytest_mock import MockerFixture
 
 from tests.helpers.config import ConfigFiles
 from tests.helpers.types import CliRunner
-from ynab_unlinked.store import Store
+from ynab_unlinked.store import ExcludedRow, Store
 
 pytestmark = pytest.mark.version("missing")
 
@@ -55,7 +56,16 @@ def test_reset_deletes_the_local_store_kept_apart_from_the_config(
     yul: CliRunner, config_files: ConfigFiles, store_file: Path
 ):
     config_files.write("V2", '{"version": "V2"}')
-    Store(store_file)
+    Store(store_file).exclude(
+        "budget",
+        ExcludedRow(
+            account_id="account",
+            import_id="YNAB:-18380:2025-05-12:1",
+            date=dt.date(2025, 5, 12),
+            amount=-18_380,
+            payee="Maya mobile ltd",
+        ),
+    )
 
     result = yul("config reset --yes", env=WIDE_TERMINAL)
 
@@ -63,6 +73,8 @@ def test_reset_deletes_the_local_store_kept_apart_from_the_config(
     assert str(store_file) in result.output
     assert not store_file.exists()
     assert not config_files.v2.parent.exists()
+    # The rows left out of imports went with it
+    assert Store(store_file).excluded("budget") == []
 
 
 def test_reset_deletes_the_web_app_preferences_kept_apart_from_the_config(

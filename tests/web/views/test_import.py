@@ -12,9 +12,15 @@ from nicegui.testing.user import User
 from pytest_mock import MockerFixture
 from ynab import ApiException, TransactionClearedStatus
 
-from tests.factories import AccountFactory, TransactionDetailFactory
+from tests.factories import (
+    AccountFactory,
+    ImportRowFactory,
+    StoredTransactionFactory,
+    TransactionDetailFactory,
+)
 from tests.helpers import assets
 from tests.helpers.statements import bbva_sheet, write_xls
+from tests.helpers.store import upsert
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.core.detect import resolve_options
@@ -22,6 +28,7 @@ from ynab_unlinked.core.importing import ImportPlan, ImportResult
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
 from ynab_unlinked.models import assign_import_ids
+from ynab_unlinked.store import ExcludedRow, Store
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views.import_.data import import_log
@@ -33,6 +40,7 @@ ORO = str(uuid.UUID(int=1))
 MAXIMA = str(uuid.UUID(int=2))
 SABADELL = assets.path("sabadell/movements.txt")
 BBVA = "BBVA Credit Card"
+BUDGET_ID = "00000000-0000-0000-0000-000000000001"  # the budget of the V4 config asset
 
 
 @pytest.fixture
@@ -404,3 +412,107 @@ def test_the_log_line_of_an_import_counts_in_words(created: int, message: str):
     logged, _ = import_log("sabadell", "movements.txt", "💳 Oro", plan, result)
 
     assert logged == message
+
+
+@pytest.fixture
+def sabadell_first_left_out(store_file: Path) -> str:
+    """The first Sabadell row, left out of imports to Oro in an earlier run. Before `user`."""
+    import_id = import_ids("sabadell", SABADELL)[0]
+    Store(store_file).exclude(
+        BUDGET_ID,
+        ExcludedRow(
+            account_id=ORO, import_id=import_id, date=dt.date(2025, 1, 1), amount=-1, payee="x"
+        ),
+    )
+    return import_id
+
+
+async def test_a_row_left_out_in_the_review_is_never_sent_and_stays_left_out(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User
+):
+    first, *rest = import_ids("sabadell", SABADELL)
+    await drop(user, SABADELL)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+
+    user.find(marker="leave-out-1-0").click()
+
+    await user.should_see("left out", marker="row-status-1-0", retries=20)
+    await user.should_see("1 left out", marker="review-left-out")
+    await user.should_see("2 new transactions in 1 account", marker="review-summary")
+    store = state().store
+    assert [row.import_id for row in store.excluded(BUDGET_ID, ORO)] == [first]
+    [entry] = store.activity(BUDGET_ID, kind="exclude")
+    assert entry.message.startswith("Left ")
+    assert entry.details["import_id"] == first
+
+    user.find(marker="import").click()
+
+    await user.should_see("2 transactions imported", retries=30)
+    await user.should_see("1 was left out.", marker="done-summary")
+    assert [t.import_id for t in created(ynab)[ORO]] == rest
+    [logged] = store.activity(BUDGET_ID, kind="import")
+    assert logged.details["excluded"] == 1
+
+
+async def test_a_row_left_out_before_comes_back_crossed_out_and_can_be_included_again(
+    accounts: LatestConfig, ynab: YnabClientStub, sabadell_first_left_out: str, user: User
+):
+    await drop(user, SABADELL)
+    await user.should_see("2 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    await user.should_see("left out", marker="row-status-1-0")
+
+    user.find(marker="include-1-0").click()
+
+    await user.should_see("new", marker="row-status-1-0", retries=20)
+    await user.should_see("3 new transactions in 1 account", marker="review-summary")
+    store = state().store
+    assert store.excluded(BUDGET_ID) == []
+    assert len(store.activity(BUDGET_ID, kind="include")) == 1
+    user.find(marker="import").click()
+    await user.should_see("3 transactions imported", retries=30)
+    assert sabadell_first_left_out in [t.import_id for t in created(ynab)[ORO]]
+
+
+async def test_a_row_matched_onto_a_reconciled_transaction_is_shown_as_in_ynab(
+    accounts: LatestConfig, ynab: YnabClientStub, store_file: Path, user: User
+):
+    first = import_ids("sabadell", SABADELL)[0]
+    upsert(
+        Store(store_file),
+        BUDGET_ID,
+        transactions=[StoredTransactionFactory(id="yul", account_id=ORO, import_id=first)],
+    )
+    ynab.api("transactions").get_transactions_by_account.return_value.data.transactions = [
+        TransactionDetailFactory(
+            id="hand",
+            cleared=TransactionClearedStatus.RECONCILED,
+            matched_transaction_id="yul",
+        )
+    ]
+
+    await drop(user, SABADELL)
+
+    await user.should_see("2 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    await user.should_see("matched in YNAB", marker="row-status-1-0")
+
+
+def test_the_log_line_of_an_import_says_how_many_rows_were_left_out():
+    plan = ImportPlan(
+        entity_name="sabadell",
+        account_id=ORO,
+        input_file=SABADELL,
+        rows=(
+            ImportRowFactory(import_id="YNAB:-1:x:1", already_imported=True, matched=True),
+            ImportRowFactory(import_id="YNAB:-2:x:1", excluded=True),
+            ImportRowFactory(import_id="YNAB:-3:x:1"),
+        ),
+    )
+    result = ImportResult(created=1, duplicate_import_ids=())
+
+    logged, details = import_log("sabadell", "movements.txt", "💳 Oro", plan, result)
+
+    assert logged == "Imported 1 transaction to 💳 Oro from movements.txt · 1 left out"
+    assert (details["skipped"], details["matched"], details["excluded"]) == (1, 1, 1)

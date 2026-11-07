@@ -13,15 +13,17 @@ from tests.factories import (
     AccountFactory,
     PlanDetailFactory,
     PlanSummaryFactory,
+    StoredAccountFactory,
     TransactionDetailFactory,
 )
 from tests.helpers.config import ConfigFiles
+from tests.helpers.store import upsert
 from tests.helpers.web import eventually
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
 from ynab_unlinked.keychain import mask_token
-from ynab_unlinked.store import Store
+from ynab_unlinked.store import ExcludedRow, Store
 from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views.settings import tab_from_slug
 from ynab_unlinked.web.wording import SAVE_FAILED
@@ -255,10 +257,48 @@ async def test_resync_rebuilds_the_budget_copy_and_keeps_the_activity(
     assert "Imported 3 transactions" in [a.message for a in store.activity(config_v4.budget.id)]
 
 
+def left_out(account_id: str, payee: str, day: int) -> ExcludedRow:
+    return ExcludedRow(
+        account_id=account_id,
+        import_id=f"YNAB:-18380:2025-05-{day:02d}:1",
+        date=dt.date(2025, 5, day),
+        amount=-18_380,
+        payee=payee,
+    )
+
+
+async def test_the_data_tab_lists_the_rows_left_out_and_includes_one_again(
+    config_v4: LatestConfig, store_file: Path, user: User
+):
+    store = Store(store_file)
+    upsert(
+        store, config_v4.budget.id, accounts=[StoredAccountFactory(id=CARD_ID, name="💳 Maxima")]
+    )
+    store.exclude(config_v4.budget.id, left_out(CARD_ID, "Maya mobile ltd", 12))
+    store.exclude(config_v4.budget.id, left_out(CARD_ID, "Glovo", 2))
+    await _open_tab(user, "data-privacy")
+
+    await user.should_see(marker="left-out-0", retries=20)
+    await user.should_see("Maya mobile ltd")
+    await user.should_see("💳 Maxima")
+    user.find(marker="include-again-0").click()
+
+    await user.should_see("Maya mobile ltd included in imports again", retries=20)
+    assert [row.payee for row in store.excluded(config_v4.budget.id)] == ["Glovo"]
+    [entry] = store.activity(config_v4.budget.id, kind="include")
+    assert entry.message.startswith("Included Maya mobile ltd")
+
+
+async def test_the_data_tab_says_when_no_row_is_left_out(user: User, config_v4: LatestConfig):
+    await _open_tab(user, "data-privacy")
+
+    await user.should_see(marker="left-out-empty", retries=20)
+
+
 async def test_reset_all_data_deletes_everything_and_starts_onboarding(
     user: User, config_v4: LatestConfig, config_files: ConfigFiles, store_file: Path
 ):
-    Store(store_file)
+    Store(store_file).exclude(config_v4.budget.id, left_out(CARD_ID, "Maya mobile ltd", 12))
     await _open_tab(user, "data-privacy")
     await user.should_see(str(store_file), retries=20)
 
@@ -269,6 +309,8 @@ async def test_reset_all_data_deletes_everything_and_starts_onboarding(
     await user.should_see("Connect to YNAB", retries=20)
     assert not config_files.v2.exists()
     assert not store_file.exists()
+    # Nothing of the rows left out survives in a new copy
+    assert Store(store_file).excluded(config_v4.budget.id) == []
 
 
 @pytest.fixture

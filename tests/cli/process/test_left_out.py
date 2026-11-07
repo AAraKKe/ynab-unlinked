@@ -4,10 +4,14 @@ import pytest
 from ynab import TransactionClearedStatus
 
 from tests.cli.process.builders import ACCOUNT_ID, BUDGET_ID, THREE_DAYS_AGO, TODAY, YESTERDAY
-from tests.factories import TransactionDetailFactory, TransactionFactory
+from tests.factories import (
+    StoredTransactionFactory,
+    TransactionDetailFactory,
+    TransactionFactory,
+)
 from tests.helpers.store import upsert
 from tests.helpers.types import CliRunner, LoadEntityCallback
-from ynab_unlinked.store import ExcludedRow, Store, StoredTransaction
+from ynab_unlinked.store import ExcludedRow, Store
 
 pytestmark = pytest.mark.version("V4")
 
@@ -37,19 +41,8 @@ def coffee_matched_onto_a_reconciled_one(existing_in_ynab, store_file: Path) -> 
         Store(store_file),
         BUDGET_ID,
         transactions=[
-            StoredTransaction(
-                id="yul",
-                account_id=ACCOUNT_ID,
-                date=THREE_DAYS_AGO,
-                amount=-12340,
-                cleared=TransactionClearedStatus.CLEARED,
-                approved=False,
-                deleted=False,
-                payee_name="Coffee Shop",
-                category_name=None,
-                import_id=COFFEE_ID,
-                memo=None,
-                transfer_account_id=None,
+            StoredTransactionFactory(
+                id="yul", date=THREE_DAYS_AGO, amount=-12340, import_id=COFFEE_ID
             )
         ],
     )
