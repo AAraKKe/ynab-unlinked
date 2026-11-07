@@ -11,8 +11,11 @@ from tests.helpers.statements import cobee_export
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.cli import display
+from ynab_unlinked.core.detect import resolve_options
 from ynab_unlinked.core.importing import ImportPlan
-from ynab_unlinked.store import Store
+from ynab_unlinked.entities.registry import loader
+from ynab_unlinked.models import assign_import_ids
+from ynab_unlinked.store import ExcludedRow, Store
 
 pytestmark = pytest.mark.version("V4")
 
@@ -234,6 +237,30 @@ def test_nothing_is_asked_when_every_transaction_is_already_in_ynab(
     assert "Nothing to do" in result.output
     assert confirm.call_count == 0
     ynab.api("transactions").create_transaction.assert_not_called()
+
+
+def test_yes_keeps_the_rows_left_out_of_every_file(
+    yul: CliRunner, accounts, ynab: YnabClientStub, store_file: Path
+):
+    spec = loader("sabadell")
+    [first, *_] = assign_import_ids(spec.build(resolve_options(spec)).parse(Path(SABADELL)))
+    Store(store_file).exclude(
+        BUDGET_ID,
+        ExcludedRow(
+            account_id=ACCOUNT_ID,
+            import_id=first.import_id,
+            date=first.transaction.date,
+            amount=-1,
+            payee=first.transaction.payee,
+        ),
+    )
+
+    result = yul("load", "--yes", "auto", SABADELL, COBEE, env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert first.transaction.payee not in created(ynab)[ACCOUNT_ID]
+    assert len(created(ynab)[ACCOUNT_ID]) == 2
+    assert len(created(ynab)[OTHER_ACCOUNT_ID]) == 2
 
 
 def test_transactions_ynab_rejects_are_reported_across_files(

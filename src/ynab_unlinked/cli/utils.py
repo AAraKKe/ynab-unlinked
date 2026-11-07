@@ -11,7 +11,7 @@ from ynab_unlinked.cli.display import CliProgress, console, process, question
 from ynab_unlinked.config import get_config
 from ynab_unlinked.config.budget import budget_from_plan
 from ynab_unlinked.config.models.v2 import Budget
-from ynab_unlinked.core.importing import ImportRow
+from ynab_unlinked.core.importing import ImportRow, RowStatus
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import Transaction
 from ynab_unlinked.ynab_api.client import Client
@@ -20,9 +20,20 @@ IMPORT_HELP_MESSAGE = (
     "The table below shows the transactions to be imported to YNAB.\n"
     " - The [green]green[/] rows are new transactions to be imported.\n"
     " - The [gray37]dimmed[/] rows are already in YNAB and will not be sent again.\n"
+    " - The [gray37]matched[/] rows were matched in YNAB with a transaction you had entered "
+    "by hand: they are there too.\n"
+    " - The [gray37 strike]crossed out[/] rows were left out of imports in `yul app` and are "
+    "never sent.\n"
     "YNAB matches every imported transaction against the ones you entered yourself on the same "
     "account, so the payee shown here is the one from the bank export, not the final one."
 )
+
+_STATUS: dict[RowStatus, tuple[str, Style]] = {
+    RowStatus.NEW: ("new", Style(color="green")),
+    RowStatus.IN_YNAB: ("in YNAB", Style(color="gray37")),
+    RowStatus.MATCHED: ("matched in YNAB", Style(color="gray37")),
+    RowStatus.EXCLUDED: ("left out", Style(color="gray37", strike=True)),
+}
 
 
 def prompt_for_api_key() -> str:
@@ -99,17 +110,19 @@ def display_import_table(rows: Sequence[ImportRow], formatter: Formatter):
         Column(header="Payee", justify="left", width=50),
         Column(header="Inflow", justify="right", max_width=15),
         Column(header="Outflow", justify="right", max_width=15),
+        Column(header="Status", justify="left", max_width=16),
     ]
     table = Table(*columns, title="Transactions to import", box=box.SIMPLE)
 
     for row in rows:
         inflow, outflow = _flows(row.transaction.amount, formatter)
-        style = Style(color="gray37" if row.already_imported else "green")
+        status, style = _STATUS[row.status]
         table.add_row(
             formatter.format_date(row.transaction.date),
             Text(row.transaction.payee),
             inflow,
             outflow,
+            status,
             style=style,
         )
 
