@@ -563,15 +563,12 @@ class Store:
                 (budget_id, _timestamp(at), kind, message, json.dumps(dict(details or {}))),
             )
 
-    def last_activity(self, budget_id: str, *, other_than: str | None = None) -> dt.datetime | None:
-        """When the newest activity entry was logged, leaving out those of kind `other_than`."""
-        query = "SELECT max(at) AS at FROM activity WHERE budget_id = ?"
-        params = [budget_id]
-        if other_than is not None:
-            query += " AND kind != ?"
-            params.append(other_than)
+    def last_activity(self, budget_id: str) -> dt.datetime | None:
+        """When the newest activity entry of the budget was logged."""
         with self._connect() as conn:
-            row = conn.execute(query, params).fetchone()
+            row = conn.execute(
+                "SELECT max(at) AS at FROM activity WHERE budget_id = ?", (budget_id,)
+            ).fetchone()
         return None if row["at"] is None else dt.datetime.fromisoformat(row["at"])
 
     def last_import_per_loader(self, budget_id: str) -> dict[str, dt.datetime]:

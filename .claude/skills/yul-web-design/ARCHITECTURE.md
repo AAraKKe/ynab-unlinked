@@ -169,7 +169,8 @@ RECONCILE_BUFFER_DAYS = 7
 `cli/commands/reconcile.py` and the Textual app keep working on top of these. The two
 frontends read from different places on purpose: `yul reconcile` asks YNAB live
 (`reconciliation_overview`), the app reads the budget copy (`Store.unreconciled`, synced
-first when older than 10 minutes or after a write). Both use the same scope rule and
+first every time the view opens, so a match or a delete made in YNAB a moment ago is not
+listed; a failed sync shows the last copy with a toast). Both use the same scope rule and
 `reconcile()`, so they differ only by what YNAB changed since the last sync.
 
 ### 2.4 Loaders and detection (`entities/`, `core/detect.py`)
@@ -476,10 +477,9 @@ class Store:
     def activity(self, budget_id: str, limit: int | None = 20, *,
                  kind: str | None = None) -> list[Activity]
         # newest first; limit None = all; kind keeps one kind only
-    def last_activity(self, budget_id: str, *, other_than: str | None = None) -> dt.datetime | None
+    def last_activity(self, budget_id: str) -> dt.datetime | None   # when the newest entry was logged
     def last_import_per_loader(self, budget_id: str) -> dict[str, dt.datetime]
         # newest `import` entry per `details.loader`, one GROUP BY query (Home's last imports)
-        # when the newest entry was logged, leaving out one kind (`fresh` leaves out "sync")
     def daily_amounts(self, budget_id: str,
                       account_ids: Iterable[str] | None = None) -> dict[str, DailyAmounts]
         # per account: its stored balance and the sum of its non deleted transactions per
