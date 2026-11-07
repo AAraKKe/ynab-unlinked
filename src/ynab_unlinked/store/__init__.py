@@ -7,6 +7,7 @@ from .paths import store_path
 from .store import (
     Activity,
     DailyAmounts,
+    ExcludedRow,
     Store,
     StoredAccount,
     StoredTransaction,
@@ -17,6 +18,7 @@ from .store import (
 __all__ = [
     "Activity",
     "DailyAmounts",
+    "ExcludedRow",
     "Store",
     "StoreError",
     "StoredAccount",

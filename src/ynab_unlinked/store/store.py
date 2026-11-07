@@ -86,6 +86,21 @@ class Activity:
 
 
 @dataclass(frozen=True)
+class ExcludedRow:
+    """A row of a bank export the user left out of imports to an account."""
+
+    account_id: str
+    import_id: str
+    """The registry's key with the account: the same row of a later export has the same id."""
+    date: dt.date
+    amount: int
+    """Milliunits."""
+    payee: str
+    excluded_at: dt.datetime | None = None
+    """When it was left out; None on a row not saved yet."""
+
+
+@dataclass(frozen=True)
 class DailyAmounts:
     """What the balance history of one account is built from."""
 
@@ -532,7 +547,8 @@ class Store:
         """Forget the copy of a budget, or of every budget when none is given.
 
         The next sync of a cleared budget is a full one. The activity log stays (it is what
-        yul did, not a copy of YNAB) unless `activity` is True.
+        yul did, not a copy of YNAB) unless `activity` is True. The rows left out of imports
+        always stay: they are the user's choice, deleted with the store file.
         """
         with self._connect() as conn:
             self._forget(conn, budget_id)
@@ -609,6 +625,72 @@ class Store:
                 kind=row["kind"],
                 message=row["message"],
                 details=json.loads(row["details"]),
+            )
+            for row in rows
+        ]
+
+    def import_ids(self, budget_id: str, transaction_ids: Iterable[str]) -> dict[str, str]:
+        """The import id of each of these transactions that has one, deleted ones included.
+
+        A transaction YNAB matched away is hidden from its listings and answers 404, but the
+        copy still holds it with the import id it was created with.
+        """
+        ids = list(transaction_ids)
+        if not ids:
+            return {}
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, import_id FROM transactions WHERE budget_id = ? AND "
+                f"import_id IS NOT NULL AND id IN ({', '.join('?' * len(ids))})",
+                [budget_id, *ids],
+            ).fetchall()
+        return {row["id"]: row["import_id"] for row in rows}
+
+    def exclude(self, budget_id: str, row: ExcludedRow) -> None:
+        """Leave `row` out of every import to its account from now on."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO excluded_rows (budget_id, account_id, import_id, date, "
+                "amount, payee, excluded_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    budget_id,
+                    row.account_id,
+                    row.import_id,
+                    row.date.isoformat(),
+                    row.amount,
+                    row.payee,
+                    _timestamp(row.excluded_at),
+                ),
+            )
+
+    def include(self, budget_id: str, account_id: str, import_id: str) -> bool:
+        """Import the row again from now on. False when it was not left out."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM excluded_rows WHERE budget_id = ? AND account_id = ? "
+                "AND import_id = ?",
+                (budget_id, account_id, import_id),
+            )
+        return cursor.rowcount > 0
+
+    def excluded(self, budget_id: str, account_id: str | None = None) -> list[ExcludedRow]:
+        """The rows left out of imports to the budget, or to one account, newest row first."""
+        query = "SELECT * FROM excluded_rows WHERE budget_id = ?"
+        params = [budget_id]
+        if account_id is not None:
+            query += " AND account_id = ?"
+            params.append(account_id)
+        query += " ORDER BY date DESC, payee, import_id"
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [
+            ExcludedRow(
+                account_id=row["account_id"],
+                import_id=row["import_id"],
+                date=dt.date.fromisoformat(row["date"]),
+                amount=row["amount"],
+                payee=row["payee"],
+                excluded_at=dt.datetime.fromisoformat(row["excluded_at"]),
             )
             for row in rows
         ]

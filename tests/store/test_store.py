@@ -25,7 +25,14 @@ from ynab import (
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.core.progress import Progress
-from ynab_unlinked.store import DailyAmounts, Store, StoredAccount, StoredTransaction, StoreError
+from ynab_unlinked.store import (
+    DailyAmounts,
+    ExcludedRow,
+    Store,
+    StoredAccount,
+    StoredTransaction,
+    StoreError,
+)
 from ynab_unlinked.store.migrations import SCHEMA_VERSION
 from ynab_unlinked.store.store import (
     BUSY_TIMEOUT_SECONDS,
@@ -880,3 +887,104 @@ def test_last_import_per_loader_is_the_newest_import_of_each_bank_in_the_budget(
         "cobee": at(3, 21) + dt.timedelta(minutes=30),
     }
     assert store.last_import_per_loader("unknown") == {}
+
+
+def left_out(
+    import_id: str, day: int, account_id: str = "checking", payee: str = "Maya"
+) -> ExcludedRow:
+    return ExcludedRow(
+        account_id=account_id,
+        import_id=import_id,
+        date=dt.date(2025, 5, day),
+        amount=-18_380,
+        payee=payee,
+    )
+
+
+@freeze_time("2025-05-15 10:00:00")
+def test_rows_left_out_are_kept_per_budget_and_account_newest_row_first(store: Store):
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-02:1", 2))
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12))
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12, "savings"))
+    store.exclude(OTHER_BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12))
+
+    assert [(r.account_id, r.import_id) for r in store.excluded(BUDGET_ID)] == [
+        ("checking", "YNAB:-18380:2025-05-12:1"),
+        ("savings", "YNAB:-18380:2025-05-12:1"),
+        ("checking", "YNAB:-18380:2025-05-02:1"),
+    ]
+    [newest, _] = store.excluded(BUDGET_ID, "checking")
+    assert newest == ExcludedRow(
+        account_id="checking",
+        import_id="YNAB:-18380:2025-05-12:1",
+        date=dt.date(2025, 5, 12),
+        amount=-18_380,
+        payee="Maya",
+        excluded_at=dt.datetime(2025, 5, 15, 10, tzinfo=dt.UTC),
+    )
+
+
+def test_a_row_left_out_twice_is_kept_once(store: Store):
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12, payee="Maya"))
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12, payee="Maya mobile ltd"))
+
+    assert [r.payee for r in store.excluded(BUDGET_ID)] == ["Maya mobile ltd"]
+
+
+def test_including_a_row_again_only_takes_back_that_row(store: Store):
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12))
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12, "savings"))
+
+    assert store.include(BUDGET_ID, "checking", "YNAB:-18380:2025-05-12:1")
+    assert not store.include(BUDGET_ID, "checking", "YNAB:-18380:2025-05-12:1")
+
+    assert [r.account_id for r in store.excluded(BUDGET_ID)] == ["savings"]
+
+
+@pytest.mark.parametrize(
+    "clear",
+    [
+        pytest.param(lambda store: store.clear(BUDGET_ID), id="a-resync"),
+        pytest.param(lambda store: store.clear(activity=True), id="clearing-everything"),
+    ],
+)
+def test_clearing_the_budget_copy_keeps_the_rows_left_out(store: Store, clear):
+    store.exclude(BUDGET_ID, left_out("YNAB:-18380:2025-05-12:1", 12))
+
+    clear(store)
+
+    assert len(store.excluded(BUDGET_ID)) == 1
+
+
+def test_import_ids_finds_the_transactions_ynab_hides_after_a_match(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    serve(
+        ynab_api,
+        (
+            [
+                TransactionDetailFactory(id="ghost", import_id="YNAB:-18380:2025-05-12:1"),
+                TransactionDetailFactory(id="gone", import_id="YNAB:-5000:2025-05-14:1"),
+                TransactionDetailFactory(id="by-hand", import_id=None),
+            ],
+            10,
+        ),
+        (
+            [
+                TransactionDetailFactory(
+                    id="gone", import_id="YNAB:-5000:2025-05-14:1", deleted=True
+                )
+            ],
+            20,
+        ),
+        accounts=[AccountFactory()],
+    )
+    store.sync(client, BUDGET_ID)
+    store.sync(client, BUDGET_ID)
+
+    assert store.import_ids(BUDGET_ID, ["ghost", "gone", "by-hand", "unknown"]) == {
+        "ghost": "YNAB:-18380:2025-05-12:1",
+        "gone": "YNAB:-5000:2025-05-14:1",
+    }
+    assert store.import_ids(OTHER_BUDGET_ID, ["ghost"]) == {}
+    assert store.import_ids(BUDGET_ID, []) == {}
