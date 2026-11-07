@@ -425,6 +425,7 @@ class StoredTransaction:
     id: str; account_id: str; date: dt.date; amount: int; cleared: TransactionClearedStatus
     approved: bool; deleted: bool; payee_name: str | None; category_name: str | None
     import_id: str | None; memo: str | None; transfer_account_id: str | None
+    matched_transaction_id: str | None = None   # the row YNAB merged this one with
 
 @dataclass(frozen=True)
 class StoredAccount:
@@ -454,7 +455,11 @@ class Store:
         # flagged, replaces the budget's accounts (closed kept, deleted skipped), stores the
         # new server_knowledge (never a lower one than stored), all in one SQLite transaction.
         # A 409 on a delta forgets the budget's rows and knowledge and redoes a full fetch once.
-        # Then runs the ghost repair (below) and reports it in ghosts_removed.
+        # Then runs the ghost repair and reports it in ghosts_removed: a match approved in
+        # YNAB hides the imported row (404) without a delta tombstone, so the rows that share
+        # an import id, or point at one through matched_transaction_id, are checked with
+        # transaction_exists and the missing ones flagged deleted (50 ids a sync, the rest
+        # kept in ghost_checks for the next one).
     def accounts(self, budget_id: str) -> list[StoredAccount]        # sorted by name
     def transactions(self, budget_id: str, *, account_id: str | None = None,
                      since: dt.date | None = None, until: dt.date | None = None,

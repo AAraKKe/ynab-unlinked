@@ -197,6 +197,7 @@ def test_sync_stores_every_field_the_app_reads(store: Store, client: Client, yna
         import_id="YNAB:-250000:2025-05-01:1",
         memo="Monthly saving",
         transfer_account_id=SAVINGS,
+        matched_transaction_id="t0",
     )
     serve(ynab_api, ([transfer], 10))
 
@@ -216,6 +217,7 @@ def test_sync_stores_every_field_the_app_reads(store: Store, client: Client, yna
             import_id="YNAB:-250000:2025-05-01:1",
             memo="Monthly saving",
             transfer_account_id=str(SAVINGS),
+            matched_transaction_id="t0",
         )
     ]
 
@@ -290,6 +292,45 @@ def test_sync_tombstones_the_import_ynab_merged_into_a_manual_transaction(
 
     assert (first.ghosts_removed, second.ghosts_removed) == (0, 1)
     assert ids(store.unreconciled(BUDGET_ID)) == ["manual"]
+    assert sorted(c.kwargs["transaction_id"] for c in endpoint.call_args_list) == [
+        "imported",
+        "manual",
+    ]
+
+
+def test_sync_tombstones_the_import_ynab_merged_into_a_reconciled_transaction(
+    store: Store, client: Client, ynab_api: YnabClientStub
+):
+    # A reconciled transaction takes no import id when matched: the survivor only points at
+    # the import through matched_transaction_id, and the import is gone (404) without a delta
+    serve(
+        ynab_api,
+        (
+            [
+                TransactionDetailFactory(id="imported", import_id=MERGED_IMPORT_ID),
+                TransactionDetailFactory(id="manual", cleared=RECONCILED),
+            ],
+            10,
+        ),
+        (
+            [
+                TransactionDetailFactory(
+                    id="manual", cleared=RECONCILED, matched_transaction_id="imported"
+                ),
+                TransactionDetailFactory(
+                    id="imported", import_id=MERGED_IMPORT_ID, matched_transaction_id="manual"
+                ),
+            ],
+            15,
+        ),
+    )
+    endpoint = answer_exists(ynab_api, missing={"imported"})
+    first = store.sync(client, BUDGET_ID)
+
+    second = store.sync(client, BUDGET_ID)
+
+    assert (first.ghosts_removed, second.ghosts_removed) == (0, 1)
+    assert ids(store.transactions(BUDGET_ID)) == ["manual"]
     assert sorted(c.kwargs["transaction_id"] for c in endpoint.call_args_list) == [
         "imported",
         "manual",
