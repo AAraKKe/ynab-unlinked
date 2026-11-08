@@ -25,12 +25,12 @@ classifiers = [
   "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
-  "ynab==4.4.1",
+  "ynab==5.0.0",
   "typer==0.27.3",
   "html-text==0.7.1",
   "pdfplumber==0.11.10",
-  "pydantic==2.14.1",
-  "platformdirs==4.13.5",
+  "pydantic==2.14.3",
+  "platformdirs==4.14.5",
   "pyexcel==0.7.6",
   "pyexcel-xls==0.7.1",
   "pyexcel-xlsx==0.6.1",
@@ -39,7 +39,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-web = ["nicegui==3.19.0"]
+web = ["nicegui==4.0.0"]
 
 [project.scripts]
 yul = "ynab_unlinked.main:main"
