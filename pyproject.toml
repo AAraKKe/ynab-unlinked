@@ -81,6 +81,7 @@ cov = { cmd = "pytest --cov=src --cov-report term-missing:skip-covered tests", h
 tc-check = { cmd = "towncrier check", help = "Check the branch has a changelog fragment" }
 tc-show = { cmd = "towncrier build --draft", help = "Preview the next changelog" }
 tc-build = { cmd = "towncrier build --yes", help = "Build CHANGELOG.md from the fragments" }
+release = { cmd = "python scripts/release.py", help = "Open the release PR: uv run poe release X.Y.Z [-m MESSAGE]" }
 
 [tool.pyright]
 # `src` is checked in strict mode; tests stay at the default level.
