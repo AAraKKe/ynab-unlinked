@@ -102,8 +102,8 @@ same change. Never update a document to describe something you did not build.
 - YNAB is the `ynab_api` stub (`tests/helpers/ynab_api.py`). The store is filled through
   `Store.sync` with the stub (see `seed` in `test_reconcile.py`). The keychain is a fail
   backend by default; `memory_keychain` when a test needs one.
-- Run `hatch run dev:pytest -q tests/web` while iterating, the whole suite and
-  `hatch run dev:check` (pyright strict on src) before you finish.
+- Run `uv run pytest -q tests/web` while iterating, the whole suite and
+  `uv run poe check` (pyright strict on src) before you finish.
 
 ## Looking at it
 
@@ -117,7 +117,7 @@ Found" dialog.
 ```sh
 mkdir -p /tmp/yulhome
 cp tests/assets/config_V4/config.json /tmp/yulhome/
-YUL_HOME=/tmp/yulhome hatch run dev:yul app --no-browser --port 8771
+YUL_HOME=/tmp/yulhome uv run yul app --no-browser --port 8771
 ```
 
 For a first run (onboarding) leave the folder empty. `YUL_NO_KEYCHAIN=1` instead keeps the
@@ -132,6 +132,6 @@ every palette (Settings › Appearance) and a narrow window (under 1000px Home b
 - [ ] Wording passes rule 1; figures use the budget's `Formatter`.
 - [ ] New element → marker; new behaviour → test; changed behaviour → test updated.
 - [ ] `ARCHITECTURE.md` and `DESIGN.md` in this folder describe what you built.
-- [ ] A changelog fragment exists for the branch (`hatch run tc:check`).
-- [ ] `hatch run dev:check` clean, `hatch run dev:pytest -q` green.
+- [ ] A changelog fragment exists for the branch (`uv run poe tc-check`).
+- [ ] `uv run poe check` clean, `uv run pytest -q` green.
 - [ ] Commit message plain, no trailers.

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ynab-unlinked"
-dynamic = ["version"]
+version = "1.0.0"
 description = "Import bank statement exports into YNAB from the command line or a local web app"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -50,18 +50,13 @@ Issues = "https://github.com/AAraKKe/ynab-unlinked/issues"
 Source = "https://github.com/AAraKKe/ynab-unlinked"
 Privacy = "https://github.com/AAraKKe/ynab-unlinked/blob/main/PRIVACY.md"
 
-[tool.hatch.version]
-path = "src/ynab_unlinked/__about__.py"
-
-# Set uv as installer
-[tool.hatch.envs.default]
-installer = "uv"
-
-# ------ Development Environment ------
-[tool.hatch.envs.dev]
-installer = "uv"
-features = ["web"]
-extra-dependencies = [
+# ------ Development ------
+# `uv sync` installs the dev group (and the web extra through it); `uv run poe <task>` runs
+# the tasks below. `uv.lock` pins the whole tree, transitive dependencies included.
+[dependency-groups]
+dev = [
+  "ynab-unlinked[web]",
+  "poethepoet==0.49.0",
   "ruff==0.15.12",
   "pyright==1.1.409",
   "pytest==9.0.3",
@@ -70,20 +65,23 @@ extra-dependencies = [
   "pytest-asyncio==1.4.1",
   "factory_boy==3.3.3",
   "freezegun==1.5.5",
+  "towncrier==25.8.0",
 ]
 
-[tool.hatch.envs.dev.scripts]
-format-check = "ruff format --check"
-lint = "ruff check"
-type-check = "pyright src"
-check = ["lint", "format-check", "type-check"]
-# Runs every check even when an earlier one fails, for a full report
-check-all = ["- lint", "- format-check", "- type-check"]
-format = "ruff format"
-lint-fix = "ruff check --fix --unsafe-fixes"
-fix = ["format", "lint-fix"]
-cov = ["pytest --cov=src --cov-report term-missing:skip-covered tests {args:}"]
-
+[tool.poe.tasks]
+lint = { cmd = "ruff check", help = "Lint with ruff" }
+format-check = { cmd = "ruff format --check", help = "Check the formatting" }
+type-check = { cmd = "pyright src", help = "Type check src with pyright" }
+check = { sequence = ["lint", "format-check", "type-check"], help = "Lint, format check and type check, stopping at the first failure" }
+check-all = { sequence = ["lint", "format-check", "type-check"], ignore_fail = "return_non_zero", help = "Every check even when an earlier one fails, for a full report" }
+format = { cmd = "ruff format", help = "Format with ruff" }
+lint-fix = { cmd = "ruff check --fix --unsafe-fixes", help = "Apply ruff autofixes" }
+fix = { sequence = ["format", "lint-fix"], help = "Format and autofix" }
+cov = { cmd = "pytest --cov=src --cov-report term-missing:skip-covered tests", help = "Tests with coverage, extra args go to pytest" }
+tc-check = { cmd = "towncrier check", help = "Check the branch has a changelog fragment" }
+tc-show = { cmd = "towncrier build --draft", help = "Preview the next changelog" }
+tc-build = { cmd = "towncrier build --yes", help = "Build CHANGELOG.md from the fragments" }
+release = { cmd = "python scripts/release.py", help = "Open the release PR: uv run poe release X.Y.Z [-m MESSAGE]" }
 
 [tool.pyright]
 # `src` is checked in strict mode; tests stay at the default level.
@@ -95,7 +93,7 @@ exclude = [
   "**/.git/**",
   "**/.mypy_cache/**",
   "**/.pytest_cache/**",
-  "**/.hatch/**",
+  "**/.venv/**",
   "**/*.egg-info/**",
   "dist",
 ]
@@ -106,7 +104,7 @@ ignore = [
   "**/.git/**",
   "**/.mypy_cache/**",
   "**/.pytest_cache/**",
-  "**/.hatch/**",
+  "**/.venv/**",
   "**/*.egg-info/**",
   "dist",
 ]
@@ -131,7 +129,7 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ynab_unlinked", "tests"]
+known-first-party = ["ynab_unlinked", "tests", "scripts"]
 
 [tool.ruff.lint.pycodestyle]
 max-doc-length = 120
@@ -178,26 +176,6 @@ exclude_also = [
 
 [tool.coverage.paths]
 ynab_unlinked = ["src/ynab_unlinked"]
-
-# ------ Environment to run towncrier ------
-[tool.hatch.envs.tc]
-installer = "uv"
-extra-dependencies = ["towncrier==25.8.0"]
-
-[tool.hatch.envs.tc.scripts]
-check = "towncrier check"
-show = "towncrier build --draft"
-build = "towncrier build {args:+}"
-removed = "towncrier create --edit {args:+}.removed.md"
-deprecated = "towncrier create --edit {args:+}.deprecated.md"
-added = "towncrier create --edit {args:+}.added.md"
-improved = "towncrier create --edit {args:+}.improved.md"
-bugfix = "towncrier create --edit {args:+}.bugfix.md"
-bumped = "towncrier create --edit {args:+}.bumped.md"
-doc = "towncrier create --edit {args:+}.doc.md"
-contrib = "towncrier create --edit {args:+}.contrib.md"
-misc = "towncrier create --edit {args:+}.misc.md"
-
 
 [tool.towncrier]
 package = "ynab_unlinked"
