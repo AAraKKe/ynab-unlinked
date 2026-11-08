@@ -6,6 +6,52 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.0.0 (2026-11-05)
+
+### Fresh Out of the Feature Oven
+* `yul app` opens a local web app in your browser (install it with the `[web]` extra, e.g. `uv tool install 'ynab-unlinked[web]'`): a first run that connects YNAB, picks the budget and where each bank's statements go, then copies the budget; Home with your net worth, what needs attention and recent activity; Import, where dropped statements are detected and imported after one confirmation; Reconcile, comparing each account's cleared balance with the bank and reconciling the transactions; Net worth with its history, buckets and inline balance updates for accounts you update by hand; and Settings for the connection, banks, accounts, net worth and local data. It only listens on 127.0.0.1 and needs the link it prints.
+* Add `yul load auto <files...>`, which works out the bank of each statement (and the Cobee language and the Sabadell year) and imports them all in one go.
+* Keep a local copy of your budget's transactions and accounts, plus an activity log, so the web app can work without refetching everything from YNAB.
+* The YNAB token is kept in the system keychain (macOS Keychain, Windows Credential Manager, Secret Service or KWallet on Linux) instead of the config file; an existing token moves there the next time yul runs, and the file keeps plain text only where no keychain exists.
+* Leave a row out of imports for good from the app's import review, and bring it back from there or from Settings › Data & privacy; yul then skips it in every later import of the same statement.
+* Settings › Appearance picks one of four palettes, Midnight (default), Twilight, Graphite and Aurora, each with a dark and a light variant.
+
+### Polished Until It Shines
+* `yul load auto` shows the transactions of every file first and asks a single confirmation to import them all, then reports how many were created in each account.
+* Every open account now counts in net worth by default; Settings › Accounts lets you leave one out.
+* Net worth in `yul app` has "Update balances": every balance you keep by hand becomes a field at once, Tab moves from one to the next, each shows how much it changes, and one Save (or Enter) updates them all in YNAB.
+* Home is laid out in three blocks: net worth, an Import section with the drop zone and when each bank was last imported, and a Needs you section with only what is waiting for you.
+* Settings in `yul app`: Banks and Accounts are grids of cards that light up when switched on, Accounts saves every change at once with the bucket as pills and a pencil for balances entered by hand, and every bank logo has the same size.
+* Setup now ends by copying your budget from YNAB while you watch, and no longer asks which accounts to track: every open account counts until you change it in Settings.
+* The config moves to V4 (migrated automatically) and gains account settings, balance adjustment settings and debt mappings.
+* Reconcile in `yul app` shows each account as YNAB does, cleared balance + uncleared = working balance with how many are left to reconcile, groups its transactions under Cleared, Uncleared and Reconciled, opens them with one "Show transactions" bar before anything can be reconciled, and says reconcile instead of lock.
+* `yul load <bank>` without a value for an option (the Cobee language, the Sabadell year) now uses the one saved for that bank in Settings › Banks before reading it from the file.
+* `yul setup` asks before replacing an existing config; `--yes` replaces it without asking.
+* `yul load <bank> --show` prints the transactions before asking for an account, and `--help` works without a config.
+* `yul reconcile` without a date asks YNAB for every transaction of the account, and only the transactions you chose to skip hold the reconciliation date back, in the CLI and in the app.
+* A YNAB or network error in any command is reported as one line with exit code 1 instead of a traceback, and every YNAB request has a connect and read timeout instead of hanging.
+* The config file and the local data folder are written atomically and readable by you only.
+
+### Bugs Squashed, Peace Restored
+* Transactions merged by YNAB's matching no longer linger in the local store as "to reconcile".
+* Reconcile in `yul app` checks YNAB every time it opens, and the budget copy drops a transaction YNAB hid after matching it into a reconciled one, so neither shows up as a transaction to reconcile.
+* A row YNAB matched with a reconciled transaction you entered by hand is no longer imported again on the next run.
+* A Sabadell row dated after today is moved back one year, so a December statement read in January is not dated in the future; `MOVIMIENTOS.XLS` and `Cobee.HTML` are accepted whatever the case of the extension.
+* A Sabadell, BBVA or Cobee row that cannot be read stops the import with one line naming the row, instead of a traceback or a silently dropped transaction; BBVA dates typed as date cells are read.
+* A payee with brackets no longer crashes `yul load` or `yul reconcile`, and a payee longer than the 200 characters YNAB accepts is cut instead of failing the whole file.
+* An unreadable config file is reported as an error pointing at `yul config reset`, its validation errors never print part of the token, and a config migration saves the new file before deleting the old one.
+
+### Read All About It! (Docs Updates)
+* Document the local web app: the architecture contract and design document kept with the `yul-web-design` project skill, a Web app section in the README and the local web server in the privacy notice.
+* The README is rewritten for 1.0: what yul is, how to install it, and how to use the web app and the command line.
+
+### For the Builders: Dev Experience Upgrades
+* Add the net worth, debt netting and balance adjustment core shared by the CLI and the web app.
+* Move importing and reconciling into UI independent core services shared by the CLI and the web app.
+* `src` is type checked with pyright in strict mode; `hatch run dev:check` fails when lint, format or types fail.
+* The PR checks run on Ubuntu and macOS with Python 3.13 and 3.14, on every pull request whatever its base; the release refuses a tag off `main` or with a changelog fragment pending, and runs the checks on the tagged commit.
+* Every test gets its own scratch `YUL_HOME`, and a run with `YUL_HOME` set uses a keychain item named after that folder, so a scratch run never touches the real token.
+
 ## ynab-unlinked 0.10.0 (2026-10-31)
 
 ### Fresh Out of the Feature Oven

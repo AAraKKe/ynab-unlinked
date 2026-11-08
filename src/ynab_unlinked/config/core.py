@@ -1,11 +1,29 @@
 from __future__ import annotations
 
 import json
-from typing import Final
+import threading
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Final, cast
+
+from pydantic import ValidationError
+
+from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 
 from .constants import LATEST_VERSION
+from .lock import file_lock
 from .migrations import MigrationEngine, Version
-from .models import ConfigV1, ConfigV2, ConfigV3, DeltaConfigV1ToV2, DeltaConfigV2ToV3
+from .models import (
+    ConfigV1,
+    ConfigV2,
+    ConfigV3,
+    ConfigV4,
+    DeltaConfigV1ToV2,
+    DeltaConfigV2ToV3,
+    DeltaConfigV3ToV4,
+)
+from .models.v2 import Budget
 from .paths import config_path
 from .types import Config
 
@@ -13,47 +31,79 @@ VERSION_MAPPING: Final[dict[str, type[Config]]] = {
     "V1": ConfigV1,
     "V2": ConfigV2,
     "V3": ConfigV3,
+    "V4": ConfigV4,
 }
-LATESST_CONFIG_TYPE = ConfigV3
+LATEST_CONFIG_TYPE = ConfigV4
+
+_edit_lock = threading.Lock()
+"""One `edit_config` at a time in this process (the app saves from a pool of threads)."""
 
 
-class ConfigError(ValueError): ...
+class ConfigError(ValueError):
+    """The config file exists but cannot be used: not JSON, not a config, or from a newer yul."""
 
 
 # Deltas are registered on a registry shared by every MigrationEngine, so a second engine for
 # the same class would be rejected. Build the one engine for the config lazily and reuse it.
-_MIGRATION_ENGINE: MigrationEngine | None = None
+_engine: MigrationEngine | None = None
 
 
 def migration_engine() -> MigrationEngine:
-    global _MIGRATION_ENGINE
-    if _MIGRATION_ENGINE is None:
-        _MIGRATION_ENGINE = MigrationEngine("Config", DeltaConfigV1ToV2(), DeltaConfigV2ToV3())
-    return _MIGRATION_ENGINE
+    global _engine
+    if _engine is None:
+        _engine = MigrationEngine(
+            "Config", DeltaConfigV1ToV2(), DeltaConfigV2ToV3(), DeltaConfigV3ToV4()
+        )
+    return _engine
 
 
 def config_version() -> Version:
-    # Check V1
-    # V1 does not have a version in it and was stored in a different path
-    if config_path("V1").is_file():
-        return Version("Config", "V1")
+    """The version of the config on disk; the latest one when there is none yet.
 
+    V2 onwards share one file, which wins over a V1 file left behind (by a V1 migration that
+    could not remove it, say): that file is newer, and migrating the V1 one would replace it.
+    """
     latest_config_path = config_path(LATEST_VERSION.version)
     if not latest_config_path.is_file():
-        # This can happen when we run the tool for the first time. Return the latest verison
+        # V1 has no version in it and was stored in a different path
+        if config_path("V1").is_file():
+            return Version("Config", "V1")
+        # This can happen when we run the tool for the first time
         return LATEST_VERSION
 
-    with open(latest_config_path) as config_file:
-        content = json.load(config_file)
-        if "version" not in content:
-            raise ConfigError(
-                "Configuration file malformatted. Run `yul config reset` to reconfigure yul."
-            )
-        return Version("Config", content["version"])
+    try:
+        content = json.loads(latest_config_path.read_text())
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise ConfigError(
+            f"The config file {latest_config_path} is not valid JSON: {error}"
+        ) from error
+
+    if not isinstance(content, dict) or "version" not in content:
+        raise ConfigError(f"The config file {latest_config_path} has no version, it is malformed.")
+    version = cast(dict[str, object], content)["version"]
+    return Version("Config", str(version))
 
 
-def get_config() -> LATESST_CONFIG_TYPE | None:
-    """Get the latest supported version of the config running any migrations if needed"""
+def get_config(progress: Progress = NO_PROGRESS) -> LATEST_CONFIG_TYPE | None:
+    """Get the latest supported version of the config running any migrations if needed.
+
+    `progress` shows the migration steps: the CLI passes its `CliProgress`. A migration holds
+    the lock of `edit_config`, and the version is read again once it has it: when the CLI
+    and the app start together on an old config, the second one finds it migrated already.
+    """
+    loaded = _load_current()
+    if loaded is None or isinstance(loaded, LATEST_CONFIG_TYPE):
+        return loaded
+
+    with _edit_lock, file_lock(lock_path()):
+        loaded = _load_current()
+        if loaded is None or isinstance(loaded, LATEST_CONFIG_TYPE):
+            return loaded
+        return migration_engine().migrate(loaded, LATEST_CONFIG_TYPE, progress=progress)
+
+
+def _load_current() -> Config | None:
+    """The config on disk as the version it was saved as, None when there is none."""
     version = config_version()
 
     if (current_config := VERSION_MAPPING.get(version.version)) is None:
@@ -62,7 +112,61 @@ def get_config() -> LATESST_CONFIG_TYPE | None:
     if not current_config.exists():
         return None
 
-    if current_config is LATESST_CONFIG_TYPE:
-        return LATESST_CONFIG_TYPE.load()
+    try:
+        return current_config.load()
+    except ValidationError as error:
+        # Also what pydantic raises for a file that is not JSON
+        raise ConfigError(
+            f"The config file {config_path(version.version)} is not a valid {version.version} config: "
+            f"{error}"
+        ) from error
 
-    return migration_engine().migrate(current_config.load(), LATESST_CONFIG_TYPE)
+
+@contextmanager
+def edit_config() -> Generator[LATEST_CONFIG_TYPE]:
+    """Change the config on disk in a block: read again, change what the block yields, save.
+
+    The file is read again first, so what another process (the CLI or the app) saved since
+    this one loaded its copy is kept: each writer only changes what its block touches.
+    Without a file it raises `ConfigError`. Nothing is saved when the block raises.
+
+    The read, the change and the save hold a lock, in this process and on `config.json.lock`
+    next to the file, so two saves at once (two threads of the app, or the app and the CLI)
+    take turns and each keeps what the other changed. Do not nest it.
+    """
+    with _edit_lock, file_lock(lock_path()):
+        if not LATEST_CONFIG_TYPE.exists():
+            raise ConfigError("There is no config to change yet. Run `yul setup` first.")
+        config = LATEST_CONFIG_TYPE.load()
+        yield config
+        config.save()
+
+
+def lock_path() -> Path:
+    """The file `edit_config` locks, next to the config."""
+    path = config_path()
+    return path.with_name(f"{path.name}.lock")
+
+
+def update_config(change: Callable[[LATEST_CONFIG_TYPE], None]) -> LATEST_CONFIG_TYPE:
+    """`edit_config` as a call: apply `change` to the config on disk; returns what was saved."""
+    with edit_config() as config:
+        change(config)
+    return config
+
+
+def switch_budget(config: LATEST_CONFIG_TYPE, budget: Budget) -> None:
+    """Point `config` at another budget, forgetting what belonged to the old one.
+
+    Bank accounts, tracked accounts, debt mappings and the last reconciliation are ids and
+    dates of the old budget, so they are cleared. The token and the adjustment settings are
+    not tied to a budget and stay. Choosing the budget already set changes nothing.
+    """
+    if config.budget.id == budget.id:
+        config.budget = budget
+        return
+    config.budget = budget
+    config.loaders = {}
+    config.accounts = []
+    config.debt_mappings = []
+    config.last_reconciliation_date = None

@@ -288,3 +288,55 @@ def test_migration_that_produces_another_entity_is_rejected(
 ):
     with pytest.raises(TypeError, match="Unexpected type mismatch"):
         broken_engine.migrate(v1, UserV2)
+
+
+class RecordingProgress:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str | None]] = []
+
+    def start(self, message: str) -> None:
+        self.calls.append(("start", message))
+
+    def done(self, message: str | None = None) -> None:
+        self.calls.append(("done", message))
+
+    def info(self, message: str) -> None:
+        self.calls.append(("info", message))
+
+    def warn(self, message: str) -> None:
+        self.calls.append(("warn", message))
+
+
+class DeltaUserV1V2ThatFails(DeltaUserV1V2):
+    def on_migrate(self, origin: UserV1) -> UserV2:
+        raise RuntimeError("YNAB is down")
+
+
+def test_migration_reports_its_progress(v1: UserV1, engine: MigrationEngine):
+    progress = RecordingProgress()
+
+    engine.migrate(v1, UserV3, progress=progress)
+
+    assert progress.calls == [
+        ("start", "Migrating User:V1 to User:V3"),
+        ("done", "Migration done!"),
+    ]
+
+
+def test_migration_to_the_same_version_reports_nothing(v1: UserV1, engine: MigrationEngine):
+    progress = RecordingProgress()
+
+    engine.migrate(v1, UserV1, progress=progress)
+
+    assert progress.calls == []
+
+
+@pytest.mark.usefixtures("isolated_migration_registry")
+def test_a_failed_migration_stops_the_progress_without_announcing_success(v1: UserV1):
+    engine = MigrationEngine("User", DeltaUserV1V2ThatFails())
+    progress = RecordingProgress()
+
+    with pytest.raises(RuntimeError, match="YNAB is down"):
+        engine.migrate(v1, UserV2, progress=progress)
+
+    assert progress.calls[-1] == ("done", None)

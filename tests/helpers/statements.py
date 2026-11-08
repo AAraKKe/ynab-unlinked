@@ -153,6 +153,38 @@ SABADELL_TXT_TRANSACTIONS = [
 ]
 
 
+# A BBVA card movements export: a report title block, then the header row the parser starts
+# reading after. The real export stores amounts as numbers, not text. Its titles are merged
+# cells reaching the seventh column, which is what keeps the empty last column of the header
+# row when the sheet is read back.
+BBVA_TITLE = "Listado de movimientos"
+BBVA_DATE = "Fecha de generación del informe: 15/07/2025"
+BBVA_XLSX_HEADER: list[Row] = [
+    ["", "", "", "", "", "", ""],
+    ["", "", "", BBVA_TITLE, BBVA_TITLE, BBVA_TITLE, BBVA_TITLE],
+    ["", "", "", BBVA_DATE, BBVA_DATE, BBVA_DATE, BBVA_DATE],
+    ["", "", "", "", "", "", ""],
+    ["", "Fecha", "Tarjeta", "Concepto", "Importe", "Divisa", ""],
+]
+
+BBVA_XLSX_MOVEMENTS: list[tuple[str, str, float]] = [
+    ("11/07/2025", "Netflix.com", -19.99),
+    ("09/07/2025", "Bonificacion pack viajes", 2.45),
+    ("03/07/2025", "Www.dazn.com", -5.0),
+]
+
+
+def bbva_sheet(
+    movements: Iterable[tuple[str, str, float]] = BBVA_XLSX_MOVEMENTS,
+) -> list[list[str | float]]:
+    """The rows of a BBVA xlsx export listing `movements` as (date, concept, amount)."""
+    card = "4940121100362325"
+    return [
+        *(list(row) for row in BBVA_XLSX_HEADER),
+        *(["", date, card, concept, amount, "€", ""] for date, concept, amount in movements),
+    ]
+
+
 def cobee_export(lines: Iterable[str], header: Iterable[str] = COBEE_PAGE_HEADER) -> str:
     """Render a saved Cobee page whose transaction list is made of `lines`.
 

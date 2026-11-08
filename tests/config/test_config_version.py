@@ -1,5 +1,6 @@
 import pytest
 
+from tests.helpers.config import ConfigFiles
 from ynab_unlinked.config import LATEST_VERSION, MAX_CONFIG_VERSION
 from ynab_unlinked.config.core import ConfigError, config_version
 from ynab_unlinked.config.migrations.base import Version
@@ -29,4 +30,13 @@ def test_config_version_with_no_file_returns_latest_version():
 @pytest.mark.usefixtures("config")
 def test_config_version_without_version_raises():
     with pytest.raises(ConfigError):
+        config_version()
+
+
+@pytest.mark.version("missing")
+@pytest.mark.usefixtures("config")
+def test_config_version_of_a_truncated_file_is_a_config_error(config_files: ConfigFiles):
+    config_files.write("V4", '{"version": "V4", "api_')
+
+    with pytest.raises(ConfigError, match="not valid JSON"):
         config_version()

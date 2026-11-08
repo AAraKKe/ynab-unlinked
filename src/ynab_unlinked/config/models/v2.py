@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ynab_unlinked.config.migrations import Version
 from ynab_unlinked.config.paths import config_path
 
-from .shared import EntityConfig
+from .shared import EntityConfig, write_private
 
 
 class CurrencyFormat(BaseModel):
@@ -36,7 +36,10 @@ class ConfigV2(BaseModel):
     payee_rules: dict[str, set[str]] = Field(default_factory=dict)
     version_number: str = Field(default="V2", alias="version")
 
-    model_config = ConfigDict(validate_by_alias=True, serialize_by_alias=True)
+    # A validation error must not print the token, which the input of the error would show
+    model_config = ConfigDict(
+        validate_by_alias=True, serialize_by_alias=True, hide_input_in_errors=True
+    )
 
     @staticmethod
     def version() -> Version:
@@ -47,8 +50,7 @@ class ConfigV2(BaseModel):
         return config_path(ConfigV2.version().version)
 
     def save(self):
-        self.path().parent.mkdir(parents=True, exist_ok=True)
-        self.path().write_text(self.model_dump_json(indent=4))
+        write_private(self.path(), self.model_dump_json(indent=4))
 
     @staticmethod
     def load() -> ConfigV2:

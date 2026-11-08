@@ -4,11 +4,22 @@ import uuid
 
 import factory
 from factory.base import Factory
-from ynab import Account, DateFormat, PlanDetail, TransactionClearedStatus, TransactionDetail
+from ynab import (
+    Account,
+    DateFormat,
+    PlanDetail,
+    PlanSummary,
+    TransactionClearedStatus,
+    TransactionDetail,
+)
 from ynab import CurrencyFormat as SdkCurrencyFormat
 
+from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config.models.v2 import CurrencyFormat
+from ynab_unlinked.core.balances import AccountBalance
+from ynab_unlinked.core.importing import ImportRow
 from ynab_unlinked.models import PendingImport, Transaction
+from ynab_unlinked.store import StoredAccount, StoredTransaction
 
 # Matches the `today` fixture so factory built objects line up with frozen time
 DEFAULT_DATE = dt.date(2025, 5, 15)
@@ -60,6 +71,26 @@ class PendingImportFactory(Factory):
     legacy_import_id = "0" * 30
 
 
+class ImportRowFactory(Factory):
+    """A row of an import plan, new to YNAB unless `already_imported` says otherwise."""
+
+    class Meta:
+        model = ImportRow
+
+    class Params:
+        date = DEFAULT_DATE
+        payee = "Mercadona"
+        amount = -10.0
+
+    transaction = factory.LazyAttribute(
+        lambda o: TransactionFactory(date=o.date, payee=o.payee, amount=o.amount)
+    )
+    import_id = factory.LazyAttribute(
+        lambda o: f"YNAB:{round(o.transaction.amount * 1000)}:{o.transaction.date:%Y-%m-%d}:1"
+    )
+    already_imported = False
+
+
 class TransactionDetailFactory(Factory):
     """A transaction as YNAB returns it. `amount` is in milliunits, not currency units."""
 
@@ -78,6 +109,42 @@ class TransactionDetailFactory(Factory):
     payee_id = None
     import_id = None
     subtransactions = factory.LazyFunction(list)
+
+
+class StoredTransactionFactory(Factory):
+    """A transaction as the budget copy keeps it, in the ...00a account. `amount` in milliunits."""
+
+    class Meta:
+        model = StoredTransaction
+
+    id = "t1"
+    account_id = "00000000-0000-0000-0000-00000000000a"
+    date = DEFAULT_DATE
+    amount = -10000
+    cleared = TransactionClearedStatus.CLEARED
+    approved = False
+    deleted = False
+    payee_name = "Mercadona"
+    category_name = None
+    import_id = None
+    memo = None
+    transfer_account_id = None
+
+
+class StoredAccountFactory(Factory):
+    """An open account as the budget copy keeps it, the ...00a one."""
+
+    class Meta:
+        model = StoredAccount
+
+    id = "00000000-0000-0000-0000-00000000000a"
+    name = "Checking"
+    type = "checking"
+    closed = False
+    on_budget = True
+    balance = 0
+    cleared_balance = 0
+    uncleared_balance = 0
 
 
 class AccountFactory(Factory):
@@ -124,3 +191,27 @@ class PlanDetailFactory(Factory):
     name = "My Budget"
     date_format = factory.LazyFunction(lambda: DateFormat(format="DD/MM/YYYY"))
     currency_format = factory.SubFactory(SdkCurrencyFormatFactory)
+
+
+class PlanSummaryFactory(Factory):
+    """A budget as YNAB lists it, with its accounts. Its id matches `PlanDetailFactory`."""
+
+    class Meta:
+        model = PlanSummary
+
+    id = uuid.UUID(int=1)
+    name = "My Budget"
+    currency_format = factory.SubFactory(SdkCurrencyFormatFactory)
+    accounts = factory.LazyFunction(lambda: [AccountFactory()])
+
+
+class AccountBalanceFactory(Factory):
+    """A net worth balance in milliunits. Pass `bucket` for anything but a cash account."""
+
+    class Meta:
+        model = AccountBalance
+
+    id = factory.Sequence(lambda n: f"account-{n}")
+    name = factory.LazyAttribute(lambda o: o.id.title())
+    bucket = Bucket.CASH
+    balance = 0
