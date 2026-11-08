@@ -1,0 +1,1 @@
+The Reconcile cards read like YNAB's own header (cleared + uncleared = working balance), group the transactions under Cleared, Uncleared and Reconciled, open with one "Show transactions" bar before anything can be reconciled, and say reconcile instead of lock.
