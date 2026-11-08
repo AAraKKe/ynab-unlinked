@@ -24,7 +24,7 @@ rules in section 5.
 ```
 Home        net worth at a glance, drop target and last imports, what needs you, recent activity
 Import      Files -> Review -> Done
-Reconcile   per account: cleared balance vs bank balance, lock transactions
+Reconcile   per account: cleared balance vs bank balance, reconcile transactions
 Net worth   history chart, buckets, accounts with inline balance updates
 Settings    tabs: Connection · Banks · Accounts · Net worth · Data & privacy
 Onboarding  full screen, first run only
@@ -98,17 +98,30 @@ without the ceremony.
 - Header: "4 accounts · 17 transactions not reconciled", a date scope
   ("since 22 Oct", "all time"), and the switch "include uncleared".
 - One card per account:
-  - Name, cleared balance (large), uncleared balance (small), total.
+  - Header: the name, then YNAB's own equation: cleared balance (large) + uncleared
+    balance = working balance (both smaller, muted). Under each figure a caption: a green
+    dot and "cleared balance · 2 to reconcile", an amber dot and "uncleared · 1", and
+    "working balance". The counts follow the scope chips, never the "include uncleared"
+    switch. Below 900px the figures stack, each with its + or = in front.
   - An optional **Your bank says** input, empty with the hint "Type it to check" (it never
-    changes a balance). When filled: equal -> green "Matches" and the lock
+    changes a balance). When filled: equal -> green "Matches" and the Reconcile
     button becomes primary; different -> the difference is shown in amber with "Find the
     gap" which expands the transactions and highlights candidates whose amount equals the
     difference.
-  - Collapsible transaction list with checkboxes (cleared pre selected, uncleared not),
-    date, payee, amount, current status.
-  - Button "Lock n transactions".
-- Footer: "Lock 14 transactions in 4 accounts" for everything at once, one confirmation
-  dialog listing accounts and counts, live progress, done state with "See net worth".
+  - Transactions, when open, grouped under section headers that say what the status
+    means: **Cleared** "the bank shows these · 2 to reconcile", **Uncleared** "the bank
+    has not taken these yet · skipped" ("reconcile them too" with the switch on), and,
+    once rows were reconciled in this visit, **Reconciled** "already reconciled". An
+    empty section keeps its header with "none since 29 Oct". Rows: checkbox (cleared pre
+    selected, uncleared not and dimmed until the switch is on), date, payee, amount.
+  - A full width bar closes the card. Collapsed it is one quiet button "Show 3
+    transactions" with a chevron, and no Reconcile button: nobody reconciles rows they
+    have not seen. Open it holds "Hide transactions" on the left and "Reconcile n
+    transactions" on the right (disabled "Nothing to reconcile" at 0).
+- Footer: "Reconcile 14 transactions in 4 accounts · uncleared stay untouched" and
+  "Reconcile all" for everything at once, one confirmation dialog listing accounts and
+  counts, live progress, done state with "See net worth". The screen says reconcile,
+  YNAB's word, never lock.
 
 ### Net worth
 

@@ -173,6 +173,37 @@ first every time the view opens, so a match or a delete made in YNAB a moment ag
 listed; a failed sync shows the last copy with a toast). Both use the same scope rule and
 `reconcile()`, so they differ only by what YNAB changed since the last sync.
 
+The app's account card (`web/views/reconcile/card.py`, kept current by `view.py`):
+
+```
+header   account name · cleared balance + uncleared balance = working balance
+         captions: "cleared balance · N to reconcile" (green dot), "uncleared · N" (amber
+         dot), "working balance"; N = rows of that status in the scope chip not reconciled
+         yet. They follow the chips, never the "include uncleared" switch or the selection
+         right: "Your bank says" input and its match line
+rows     (open only) sections, each a header with a dot, a name and a note:
+           Cleared     "the bank shows these · N to reconcile"   (or "· none since 29 Oct",
+                                                                  "· none" under all time)
+           Uncleared   "the bank has not taken these yet · skipped" ("· reconcile them too"
+                       with the switch on, "· none ..." when empty)
+           Reconciled  "already reconciled", only once rows were reconciled in this visit
+         a row is checkbox · date · payee · amount; no status column
+bar      collapsed: one full width button "Show N transactions" (N = every row the card
+         lists) and no Reconcile button, so nothing is reconciled unseen.
+         open: "Hide transactions" left, "Reconcile N transactions" right (N = selected,
+         disabled "Nothing to reconcile" at 0, primary once the bank balance matches),
+         "🔒 reconciled" once the account has nothing left
+```
+
+On screen it is "reconcile" everywhere (buttons, footer "Reconcile all", confirmation,
+progress, toasts); the code keeps `lock` names and the activity kind stays `reconcile`.
+Markers: `account-{id}`, `cleared-{id}`, `cleared-count-{id}`, `uncleared-{id}`,
+`uncleared-count-{id}`, `bank-{id}`, `match-{id}`, `gap-{id}`, `rows-{id}`,
+`section-{cleared|uncleared|reconciled}-{id}` with its `note-...-{id}`, `row-{transaction id}`,
+`bar-{id}` (class `open` when open), `toggle-{id}`, `lock-{id}`, and on the page `rec-title`,
+`scope`, `include-uncleared`, `scope-empty`, `all-reconciled`, `rec-footer`, `rec-summary`,
+`select-all`, `deselect-all`, `lock-all`, `rec-done`, `lock-more`, `see-networth`.
+
 ### 2.4 Loaders and detection (`entities/`, `core/detect.py`)
 
 Every entity package (`entities/bbva`, `entities/sabadell`, `entities/cobee`) exposes a
@@ -591,12 +622,15 @@ web/
       rows.py          draw_row(flow, item): a file row of step Files and its body
       tables.py        badge, plan_table, transactions_table
       cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
-    reconcile/         /reconcile   per account cleared vs bank balance, lock
+    reconcile/         /reconcile   per account cleared vs bank balance, reconcile (2.3)
       data.py          scope_start, gap_candidates, ReconcileData (read,
-                       open_transactions, has_anything), LOCK_TIMED_OUT, parse_bank_balance, lock_confirmation,
-                       lock_log, lock_checkpoint, pending_title
+                       open_transactions, has_anything), LOCK_TIMED_OUT, UNCLEARED_SKIPPED,
+                       parse_bank_balance, cleared_note, uncleared_note, show_label,
+                       reconcile_label, lock_confirmation, lock_log, lock_checkpoint,
+                       pending_title
       groups.py        Row, AccountGroup: the selection and the elements that show it
-      view.py          ReconcileView (with the lock: confirm, reconcile, log, checkpoint) and the view
+      card.py          equation, section, bar, paint_bar: the account card's fixed pieces
+      view.py          ReconcileView (with the reconcile: confirm, reconcile, log, checkpoint) and the view
       footer.py        selection / done / locking footers
     networth/          /networth    history chart, buckets, accounts, balance updates, drawer
       data.py          RANGES, MAX_PICKED, range_start, by_hand_pill, assign_slots,

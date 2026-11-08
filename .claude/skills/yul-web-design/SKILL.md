@@ -44,7 +44,7 @@ same change. Never update a document to describe something you did not build.
    Save button.
 8. **Every write to YNAB** goes through `run.io_bound`, logs one activity entry (shapes in
    ARCHITECTURE 3.4), calls `state().invalidate()` and ends with a toast. Multi item writes
-   (import commit, lock all) get exactly one `shell.confirm` listing what will change.
+   (import commit, reconcile all) get exactly one `shell.confirm` listing what will change.
 9. **Toasts** are `shell.notify(message, kind)`: top center under the bar, 3s. Never
    `ui.notify` directly.
 10. **Views are `live` unless they hold a form.** `@shell.view(..., live=False)` for Import
