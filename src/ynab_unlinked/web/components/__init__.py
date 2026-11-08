@@ -55,6 +55,7 @@ ICONS: dict[str, str] = {
     "x": '<path d="M6 6l12 12M18 6 6 18"/>',
     "check": '<path d="M20 6 9 17l-5-5"/>',
     "refresh": '<path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/>',
+    "chevron-down": '<path d="M6 9l6 6 6-6"/>',
     "pencil": '<path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/><path d="M14.5 5.5l3 3"/>',
 }
 

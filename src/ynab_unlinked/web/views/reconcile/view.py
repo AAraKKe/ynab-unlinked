@@ -21,30 +21,32 @@ from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import StoredAccount, StoredTransaction
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import (
-    button,
     check,
     empty_state,
     glass_card,
     loading,
-    pill,
     set_class,
 )
 from ynab_unlinked.web.components.controls import pill_group, switch
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.views.reconcile import footer
+from ynab_unlinked.web.views.reconcile import card, footer
 from ynab_unlinked.web.views.reconcile.data import (
     ALL_TIME,
     LOCK_TIMED_OUT,
+    RECONCILED_NOTE,
     SINCE,
     UNCLEARED_SKIPPED,
     ReconcileData,
+    cleared_note,
     gap_candidates,
     lock_checkpoint,
     lock_confirmation,
     lock_log,
     parse_bank_balance,
     pending_title,
+    reconcile_label,
     scope_start,
+    uncleared_note,
 )
 from ynab_unlinked.web.views.reconcile.groups import AccountGroup, Row
 from ynab_unlinked.web.wording import plural, short_date, ynab_error_message
@@ -93,6 +95,12 @@ class ReconcileView:
         except Exception as error:
             shell.notify(f"Showing the last sync. {ynab_error_message(error)}", "warn")
         return current.last_sync is not None
+
+    def since_label(self) -> str | None:
+        """The start of the "since" scope as its chip shows it, None under "all time"."""
+        if self.scope != SINCE or self.since is None:
+            return None
+        return short_date(self.since, self.today)
 
     def open_transactions(self) -> list[tuple[StoredAccount, list[StoredTransaction]]]:
         """Unreconciled transactions of open accounts in the current scope, newest first."""
@@ -193,7 +201,7 @@ class ReconcileView:
             else:
                 with ui.element("div").classes("yul-stagger"):
                     for group in self.groups:
-                        self.card(group)
+                        self.account_card(group)
                 for current, following in zip(self.groups, self.groups[1:], strict=False):
                     self.chain_focus(current, following)
         self.footer.set_visibility(bool(self.groups))
@@ -207,17 +215,14 @@ class ReconcileView:
 
     # ---- account card --------------------------------------------------------------------
 
-    def card(self, group: AccountGroup) -> None:
+    def account_card(self, group: AccountGroup) -> None:
+        """Cleared + uncleared = working balance and the bank's, the rows, and the bar."""
         account = group.account
         with glass_card(flush=True).classes("yul-rec-acct").mark(f"account-{account.id}"):
             with ui.element("div").classes("yul-rec-ah"):
-                with ui.element("div"):
+                with ui.element("div").classes("yul-rec-acct-main"):
                     ui.label(account.name).classes("yul-label")
-                    ui.label(self.money(account.cleared_balance)).classes("yul-rec-bal")
-                    ui.label(
-                        f"cleared · uncleared {self.money(account.uncleared_balance)}"
-                        f" · total {self.money(account.balance)}"
-                    ).classes("yul-faint yul-small")
+                    card.equation(group, self.money)
                 with ui.element("div").classes("yul-rec-bank"):
                     ui.label("Your bank says").classes("yul-label")
                     group.bank = (
@@ -233,26 +238,33 @@ class ReconcileView:
                     group.match = (
                         ui.element("div").classes("yul-rec-match").mark(f"match-{account.id}")
                     )
-                with ui.element("div"):
-                    ui.label("To lock").classes("yul-label")
-                    group.count = ui.label().classes("yul-rec-bal").mark(f"count-{account.id}")
-                    group.toggle = ui.label("show transactions ▾").classes("yul-rec-link")
-                    group.toggle.mark(f"toggle-{account.id}")
-                    group.toggle.on(
-                        "click", lambda _, group=group: self.set_open(group, not group.open)
-                    )
-                with ui.element("div").classes("yul-rec-lockcell"):
-                    group.lock_button = button(on_click=partial(self.lock, [group]))
-                    group.lock_button.mark(f"lock-{account.id}")
-                    with group.lock_button:
-                        group.lock_label = ui.label()
-                    group.done = pill("🔒 reconciled", "ok")
-                    group.done.set_visibility(False)
-            group.rows_box = ui.element("div").classes("yul-rec-rows")
-            with group.rows_box:
-                for row in group.rows:
-                    self.row(row)
+            group.rows_box = ui.element("div").classes("yul-rec-rows").mark(f"rows-{account.id}")
             group.rows_box.set_visibility(False)
+            self.draw_rows(group)
+            card.bar(
+                group,
+                on_toggle=lambda: self.set_open(group, not group.open),
+                on_reconcile=partial(self.lock, [group]),
+            )
+
+    def draw_rows(self, group: AccountGroup) -> None:
+        """The rows under Cleared, Uncleared and, once some are, Reconciled."""
+        assert group.rows_box is not None
+        account_id = group.account.id
+        group.rows_box.clear()
+        with group.rows_box:
+            group.cleared_note = card.section("Cleared", "good", f"cleared-{account_id}")
+            for row in group.cleared():
+                self.row(row)
+            group.uncleared_note = card.section("Uncleared", "warn", f"uncleared-{account_id}")
+            for row in group.uncleared():
+                self.row(row)
+            if reconciled := group.reconciled():
+                card.section("Reconciled", "done", f"reconciled-{account_id}").set_text(
+                    RECONCILED_NOTE
+                )
+                for row in reconciled:
+                    self.row(row)
 
     def chain_focus(self, current: AccountGroup, following: AccountGroup) -> None:
         """Enter in a bank balance moves on to the next account's."""
@@ -262,9 +274,9 @@ class ReconcileView:
 
     def set_open(self, group: AccountGroup, open_: bool) -> None:
         group.open = open_
-        assert group.rows_box is not None and group.toggle is not None
+        assert group.rows_box is not None
         group.rows_box.set_visibility(open_)
-        group.toggle.set_text("hide transactions ▴" if open_ else "show transactions ▾")
+        card.paint_bar(group)
 
     def bank_changed(self, group: AccountGroup, text: str) -> None:
         assert group.match is not None
@@ -324,24 +336,18 @@ class ReconcileView:
             amount = ui.label(self.money(t.amount)).classes("amt")
             if t.amount > 0:
                 amount.classes("yul-good")
-            row.status = ui.label().classes("st")
         row.element = element
         element.on("click", lambda _, row=row: self.toggle_row(row))
         self.paint_row(row)
 
     def paint_row(self, row: Row) -> None:
-        assert row.element is not None and row.box is not None and row.status is not None
+        assert row.element is not None and row.box is not None
         selectable = not row.uncleared or self.include_uncleared
         set_class(row.box, "on", row.selected or row.locked)
         set_class(row.box, "off", not selectable and not row.locked)
         set_class(row.element, "unclear", row.uncleared and not row.locked)
         if row.locked:
             row.element.classes(add="locked", remove="gap")
-            row.status.set_text("🔒 reconciled")
-        elif row.uncleared:
-            row.status.set_text("uncleared → 🔒" if row.selected else "uncleared")
-        else:
-            row.status.set_text("cleared → 🔒" if row.selected else "cleared")
 
     def toggle_row(self, row: Row) -> None:
         if row.locked or self.busy:
@@ -381,17 +387,27 @@ class ReconcileView:
         if self.title is not None:
             self.title.set_text(pending_title(pending_accounts, pending_rows, bool(self.groups)))
 
+        since = self.since_label()
         for group in self.groups:
             to_lock = len(group.to_lock())
             left = bool(group.pending())
-            assert group.count is not None and group.lock_button is not None
+            cleared, uncleared = len(group.cleared()), len(group.uncleared())
+            assert group.cleared_count is not None and group.uncleared_count is not None
+            assert group.cleared_note is not None and group.uncleared_note is not None
+            assert group.lock_button is not None
             assert group.lock_label is not None and group.done is not None
-            group.count.set_text(str(to_lock))
-            group.lock_label.set_text(f"Reconcile {plural(to_lock, 'transaction')}")
+            group.cleared_count.set_text(str(cleared))
+            group.uncleared_count.set_text(str(uncleared))
+            group.cleared_note.set_text(cleared_note(cleared, since))
+            group.uncleared_note.set_text(
+                uncleared_note(uncleared, since, included=self.include_uncleared)
+            )
+            group.lock_label.set_text(reconcile_label(to_lock))
             group.lock_button.set_enabled(to_lock > 0 and not self.busy)
             group.lock_button.set_visibility(left)
             group.done.set_visibility(not left)
             set_class(group.lock_button, "primary", bool(group.matches))
+            card.paint_bar(group)
         self.render_footer()
 
     def render_footer(self) -> None:
@@ -458,12 +474,13 @@ class ReconcileView:
         )
         # YNAB changed: show it, log it and sync before anything that can still fail
         try:
-            for _, rows in batches:
+            for group, rows in batches:
                 for row in rows:
                     row.locked = True
                     row.selected = False
                     self.locked_ids.add(row.transaction.id)
-                    self.paint_row(row)
+                # The rows move from their section to Reconciled
+                self.draw_rows(group)
             self.last_locked = count
             state().invalidate()
             message, log_details = lock_log(locked)

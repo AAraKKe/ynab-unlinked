@@ -1,8 +1,8 @@
 """What Reconcile shows and writes, worked out without NiceGUI.
 
 The scope ("since" the last reconciliation, or all time), the unreconciled transactions of the
-open accounts in it, the rows that could explain a difference with the bank, and the words and
-the log entry of a reconcile. The view (`view`) keeps the selection and draws it.
+open accounts in it, the rows that could explain a difference with the bank, the words of the
+card and of a reconcile, and its log entry. The view (`view`) keeps the selection and draws it.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ LOCK_TIMED_OUT = (
 )
 """A reconcile that timed out: YNAB may have applied it before the answer was lost."""
 UNCLEARED_SKIPPED = "Uncleared rows are skipped. Turn on “include uncleared” to reconcile them too."
+RECONCILED_NOTE = "already reconciled"
 
 
 def scope_start(last_reconciliation: dt.date | None) -> dt.date | None:
@@ -111,6 +112,34 @@ def parse_bank_balance(text: str, currency_format: CurrencyFormat) -> int | None
         )
     except ValueError:
         return None
+
+
+def _none(since: str | None) -> str:
+    return f"none since {since}" if since else "none"
+
+
+def cleared_note(count: int, since: str | None) -> str:
+    """What the Cleared section of a card means and how many of it are left to reconcile.
+
+    `since` is the start of the "since" scope as shown on its chip, None under "all time".
+    """
+    return f"the bank shows these · {f'{count} to reconcile' if count else _none(since)}"
+
+
+def uncleared_note(count: int, since: str | None, *, included: bool) -> str:
+    """What the Uncleared section means and what a reconcile does with it."""
+    tail = _none(since) if not count else "reconcile them too" if included else "skipped"
+    return f"the bank has not taken these yet · {tail}"
+
+
+def show_label(count: int) -> str:
+    """The bar of a collapsed card: every row it would list."""
+    return f"Show {plural(count, 'transaction')}"
+
+
+def reconcile_label(count: int) -> str:
+    """The account's own button: the rows selected in it."""
+    return f"Reconcile {plural(count, 'transaction')}" if count else "Nothing to reconcile"
 
 
 LockBatch = tuple[StoredAccount, Sequence[StoredTransaction]]

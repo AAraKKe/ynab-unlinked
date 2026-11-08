@@ -15,9 +15,9 @@ class Row:
     transaction: StoredTransaction
     selected: bool
     locked: bool = False
+    """Reconciled in this visit: listed under Reconciled until the list is drawn again."""
     element: ui.element | None = None
     box: ui.element | None = None
-    status: ui.label | None = None
 
     @property
     def uncleared(self) -> bool:
@@ -36,13 +36,19 @@ class AccountGroup:
     """None until a bank balance is typed, then whether it equals the cleared balance."""
     difference: int = 0
     open: bool = False
-    count: ui.label | None = None
+    cleared_count: ui.label | None = None
+    uncleared_count: ui.label | None = None
+    match: ui.element | None = None
+    rows_box: ui.element | None = None
+    cleared_note: ui.label | None = None
+    uncleared_note: ui.label | None = None
+    bar: ui.element | None = None
+    toggle_label: ui.label | None = None
+    action: ui.element | None = None
+    """The right of the bar: the account's Reconcile button, or "reconciled" once done."""
     lock_button: ui.button | None = None
     lock_label: ui.label | None = None
     done: ui.element | None = None
-    match: ui.element | None = None
-    rows_box: ui.element | None = None
-    toggle: ui.label | None = None
     bank: ui.input | None = None
 
     def to_lock(self) -> list[Row]:
@@ -50,3 +56,15 @@ class AccountGroup:
 
     def pending(self) -> list[Row]:
         return [row for row in self.rows if not row.locked]
+
+    def cleared(self) -> list[Row]:
+        """Cleared rows not reconciled yet: the Cleared section."""
+        return [row for row in self.pending() if not row.uncleared]
+
+    def uncleared(self) -> list[Row]:
+        """The Uncleared section."""
+        return [row for row in self.pending() if row.uncleared]
+
+    def reconciled(self) -> list[Row]:
+        """Rows reconciled in this visit: the Reconciled section."""
+        return [row for row in self.rows if row.locked]

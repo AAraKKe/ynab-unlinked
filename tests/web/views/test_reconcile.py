@@ -4,6 +4,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
+from nicegui import ui
 from nicegui.testing.user import User
 from pytest_mock import MockerFixture
 from urllib3.exceptions import MaxRetryError, ReadTimeoutError
@@ -21,9 +22,17 @@ from ynab import (
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.store import Store, StoredTransaction
+from ynab_unlinked.store import Store, StoredAccount, StoredTransaction
 from ynab_unlinked.web.state import AppState, state
-from ynab_unlinked.web.views.reconcile.data import LOCK_TIMED_OUT, gap_candidates
+from ynab_unlinked.web.views.reconcile.data import (
+    LOCK_TIMED_OUT,
+    cleared_note,
+    gap_candidates,
+    lock_confirmation,
+    reconcile_label,
+    show_label,
+    uncleared_note,
+)
 from ynab_unlinked.web.wording import SAVE_FAILED
 
 pytestmark = pytest.mark.version("V4")
@@ -123,6 +132,13 @@ def classes(user: User, marker: str) -> list[str]:
     return user.find(marker=marker).elements.pop().classes
 
 
+def text(user: User, marker: str) -> str:
+    """The text of the element with `marker` and of every label in it."""
+    element = user.find(marker=marker).elements.pop()
+    labels = [element, *element.descendants()]
+    return " ".join(label.text for label in labels if isinstance(label, ui.label))
+
+
 async def open_reconcile(user: User) -> None:
     await user.open("/reconcile")
     await user.should_see(marker="rec-title", retries=20)
@@ -135,8 +151,85 @@ async def test_the_header_counts_what_is_left_in_open_accounts(user: User, seed:
     await user.should_see("2 accounts · 5 transactions not reconciled")
     await user.should_see("Reconcile 3 transactions in 2 accounts")
     await user.should_see("uncleared stay untouched")
+    await user.should_see("Reconcile all")
     await user.should_see("💳 Oro")
     await user.should_not_see("💳 Old card")
+
+
+async def test_the_card_header_is_cleared_plus_uncleared_equals_working_balance(
+    user: User, seed: Seed
+):
+    seed()
+    await open_reconcile(user)
+
+    card = text(user, f"account-{ORO}")
+    assert "-150.00€" in card and "-24.90€" in card and "-174.90€" in card
+    assert text(user, f"cleared-{ORO}") == "cleared balance · 2 to reconcile"
+    assert text(user, f"uncleared-{ORO}") == "uncleared · 1"
+    assert "working balance" in card
+    assert text(user, f"cleared-count-{CHECKING}") == "1"
+    assert text(user, f"uncleared-count-{CHECKING}") == "1"
+
+    # What is selected is not what is left to reconcile: the switch leaves the counts alone
+    user.find(marker="include-uncleared").click()
+    await user.should_see("Reconcile 5 transactions in 2 accounts")
+    assert text(user, f"cleared-count-{ORO}") == "2"
+    assert text(user, f"uncleared-count-{ORO}") == "1"
+
+
+async def test_a_collapsed_card_shows_its_rows_before_it_can_be_reconciled(user: User, seed: Seed):
+    seed()
+    await open_reconcile(user)
+
+    assert text(user, f"toggle-{ORO}") == "Show 3 transactions"
+    assert text(user, f"toggle-{CHECKING}") == "Show 2 transactions"
+    await user.should_not_see(marker=f"lock-{ORO}")
+    await user.should_not_see(marker="row-oro-glovo")
+
+    user.find(marker=f"toggle-{ORO}").click()
+
+    await user.should_see(marker=f"lock-{ORO}")
+    await user.should_see(marker="row-oro-glovo")
+    assert text(user, f"toggle-{ORO}") == "Hide transactions"
+    assert text(user, f"lock-{ORO}") == "Reconcile 2 transactions"
+    assert "open" in classes(user, f"bar-{ORO}")
+    await user.should_not_see(marker=f"lock-{CHECKING}")
+
+    user.find(marker="row-oro-glovo").click()
+    user.find(marker="row-oro-mercadona").click()
+    assert text(user, f"lock-{ORO}") == "Nothing to reconcile"
+    assert not user.find(marker=f"lock-{ORO}").elements.pop().enabled
+
+    user.find(marker=f"toggle-{ORO}").click()
+    await user.should_not_see(marker=f"lock-{ORO}")
+    assert text(user, f"toggle-{ORO}") == "Show 3 transactions"
+
+
+async def test_rows_are_grouped_under_what_their_status_means(user: User, seed: Seed):
+    seed()
+    await open_reconcile(user)
+    user.find(marker=f"toggle-{ORO}").click()
+
+    await user.should_see(marker=f"section-cleared-{ORO}")
+    assert text(user, f"note-cleared-{ORO}") == "the bank shows these · 2 to reconcile"
+    assert text(user, f"note-uncleared-{ORO}") == "the bank has not taken these yet · skipped"
+    await user.should_not_see(marker=f"section-reconciled-{ORO}")
+    drawn = list(user.find(marker=f"rows-{ORO}").elements.pop().descendants())
+    order = [
+        f"section-cleared-{ORO}",
+        "row-oro-mercadona",
+        "row-oro-glovo",
+        f"section-uncleared-{ORO}",
+        "row-oro-zara",
+    ]
+    positions = [drawn.index(user.find(marker=marker).elements.pop()) for marker in order]
+    assert positions == sorted(positions)
+
+    user.find(marker="include-uncleared").click()
+    await user.should_see("Reconcile 5 transactions in 2 accounts")
+    assert text(user, f"note-uncleared-{ORO}") == (
+        "the bank has not taken these yet · reconcile them too"
+    )
 
 
 @pytest.mark.parametrize(
@@ -154,6 +247,8 @@ async def test_the_bank_balance_is_checked_against_the_cleared_balance(
 ):
     seed()
     await open_reconcile(user)
+    user.find(marker=f"toggle-{ORO}").click()
+    user.find(marker=f"toggle-{CHECKING}").click()
 
     user.find(marker=f"bank-{ORO}").type(typed)
 
@@ -195,7 +290,7 @@ async def test_uncleared_rows_are_only_selectable_with_include_uncleared(user: U
 
     user.find(marker="row-oro-zara").click()
     await user.should_see("Reconcile 4 transactions in 2 accounts")
-    assert user.find(marker=f"count-{ORO}").elements.pop().text == "2"
+    assert text(user, f"lock-{ORO}") == "Reconcile 2 transactions"
 
 
 async def test_lock_all_reconciles_exactly_the_selected_rows(
@@ -210,9 +305,7 @@ async def test_lock_all_reconciles_exactly_the_selected_rows(
     user.find(marker="lock-all").click()
     await user.should_see("Reconcile 2 transactions in 1 account?", retries=20)
     await user.should_see("💳 Oro · 2 transactions")
-    assert user.find(marker="confirm-action").elements.pop().default_slot.children[-1].text == (
-        "Reconcile 2"
-    )
+    assert text(user, "confirm-action") == "Reconcile 2"
     user.find(marker="confirm-action").click()
 
     await user.should_see("2 transactions reconciled", retries=20)
@@ -234,6 +327,14 @@ async def test_lock_all_reconciles_exactly_the_selected_rows(
     await user.should_see(marker="row-oro-glovo")
     assert "locked" in classes(user, "row-oro-glovo")
     assert "locked" not in classes(user, "row-oro-zara")
+    # The reconciled rows moved to a section of their own; the card still lists all three
+    await user.should_see(marker=f"section-reconciled-{ORO}")
+    assert text(user, f"note-reconciled-{ORO}") == "already reconciled"
+    assert text(user, f"note-cleared-{ORO}") == "the bank shows these · none"
+    assert text(user, f"cleared-count-{ORO}") == "0"
+    assert text(user, f"lock-{ORO}") == "Nothing to reconcile"
+    user.find(marker=f"toggle-{ORO}").click()
+    await user.should_see("Show 3 transactions")
 
 
 async def test_an_uncleared_row_skipped_with_include_uncleared_on_holds_the_checkpoint(
@@ -280,6 +381,8 @@ async def test_the_account_lock_touches_only_that_account(
     seed()
     await open_reconcile(user)
     user.find(marker="include-uncleared").click()
+    user.find(marker=f"toggle-{CHECKING}").click()
+    user.find(marker=f"toggle-{ORO}").click()
 
     user.find(marker=f"lock-{CHECKING}").click()
     await user.should_see("1 of them is still uncleared", retries=20)
@@ -287,7 +390,7 @@ async def test_the_account_lock_touches_only_that_account(
 
     await user.should_see("2 transactions reconciled", retries=20)
     assert updated(ynab_api) == {"chk-payroll": RECONCILED, "chk-gym": RECONCILED}
-    assert user.find(marker=f"count-{ORO}").elements.pop().text == "3"
+    assert text(user, f"lock-{ORO}") == "Reconcile 3 transactions"
     await user.should_see(marker="lock-more")
 
 
@@ -379,9 +482,35 @@ async def test_the_since_scope_starts_a_week_before_the_last_reconciliation(
 
     await user.should_see("since 24 Oct")
     await user.should_see("2 accounts · 4 transactions not reconciled")
+    # Glovo (22 Oct) is out of scope: the counts follow the chips
+    assert text(user, f"cleared-count-{ORO}") == "1"
+    assert text(user, f"toggle-{ORO}") == "Show 2 transactions"
 
     user.find(marker="scope-all").click()
     await user.should_see("2 accounts · 5 transactions not reconciled")
+    assert text(user, f"cleared-count-{ORO}") == "2"
+    assert text(user, f"toggle-{ORO}") == "Show 3 transactions"
+
+
+async def test_an_empty_section_still_says_what_it_means(
+    config_v4: LatestConfig, user: User, seed: Seed
+):
+    config_v4.last_reconciliation_date = oct_(31)
+    config_v4.save()
+    state().reload()
+    seed(transactions=[t for t in TRANSACTIONS if t.id != "chk-payroll"])
+    await open_reconcile(user)
+    user.find(marker=f"toggle-{CHECKING}").click()
+
+    await user.should_see(marker=f"section-cleared-{CHECKING}")
+    assert text(user, f"note-cleared-{CHECKING}") == "the bank shows these · none since 24 Oct"
+    assert text(user, f"cleared-count-{CHECKING}") == "0"
+    assert text(user, f"lock-{CHECKING}") == "Nothing to reconcile"
+
+    user.find(marker="scope-all").click()
+    await user.should_see("2 accounts · 4 transactions not reconciled")
+    user.find(marker=f"toggle-{CHECKING}").click()
+    assert text(user, f"note-cleared-{CHECKING}") == "the bank shows these · none"
 
 
 async def test_nothing_to_reconcile_shows_the_empty_state(user: User, seed: Seed):
@@ -466,3 +595,46 @@ def test_gap_candidates(difference: int, expected: set[str]):
     ]
 
     assert gap_candidates(transactions, difference) == expected
+
+
+@pytest.mark.parametrize(
+    ("count", "since", "included", "cleared", "uncleared"),
+    [
+        (2, "29 Oct", False, "2 to reconcile", "skipped"),
+        (1, None, True, "1 to reconcile", "reconcile them too"),
+        (0, "29 Oct", False, "none since 29 Oct", "none since 29 Oct"),
+        (0, None, True, "none", "none"),
+    ],
+    ids=["since", "all-time-included", "none-since", "none-all-time"],
+)
+def test_section_notes_say_what_the_status_means_and_what_is_left(
+    count: int, since: str | None, included: bool, cleared: str, uncleared: str
+):
+    assert cleared_note(count, since) == f"the bank shows these · {cleared}"
+    assert uncleared_note(count, since, included=included) == (
+        f"the bank has not taken these yet · {uncleared}"
+    )
+
+
+def test_the_card_buttons_say_reconcile():
+    assert show_label(1) == "Show 1 transaction"
+    assert reconcile_label(3) == "Reconcile 3 transactions"
+    assert reconcile_label(0) == "Nothing to reconcile"
+
+
+def test_the_confirmation_says_reconcile():
+    oro = StoredAccount(
+        id=str(ORO),
+        name="💳 Oro",
+        type="creditCard",
+        closed=False,
+        on_budget=True,
+        balance=0,
+        cleared_balance=0,
+        uncleared_balance=0,
+    )
+
+    title, lines, action = lock_confirmation([(oro, [stored("zara", -24_900, UNCLEARED)])])
+
+    assert (title, action) == ("Reconcile 1 transaction in 1 account?", "Reconcile 1")
+    assert lines[-2:] == ["1 of them is still uncleared", "They are marked reconciled in YNAB."]
