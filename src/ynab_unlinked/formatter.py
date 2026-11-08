@@ -14,7 +14,9 @@ class Formatter:
     def format_date(self, date: dt.date) -> str:
         return date.strftime(self.py_date_format)
 
-    def format_amount(self, amount: float, positive_style="", negative_style="") -> str:
+    def format_amount(
+        self, amount: float, positive_style: str = "", negative_style: str = ""
+    ) -> str:
         sign = "-" if amount < 0 else ""
         style = negative_style if amount < 0 else positive_style
         end_style = ""

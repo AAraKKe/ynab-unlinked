@@ -1,11 +1,13 @@
 import datetime as dt
-from typing import Literal, TypedDict, overload
+from collections.abc import Sequence
+from typing import Any, Literal, Protocol, TypedDict, overload
 from uuid import UUID
 
 from ynab import (
     Account,
     AccountsApi,
     ApiClient,
+    ApiException,
     Configuration,
     NewTransaction,
     PatchTransactionsWrapper,
@@ -18,8 +20,52 @@ from ynab import (
     TransactionDetail,
     TransactionsApi,
 )
+from ynab.rest import RESTResponse
 
 from ynab_unlinked.models import PendingImport, milliunits
+
+from .errors import api_status
+
+NOT_FOUND_STATUS = 404
+
+PAYEE_NAME_LIMIT = 200
+"""The longest payee name YNAB accepts. A longer one would fail the whole file's import."""
+
+FULL_SYNC_SINCE = dt.date(1900, 1, 1)
+"""The `since_date` that asks for every transaction. YNAB's get_transactions defaults to about
+one year ago when none is given."""
+
+
+REQUEST_TIMEOUT: tuple[float, float] = (10, 60)
+"""Seconds to connect to YNAB and to wait for each part of its answer. Without one, a stalled
+connection would hang `yul load` and the app's sync forever."""
+
+
+class _TimedApiClient(ApiClient):
+    """The SDK's client with `REQUEST_TIMEOUT` on every request that names none.
+
+    Every endpoint method of the SDK goes through `call_api`, so no call of `Client` can be
+    made without a timeout.
+    """
+
+    def call_api(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        method: Any,
+        url: Any,
+        header_params: Any = None,
+        body: Any = None,
+        post_params: Any = None,
+        _request_timeout: Any = None,
+    ) -> RESTResponse:
+        # The SDK leaves the parameters of `call_api` untyped
+        return super().call_api(  # pyright: ignore[reportUnknownMemberType]
+            method,
+            url,
+            header_params,
+            body,
+            post_params,
+            REQUEST_TIMEOUT if _request_timeout is None else _request_timeout,
+        )
 
 
 class ApisType(TypedDict):
@@ -32,10 +78,20 @@ SupportedApisType = PlansApi | AccountsApi | TransactionsApi
 SupportedApisNames = Literal["budget", "accounts", "transactions"]
 
 
+class BalanceAdjustment(Protocol):
+    """What the client needs from `core.balances.Adjustment`, without importing core."""
+
+    @property
+    def account_id(self) -> str: ...
+
+    @property
+    def amount(self) -> int: ...
+
+
 class Client:
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.__client = ApiClient(Configuration(access_token=api_key))
+        self.__client = _TimedApiClient(Configuration(access_token=api_key))
         self._apis: ApisType = {
             "budget": PlansApi,
             "accounts": AccountsApi,
@@ -115,7 +171,7 @@ class Client:
             NewTransaction(
                 account_id=account_uuid,
                 date=pending.transaction.date,
-                payee_name=pending.transaction.payee,
+                payee_name=pending.transaction.payee[:PAYEE_NAME_LIMIT],
                 cleared=cleared,
                 amount=milliunits(pending.transaction.amount),
                 approved=False,
@@ -131,21 +187,99 @@ class Client:
 
         return response.data.duplicate_import_ids or []
 
-    def update_transactions(self, budget_id: str, transactions: list[TransactionDetail]):
-        if not transactions:
+    def update_transactions(
+        self, budget_id: str, transaction_ids: Sequence[str], cleared: TransactionClearedStatus
+    ) -> None:
+        """Set the cleared status of the transactions, and nothing else.
+
+        Only the id and the status are sent: an account id read earlier could be stale and
+        would move a transaction the user moved in YNAB meanwhile back where it was.
+        """
+        if not transaction_ids:
             return
 
         api = self.api("transactions")
 
         to_update = [
-            SaveTransactionWithIdOrImportId(
-                id=t.id,
-                account_id=t.account_id,
-                cleared=t.cleared,
-            )
-            for t in transactions
+            SaveTransactionWithIdOrImportId(id=transaction_id, cleared=cleared)
+            for transaction_id in transaction_ids
         ]
         api.update_transactions(
             plan_id=budget_id,
             data=PatchTransactionsWrapper(transactions=to_update),
         )
+
+    def account(self, budget_id: str, account_id: str) -> Account:
+        api = self.api("accounts")
+        response = api.get_account_by_id(plan_id=budget_id, account_id=UUID(account_id))
+        return response.data.account
+
+    def create_adjustments(
+        self,
+        budget_id: str,
+        adjustments: Sequence[BalanceAdjustment],
+        memo: str,
+        payee: str,
+        cleared: TransactionClearedStatus,
+        date: dt.date,
+    ) -> int:
+        """Create one approved transaction per adjustment and return how many YNAB saved."""
+        if not adjustments:
+            return 0
+
+        api = self.api("transactions")
+
+        # No import id: an adjustment is a user entered transaction
+        transactions = [
+            NewTransaction(
+                account_id=UUID(adjustment.account_id),
+                date=date,
+                amount=adjustment.amount,
+                payee_name=payee,
+                memo=memo,
+                cleared=cleared,
+                approved=True,
+            )
+            for adjustment in adjustments
+        ]
+
+        response = api.create_transaction(
+            budget_id,
+            data=PostTransactionsWrapper(transactions=transactions),
+        )
+
+        return len(response.data.transaction_ids)
+
+    def transactions_with_knowledge(
+        self,
+        budget_id: str,
+        since_date: dt.date | None = None,
+    ) -> tuple[list[TransactionDetail], int]:
+        """Every transaction of the budget plus the server knowledge to ask for deltas later."""
+        api = self.api("transactions")
+        response = api.get_transactions(plan_id=budget_id, since_date=since_date)
+        return response.data.transactions, response.data.server_knowledge
+
+    def transactions_delta(
+        self,
+        budget_id: str,
+        server_knowledge: int,
+    ) -> tuple[list[TransactionDetail], int]:
+        """Transactions changed since `server_knowledge`, deleted ones included, and the new knowledge."""
+        api = self.api("transactions")
+        response = api.get_transactions(
+            plan_id=budget_id,
+            last_knowledge_of_server=server_knowledge,
+        )
+        return response.data.transactions, response.data.server_knowledge
+
+    def transaction_exists(self, budget_id: str, transaction_id: str) -> bool:
+        """Whether YNAB still has the transaction. Errors other than a 404 propagate."""
+        api = self.api("transactions")
+        try:
+            api.get_transaction_by_id(plan_id=budget_id, transaction_id=transaction_id)
+        except ApiException as error:
+            if api_status(error) == NOT_FOUND_STATUS:
+                return False
+            raise
+        return True

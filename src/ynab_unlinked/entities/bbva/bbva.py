@@ -1,27 +1,28 @@
 from __future__ import annotations
 
+import datetime as dt
+import re
 from typing import TYPE_CHECKING, cast
 
-from ynab_unlinked.entities import Entity, InputType
+from ynab_unlinked.entities import Entity, InputType, Match
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.models import Transaction
 
 
 XLSX_ROW_TO_READ = ["", "Fecha", "Tarjeta", "Concepto", "Importe", "Divisa", ""]
 VALID_TYPES = [InputType.PDF, InputType.XLSX]
+PDF_DATE = re.compile(r"^\d{2}/\d{2}/\d{4}")
 
 
 class BBVA(Entity):
-    def parse(self, input_file: Path, context: YnabUnlinkedContext) -> list[Transaction]:
-        import datetime as dt
-
+    def parse(self, input_file: Path) -> list[Transaction]:
+        from ynab_unlinked.entities._sniff import extract_type
+        from ynab_unlinked.exceptions import ParsingError
         from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import pdf, xls
-        from ynab_unlinked.utils import extract_type
 
         input_type = extract_type(input_file, valid=VALID_TYPES)
         match input_type:
@@ -33,24 +34,29 @@ class BBVA(Entity):
                 generator = pdf(input_file, allow_empty_columns=False, expected_number_of_columns=3)
                 field_reader = self.__extract_fields_from_pdf_row
 
-        transactions = []
+        transactions: list[Transaction] = []
 
         for row in generator:
-            date, payee, amount = field_reader(cast(list[str], row))
+            date, payee, amount = field_reader(cast(list[object], row))
 
-            # It can be that the row does not represent a transaction. Skip it
-            try:
-                parsed_date = dt.datetime.strptime(date, "%d/%m/%Y").date()
-            except ValueError:
+            parsed_date = self.__parse_date(date)
+            if parsed_date is None:
+                # A header or a total is not a transaction. A row with an amount whose date
+                # cell holds a date YNAB cannot use would be lost, so it stops the import
+                if self.__looks_like_a_date(date) and self.__is_amount(amount):
+                    raise ParsingError(
+                        input_file, f"the row of {payee} {amount}: {date!s} is not a date"
+                    )
                 continue
 
-            transactions.append(
-                Transaction(
-                    date=parsed_date,
-                    payee=payee,
-                    amount=self.__parse_amount(amount),
-                )
-            )
+            try:
+                parsed_amount = self.__parse_amount(amount)
+            except ValueError:
+                raise ParsingError(
+                    input_file, f"the row of {date} {payee}: {amount!r} is not an amount"
+                ) from None
+
+            transactions.append(Transaction(date=parsed_date, payee=payee, amount=parsed_amount))
 
         return transactions
 
@@ -59,22 +65,80 @@ class BBVA(Entity):
 
         return parse_amount(raw)
 
-    def __extract_fields_from_pdf_row(self, row: list[str]) -> tuple[str, ...]:
+    def __is_amount(self, raw: str) -> bool:
+        try:
+            self.__parse_amount(raw)
+        except ValueError:
+            return False
+        return True
+
+    @staticmethod
+    def __parse_date(cell: object) -> dt.date | None:
+        """The day of a date cell: typed (an xlsx saved with date cells) or "dd/mm/yyyy"."""
+        if isinstance(cell, dt.datetime):
+            return cell.date()
+        if isinstance(cell, dt.date):
+            return cell
+        try:
+            return dt.datetime.strptime(str(cell).strip(), "%d/%m/%Y").date()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def __looks_like_a_date(cell: object) -> bool:
+        """Whether the cell tries to be a date ("2025-07-11", "31/02/2025"), unlike the
+        "Fecha" of a header or the "Total" of the last row."""
+        return str(cell).strip()[:1].isdigit()
+
+    def __is_pdf_transaction(self, row: list[str | None]) -> bool:
+        try:
+            self.__parse_amount(row[2] or "")
+        except ValueError:
+            return False
+        return PDF_DATE.match(row[0] or "") is not None
+
+    def __extract_fields_from_pdf_row(self, row: list[object]) -> tuple[object, str, str]:
         # PDFs should have three columns
         # - Date with 2 lines for the date the transaction took place and when it was approved
         # - Concept, used for payee. Sometimes 2 lines including spending category
         # - Amount
         # A blank cell has no lines at all. It stays empty so the row is skipped as the
         # non transaction it is, the way the totals row is
-        date = row[0].splitlines()[0] if row[0] else ""
-        payee = row[1].splitlines()[0] if row[1] else ""
-        amount = row[2]
+        date = str(row[0]).splitlines()[0] if row[0] else ""
+        payee = str(row[1]).splitlines()[0] if row[1] else ""
+        amount = str(row[2] or "")
 
         return date, payee, amount
 
-    def __extract_fields_from_xlsx_row(self, row: list[str]) -> tuple[str, ...]:
-        # XLSX fields are present from 1 to 4 for date, card number, payee and amount
-        return str(row[1]), str(row[3]), str(row[4])
+    def __extract_fields_from_xlsx_row(self, row: list[object]) -> tuple[object, str, str]:
+        # XLSX fields are present from 1 to 4 for date, card number, payee and amount. The
+        # date stays as read: a typed date cell is a datetime, not "dd/mm/yyyy"
+        return row[1], str(row[3]), str(row[4])
 
     def name(self) -> str:
         return "BBVA Credit Card"
+
+    def sniff(self, input_file: Path) -> Match:
+        from ynab_unlinked.entities._sniff import guarded
+
+        return guarded(self.__sniff, input_file)
+
+    def __sniff(self, input_file: Path) -> Match:
+        from ynab_unlinked.entities._sniff import first_pdf_table, first_rows, suffix, wrong_suffix
+
+        if (mismatch := wrong_suffix(input_file, VALID_TYPES)) is not None:
+            return mismatch
+
+        if suffix(input_file) == InputType.PDF:
+            table = first_pdf_table(input_file)
+            if not table:
+                return Match(0.0, "No table on the first page")
+            if all(len(row) == 3 for row in table) and any(
+                self.__is_pdf_transaction(row) for row in table
+            ):
+                return Match(0.8, "Three column table of dated amounts found on the first page")
+            return Match(0.0, "The table on the first page is not a BBVA statement")
+
+        if any([str(cell) for cell in row] == XLSX_ROW_TO_READ for row in first_rows(input_file)):
+            return Match(0.95, "BBVA header row found")
+        return Match(0.0, "BBVA header row not found")

@@ -1,11 +1,19 @@
 import contextlib
 import io
+import warnings
 from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import Any, Literal, overload
 
-from ynab_unlinked import display
 from ynab_unlinked.exceptions import ParsingError
+
+
+class PdfReadWarning(UserWarning):
+    """pdfplumber reported something unusual while reading the file, the rows were still read.
+
+    A Python warning rather than a message on the terminal: the parser has no UI, and the
+    CLI and the web app each show warnings their own way.
+    """
 
 
 @overload
@@ -84,4 +92,8 @@ def pdf(
             line for line in captured_output.strip().split("\n") if line.strip() != cropbox_message
         ]:
             remaining_output = "\n".join(remaining_lines)
-            display.warning(f"Potential PDF issue reading {input_file}:\n{remaining_output}")
+            warnings.warn(
+                f"Potential PDF issue reading {input_file}:\n{remaining_output}",
+                PdfReadWarning,
+                stacklevel=2,
+            )

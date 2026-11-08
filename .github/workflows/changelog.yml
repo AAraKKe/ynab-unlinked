@@ -9,7 +9,7 @@ on:
 jobs:
   create-changelog-entry:
     runs-on: ubuntu-latest
-    if: ${{ github.actor == 'dependabot[bot]' }}
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
     permissions:
       contents: write
     steps:
@@ -18,12 +18,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Create changelog entry
+        env:
+          # Never interpolate the title into the script: it is attacker controlled text
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          FILE="changelog/${{ github.event.pull_request.number }}.bumped.md"
+          FILE="changelog/${PR_NUMBER}.bumped.md"
           if [ -f "$FILE" ]; then
             echo "$FILE already exists. Skipping."
           else
-            echo "${{ github.event.pull_request.title }}" > "$FILE"
+            printf '%s\n' "$PR_TITLE" > "$FILE"
           fi
 
       - name: Commit and push changelog entry

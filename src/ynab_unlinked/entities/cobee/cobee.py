@@ -4,15 +4,20 @@ import datetime as dt
 import re
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING
+
+from ynab_unlinked.entities import Match
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ynab_unlinked.context_object import YnabUnlinkedContext
     from ynab_unlinked.models import Transaction
 
 DATE_REGEX = re.compile(r"(\d{1,2}) (\w{3}) (\d{4})")
+
+# A saved page inlines the styles and scripts of the app before the transaction list, so the
+# sniff reads further into an HTML file than the 64 KB it reads elsewhere
+SNIFF_BYTES = 2 * 1024 * 1024
 
 # Needed to parse the date. Cobee is a Spanish system for work benefits but the
 # dates are in English locale. Parsing dates with something other than numbers
@@ -37,11 +42,6 @@ class Language(StrEnum):
     ES = "es"
     EN = "en"
     PT = "pt"
-
-
-@dataclass
-class CobeeContext:
-    language: Language
 
 
 @dataclass
@@ -91,21 +91,22 @@ def identifers_by_language(language: Language) -> Identifiers:
                 cancelled="Anulada",
                 accumulation="Acumulado em cartão",
             )
-        case never:
-            assert_never(never)
 
 
 class Cobee:
-    def parse(
-        self, input_file: Path, context: YnabUnlinkedContext[CobeeContext]
-    ) -> list[Transaction]:
+    def __init__(self, language: Language):
+        self.language = language
+        """The language the page was saved in: its headings and markers are localised."""
+
+    def parse(self, input_file: Path) -> list[Transaction]:
         # Import now the html parser
         import html_text
 
+        from ynab_unlinked.exceptions import ParsingError
         from ynab_unlinked.models import Transaction
         from ynab_unlinked.parsers import parse_amount
 
-        text = html_text.extract_text(input_file.read_text())  # type: ignore
+        text = html_text.extract_text(input_file.read_text())
 
         start = False
         previous_line = ""
@@ -116,7 +117,7 @@ class Cobee:
         date: dt.date | None = None
         payee: str | None = None
         amount: float | None = None
-        identifiers = identifers_by_language(context.extras.language)
+        identifiers = identifers_by_language(self.language)
 
         for line in text.splitlines():
             line = line.strip()
@@ -131,7 +132,11 @@ class Cobee:
             if not start:
                 continue
 
-            if (try_date := parse_date(line)) is not None:
+            try:
+                try_date = parse_date(line)
+            except ValueError as error:
+                raise ParsingError(input_file, str(error)) from None
+            if try_date is not None:
                 date = try_date
 
             if "€" in line:
@@ -147,9 +152,11 @@ class Cobee:
                 # If it was the amount line, the previous line is the payee.
                 payee = previous_line
 
-                if date is None or payee is None:
-                    raise ValueError(
-                        f"The input file is not valid. The amount {amount} has been found without a date or payee."
+                if date is None:
+                    raise ParsingError(
+                        input_file,
+                        f"The input file is not valid. The amount {amount} has been found "
+                        "without a date or payee.",
                     )
 
                 # If the payee is the accumulation line, we should skip it
@@ -174,3 +181,43 @@ class Cobee:
 
     def name(self) -> str:
         return "cobee"
+
+    def sniff(self, input_file: Path) -> Match:
+        from ynab_unlinked.entities._sniff import guarded
+
+        return guarded(self.__sniff, input_file)
+
+    def __sniff(self, input_file: Path) -> Match:
+        import html_text
+
+        from ynab_unlinked.entities import InputType
+        from ynab_unlinked.entities._sniff import head, wrong_suffix
+        from ynab_unlinked.parsers import parse_amount
+
+        if (mismatch := wrong_suffix(input_file, [InputType.HTML])) is not None:
+            return mismatch
+
+        raw = head(input_file, SNIFF_BYTES).decode("utf-8", errors="replace")
+        text: str = html_text.extract_text(raw)
+
+        headings = {
+            language: position
+            for language in Language
+            if (position := text.find(identifers_by_language(language).transactions_line)) >= 0
+        }
+        if not headings:
+            return Match(0.0, "No Cobee transactions heading found")
+
+        # The heading that comes first is the one the parser starts reading from
+        language = min(headings, key=lambda found: headings[found])
+
+        def is_amount(line: str) -> bool:
+            try:
+                parse_amount(line)
+            except ValueError:
+                return False
+            return True
+
+        if any("€" in line and is_amount(line.strip()) for line in text.splitlines()):
+            return Match(0.9, f"Cobee transactions heading and amounts found (language={language})")
+        return Match(0.3, f"Cobee transactions heading found but no amount (language={language})")

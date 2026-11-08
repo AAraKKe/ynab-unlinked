@@ -1,3 +1,3 @@
-from .client import Client
+from .client import FULL_SYNC_SINCE, Client
 
-__all__ = ["Client"]
+__all__ = ["FULL_SYNC_SINCE", "Client"]

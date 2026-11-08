@@ -1,14 +1,22 @@
 """Every test here asserts on the call the wrapper makes to the generated YNAB API."""
 
 import datetime as dt
+import socket
+import time
+from collections.abc import Iterator
 from uuid import UUID
 
 import pytest
-from ynab import TransactionClearedStatus
+from ynab import ApiException, TransactionClearedStatus
 
-from tests.factories import PendingImportFactory, TransactionDetailFactory
+from tests.factories import PendingImportFactory
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked.cli.cli_errors import ynab_error_message
+from ynab_unlinked.web.wording import YNAB_TIMED_OUT
+from ynab_unlinked.web.wording import ynab_error_message as web_error_message
+from ynab_unlinked.ynab_api import client as client_module
 from ynab_unlinked.ynab_api.client import Client
+from ynab_unlinked.ynab_api.errors import YNAB_ERRORS, timed_out
 
 BUDGET_ID = "00000000-0000-0000-0000-000000000001"
 ACCOUNT_ID = "00000000-0000-0000-0000-00000000000a"
@@ -183,6 +191,20 @@ def test_create_transactions_sends_the_import_id_the_account_and_the_bank_payee(
     assert created.approved is False
 
 
+def test_create_transactions_cuts_a_payee_to_the_length_ynab_accepts(
+    client: Client, ynab_api: YnabClientStub
+):
+    long_payee = "TRANSFERENCIA " + "X" * 300
+
+    client.create_transactions(
+        budget_id=BUDGET_ID,
+        account_id=ACCOUNT_ID,
+        transactions=[PendingImportFactory(payee=long_payee), PendingImportFactory(payee="BAR")],
+    )
+
+    assert [t.payee_name for t in created_by(ynab_api)] == [long_payee[:200], "BAR"]
+
+
 @pytest.mark.parametrize(
     "cleared",
     [
@@ -226,7 +248,9 @@ def test_create_transactions_returns_the_import_ids_ynab_rejected(
 def test_update_transactions_does_not_reach_ynab_with_nothing_to_update(
     client: Client, ynab_api: YnabClientStub
 ):
-    client.update_transactions(budget_id=BUDGET_ID, transactions=[])
+    client.update_transactions(
+        budget_id=BUDGET_ID, transaction_ids=[], cleared=TransactionClearedStatus.RECONCILED
+    )
 
     assert ynab_api.registry == {}
 
@@ -234,22 +258,88 @@ def test_update_transactions_does_not_reach_ynab_with_nothing_to_update(
 def test_update_transactions_patches_each_transaction_by_id(
     client: Client, ynab_api: YnabClientStub
 ):
-    transactions = [
-        TransactionDetailFactory(
-            id="t-1", account_id=UUID(ACCOUNT_ID), cleared=TransactionClearedStatus.RECONCILED
-        ),
-        TransactionDetailFactory(
-            id="t-2", account_id=UUID(ACCOUNT_ID), cleared=TransactionClearedStatus.CLEARED
-        ),
-    ]
-
-    client.update_transactions(budget_id=BUDGET_ID, transactions=transactions)
+    client.update_transactions(
+        budget_id=BUDGET_ID,
+        transaction_ids=["t-1", "t-2"],
+        cleared=TransactionClearedStatus.RECONCILED,
+    )
 
     call = ynab_api.api("transactions").update_transactions.call_args
     assert call.kwargs["plan_id"] == BUDGET_ID
     updated = call.kwargs["data"].transactions
     assert [(t.id, t.cleared) for t in updated] == [
         ("t-1", TransactionClearedStatus.RECONCILED),
-        ("t-2", TransactionClearedStatus.CLEARED),
+        ("t-2", TransactionClearedStatus.RECONCILED),
     ]
-    assert all(t.account_id == UUID(ACCOUNT_ID) for t in updated)
+
+
+def test_update_transactions_sends_no_account_so_a_moved_transaction_stays_where_it_is(
+    client: Client, ynab_api: YnabClientStub
+):
+    client.update_transactions(
+        budget_id=BUDGET_ID, transaction_ids=["t-1"], cleared=TransactionClearedStatus.RECONCILED
+    )
+
+    data = ynab_api.api("transactions").update_transactions.call_args.kwargs["data"]
+    assert data.to_dict() == {"transactions": [{"id": "t-1", "cleared": "reconciled"}]}
+
+
+def test_account_reads_one_account_by_its_uuid(client: Client, ynab_api: YnabClientStub):
+    api = ynab_api.api("accounts")
+
+    account = client.account(BUDGET_ID, ACCOUNT_ID)
+
+    api.get_account_by_id.assert_called_once_with(plan_id=BUDGET_ID, account_id=UUID(ACCOUNT_ID))
+    assert account is api.get_account_by_id.return_value.data.account
+
+
+@pytest.mark.parametrize(
+    ("answer", "exists"),
+    [
+        pytest.param(None, True, id="found"),
+        pytest.param(ApiException(status=404, reason="Not Found"), False, id="404 means gone"),
+    ],
+)
+def test_transaction_exists_reads_the_transaction_by_id(
+    client: Client, ynab_api: YnabClientStub, answer: ApiException | None, exists: bool
+):
+    api = ynab_api.api("transactions")
+    api.get_transaction_by_id.side_effect = answer
+
+    assert client.transaction_exists(BUDGET_ID, "t-1") is exists
+    api.get_transaction_by_id.assert_called_once_with(plan_id=BUDGET_ID, transaction_id="t-1")
+
+
+def test_transaction_exists_lets_other_errors_through(client: Client, ynab_api: YnabClientStub):
+    ynab_api.api("transactions").get_transaction_by_id.side_effect = ApiException(status=500)
+
+    with pytest.raises(ApiException):
+        client.transaction_exists(BUDGET_ID, "t-1")
+
+
+@pytest.fixture
+def silent_ynab() -> Iterator[str]:
+    """A server that accepts the connection and never answers, like a stalled YNAB."""
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen(8)
+        yield f"http://127.0.0.1:{server.getsockname()[1]}"
+
+
+def test_a_request_that_gets_no_answer_gives_up_with_one_line(
+    silent_ynab: str, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(client_module, "REQUEST_TIMEOUT", (0.2, 0.2))
+    client = Client(api_key="an-api-key")
+    client._Client__client.configuration.host = silent_ynab  # type: ignore[attr-defined]
+
+    started = time.monotonic()
+    with pytest.raises(YNAB_ERRORS) as raised:
+        client.budgets()
+
+    assert time.monotonic() - started < 10
+    assert timed_out(raised.value)
+    assert ynab_error_message(raised.value) == (
+        "YNAB did not answer in time. Check your internet connection and try again."
+    )
+    assert web_error_message(raised.value) == YNAB_TIMED_OUT

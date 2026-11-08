@@ -43,8 +43,8 @@ def cleared_str(cleared: TransactionClearedStatus) -> str:
 
 def _legacy_import_id(transaction: Transaction, counter: int) -> str:
     # Reproduces the id scheme of releases before import ids followed the YNAB convention, so a
-    # transaction already imported by one of those is still recognised. Remove it once every user
-    # has run an import with the new scheme.
+    # transaction already imported by one of those is still recognised. Removal is tracked in
+    # https://github.com/AAraKKe/ynab-unlinked/issues/123.
     return sha256(
         f"{transaction.date:%m-%d-%Y}{transaction.payee}{transaction.amount}{counter}".encode()
     ).hexdigest()[:30]

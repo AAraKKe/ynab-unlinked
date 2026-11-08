@@ -1,19 +1,18 @@
 import datetime as dt
 from collections.abc import Iterable
 from pathlib import Path
-from typing import cast
 
 import pytest
 
 from tests.helpers import assets
-from tests.helpers.statements import sabadell_statement
+from tests.helpers.statements import SABADELL_SHEET, sabadell_statement, write_xls
 from tests.helpers.types import CliRunner
-from ynab_unlinked.context_object import YnabUnlinkedContext
+from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.entities.sabadell.sabadell import ANCHOR_LINE, SabadellParser
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.models import Transaction
 
-pytestmark = pytest.mark.version("V3")
+pytestmark = pytest.mark.version("V4")
 
 TXT_STATEMENT = "sabadell/movements.txt"
 XLS_STATEMENT = "sabadell/movements.xls"
@@ -30,9 +29,10 @@ def statement(tmp_path: Path):
     return build
 
 
-def parse(input_file: Path, year: int = 2025) -> list[Transaction]:
-    # The parser does not read anything from the context
-    return SabadellParser(year=year).parse(input_file, cast(YnabUnlinkedContext, None))
+def parse(
+    input_file: Path, year: int = 2025, today: dt.date = dt.date(2025, 12, 31)
+) -> list[Transaction]:
+    return SabadellParser(year=year, today=today).parse(input_file)
 
 
 def test_a_txt_statement_becomes_transactions():
@@ -128,6 +128,29 @@ def test_a_statement_that_stays_in_one_month_keeps_the_year_it_was_given(stateme
     assert [t.date for t in parse(input_file, year=2025)] == [dt.date(2025, 1, 2)]
 
 
+@pytest.mark.parametrize(
+    ("line", "year", "expected"),
+    [
+        pytest.param(
+            "30/12|DEC|CITY|20,00EUR", 2026, dt.date(2025, 12, 30), id="december-in-the-new-year"
+        ),
+        pytest.param(
+            "05/01|SOON|CITY|20,00EUR", 2026, dt.date(2026, 1, 5), id="a-couple-of-days-ahead"
+        ),
+        pytest.param("03/01|TODAY|CITY|20,00EUR", 2026, dt.date(2026, 1, 3), id="today"),
+        pytest.param(
+            "30/12|DEC|CITY|20,00EUR", 2025, dt.date(2025, 12, 30), id="the-right-year-given"
+        ),
+    ],
+)
+def test_a_row_the_year_puts_in_the_future_moves_back_a_year(
+    statement, line: str, year: int, expected: dt.date
+):
+    transactions = parse(statement([line]), year=year, today=dt.date(2026, 1, 3))
+
+    assert [t.date for t in transactions] == [expected]
+
+
 def test_an_xls_statement_becomes_transactions():
     transactions = parse(assets.path(XLS_STATEMENT))
 
@@ -137,6 +160,13 @@ def test_an_xls_statement_becomes_transactions():
         (dt.date(2025, 6, 27), "Devolucion Compra", 12.50),
         (dt.date(2025, 6, 26), "Uber   *Eats", -1212.16),
     ]
+
+
+def test_an_xls_statement_with_an_upper_case_suffix_is_read(tmp_path: Path):
+    upper = tmp_path / "MOVIMIENTOS.XLS"
+    upper.write_bytes(assets.path(XLS_STATEMENT).read_bytes())
+
+    assert len(parse(upper)) == 3
 
 
 @pytest.mark.parametrize(
@@ -207,3 +237,118 @@ def test_the_load_command_dates_the_statement(
 
     assert result.exit_code == 0, result.output
     assert f"25/04/{expected_year}" in result.output
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_year"),
+    [
+        pytest.param([], "2023", id="the-year-saved-for-the-bank"),
+        pytest.param(["-y", "2024"], "2024", id="the-command-line-wins-over-the-saved-year"),
+    ],
+)
+def test_the_load_command_reads_the_year_saved_for_the_bank(
+    yul: CliRunner,
+    config_v4: LatestConfig,
+    today: dt.datetime,
+    arguments: list[str],
+    expected_year: str,
+):
+    config_v4.loaders["sabadell"].options = {"year": "2023"}
+    config_v4.save()
+
+    result = yul(
+        "load",
+        "--show",
+        "sabadell",
+        *arguments,
+        str(assets.path(TXT_STATEMENT)),
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert f"25/04/{expected_year}" in result.output
+
+
+@pytest.mark.parametrize(
+    ("year", "expected"),
+    [
+        pytest.param(2024, dt.date(2024, 2, 29), id="a-leap-year"),
+        pytest.param(2025, dt.date(2024, 2, 29), id="read-the-year-after-the-leap-day"),
+    ],
+)
+def test_a_leap_day_is_dated_in_the_leap_year_of_the_statement(
+    statement, year: int, expected: dt.date
+):
+    transactions = parse(statement(["29/02|LEAP|CITY|20,00EUR"]), year=year)
+
+    assert [t.date for t in transactions] == [expected]
+
+
+@pytest.mark.parametrize(
+    ("line", "year", "message"),
+    [
+        pytest.param(
+            "29/02|LEAP|CITY|20,00EUR",
+            2027,
+            "line 11: 29/02 is not a day of 2027",
+            id="a-leap-day-with-no-leap-year-the-year-before",
+        ),
+        pytest.param(
+            "31/04|NOPE|CITY|20,00EUR",
+            2025,
+            "line 11: 31/04 is not a day of 2025",
+            id="no-such-day",
+        ),
+        pytest.param(
+            "25/04|SHOP|CITY|20,00XEUR",
+            2025,
+            "line 11: '20,00XEUR' is not an amount",
+            id="an-amount-that-does-not-parse",
+        ),
+    ],
+)
+def test_a_txt_row_that_cannot_be_read_is_reported_with_its_line(
+    statement, line: str, year: int, message: str
+):
+    with pytest.raises(ParsingError) as error:
+        parse(statement([line]), year=year)
+
+    assert error.value.message.startswith(message)
+
+
+@pytest.mark.parametrize(
+    ("row", "message"),
+    [
+        pytest.param(
+            ["31/06", "SHOP", "CITY", " ", "10,00", "EUR"],
+            "the row of 31/06 SHOP: 31/06 is not a day of 2025",
+            id="no-such-day",
+        ),
+        pytest.param(
+            ["28/06", "SHOP", "CITY", " ", "diez", "EUR"],
+            "the row of 28/06 SHOP: 'diez' is not an amount",
+            id="an-amount-that-does-not-parse",
+        ),
+    ],
+)
+def test_an_xls_operation_that_cannot_be_read_is_reported_not_dropped(
+    tmp_path: Path, row: list[str], message: str
+):
+    # The rows of the statement after the second header, with the broken one first
+    header = SABADELL_SHEET.index(["FECHA", "CONCEPTO", "LOCALIDAD", "IMPORTE", "", ""])
+    sheet = [*SABADELL_SHEET[: header + 1], row, *SABADELL_SHEET[header + 1 :]]
+    input_file = write_xls(tmp_path / "movements.xls", sheet)
+
+    with pytest.raises(ParsingError) as error:
+        parse(input_file)
+
+    assert error.value.message.startswith(message)
+
+
+def test_the_load_command_reports_a_row_it_cannot_read(statement, yul: CliRunner):
+    input_file = statement(["29/02|LEAP [/]|CITY|20,00EUR"])
+
+    result = yul("load", "--show", "sabadell", "-y", "2027", str(input_file))
+
+    assert result.exit_code == 1
+    assert "line 11: 29/02 is not a day of 2027" in result.output
