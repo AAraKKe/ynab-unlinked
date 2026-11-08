@@ -34,18 +34,16 @@ jobs:
           fi
           echo "✅ The tag is on main."
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Hatch
-        run: pip install hatch==1.17.1
-
       - name: Run the checks and the tests on the tagged commit
         run: |
-          hatch run dev:check
-          hatch run dev:cov
+          uv sync --locked
+          uv run --no-sync poe check
+          uv run --no-sync poe cov
 
       - name: Set up version variables
         id: set_vars
@@ -57,10 +55,10 @@ jobs:
 
       - name: Check package version coherence
         run: |
-          PACKAGE_VERSION=$(hatch version)
+          PACKAGE_VERSION=$(uv version --short)
           echo "INFO: Tag version is ${TAG_VERSION}, package version is ${PACKAGE_VERSION}."
           if [[ "$PACKAGE_VERSION" != "$TAG_VERSION" ]]; then
-            echo "❌ Version Mismatch: Tag version (${TAG_VERSION}) does not match package version from hatch (${PACKAGE_VERSION})."
+            echo "❌ Version Mismatch: Tag version (${TAG_VERSION}) does not match package version in pyproject.toml (${PACKAGE_VERSION})."
             exit 1
           fi
           echo "✅ Package version matches tag."
@@ -80,7 +78,7 @@ jobs:
           # A fragment left in changelog/ means the release notes were built before the last change
           PENDING=$(ls changelog | grep -v '^_template' || true)
           if [[ -n "$PENDING" ]]; then
-            echo "❌ Release notes are stale: run 'hatch run tc:build' and commit it. Pending fragments:"
+            echo "❌ Release notes are stale: run 'uv run poe tc-build' and commit it. Pending fragments:"
             echo "$PENDING"
             exit 1
           fi
@@ -99,18 +97,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install hatch==1.17.1
-
       - name: Build package
-        run: hatch build
+        run: uv build
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3

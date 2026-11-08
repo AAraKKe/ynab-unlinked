@@ -1,15 +1,15 @@
 ## Running tests
 
-To run tests, run them throught the `dev` hatch environment:
+To run tests with coverage, run the `cov` task through uv:
 
 ```bash
-hatch run dev:cov
+uv run poe cov
 ```
 
 It also support passing arguments as you would do with pytest:
 
 ```bash
-hatch run dev:cov -k test_name
+uv run poe cov -k test_name
 ```
 
 ## Writing tests
