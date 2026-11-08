@@ -5,7 +5,7 @@ browser tab, and `ui.sub_pages` swaps the content column when the path changes. 
 themselves with `@view(...)`; the shell lists them in the sidebar and routes to them.
 
     @shell.view("/reconcile", key="reconcile", title="Reconcile",
-                subtitle="Lock what the bank confirmed", icon="reconcile", order=30)
+                subtitle="Reconcile what the bank confirmed", icon="reconcile", order=30)
     async def reconcile() -> None:
         ...  # rendered inside the content column, under the top bar
 

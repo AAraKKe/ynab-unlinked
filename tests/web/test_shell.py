@@ -61,7 +61,7 @@ async def test_the_sidebar_navigates_between_views(user: User):
 
     user.find(marker="nav-reconcile").click()
 
-    await user.should_see("Lock what the bank confirmed")
+    await user.should_see("Reconcile what the bank confirmed")
     assert user.back_history[-1] == "/reconcile"
 
 

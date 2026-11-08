@@ -1,9 +1,9 @@
-"""Reconcile: compare each account's cleared balance with the bank and lock what it confirmed.
+"""Reconcile: compare each account's cleared balance with the bank, reconcile what it confirmed.
 
-Everything on screen comes from the local store, synced first when it is older than ten
-minutes. The only write to YNAB is `core.reconcile.reconcile`, behind one confirmation, in
-`lock`. What is shown and written is worked out in `data`; this module keeps the selection
-(`groups`) and draws it.
+Everything on screen comes from the local store, synced first every time the view opens. The
+only write to YNAB is `core.reconcile.reconcile`, behind one confirmation, in `lock`. What is
+shown and written is worked out in `data`; this module keeps the selection (`groups`) and
+draws it.
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ class ReconcileView:
         """Sync the budget copy with YNAB before showing it, whatever its age.
 
         A match or a delete made in YNAB minutes ago must not show up as a transaction to
-        lock, and a delta sync is one request. False if the copy was never synced; a failed
+        reconcile, and a delta sync is one request. False if the copy was never synced; a failed
         sync keeps the last one, with a toast.
         """
         current = state()
@@ -146,7 +146,7 @@ class ReconcileView:
             with ui.element("div").classes("yul-grow"):
                 self.title = ui.label().classes("yul-h2").mark("rec-title")
                 ui.label(
-                    "Type the balance your bank shows to check it matches before locking. "
+                    "Type the balance your bank shows to check it matches before reconciling. "
                     "Nothing here changes a balance."
                 ).classes("yul-lede")
             options = {ALL_TIME: "all time"}
@@ -387,7 +387,7 @@ class ReconcileView:
             assert group.count is not None and group.lock_button is not None
             assert group.lock_label is not None and group.done is not None
             group.count.set_text(str(to_lock))
-            group.lock_label.set_text(f"Lock {plural(to_lock, 'transaction')}")
+            group.lock_label.set_text(f"Reconcile {plural(to_lock, 'transaction')}")
             group.lock_button.set_enabled(to_lock > 0 and not self.busy)
             group.lock_button.set_visibility(left)
             group.done.set_visibility(not left)
@@ -416,10 +416,10 @@ class ReconcileView:
                 on_lock_all=lambda: self.lock(self.groups),
             )
 
-    # ---- lock ----------------------------------------------------------------------------
+    # ---- reconcile -----------------------------------------------------------------------
 
     async def lock(self, groups: Sequence[AccountGroup]) -> None:
-        """Lock the rows selected in `groups`, behind one confirmation."""
+        """Reconcile the rows selected in `groups`, behind one confirmation."""
         if self.busy:
             return
         batches = [(group, rows) for group in groups if (rows := group.to_lock())]
@@ -443,11 +443,11 @@ class ReconcileView:
         except Exception as error:
             self.busy = False
             if classify(error).failure is Failure.TIMED_OUT:
-                # The answer was lost, not necessarily the lock: sync to see what YNAB has
+                # The answer was lost, not necessarily the change: sync to see what YNAB has
                 shell.notify(LOCK_TIMED_OUT, "warn")
                 state().invalidate()
             else:
-                shell.notify(f"Nothing was locked. {ynab_error_message(error)}", "error")
+                shell.notify(f"Nothing was reconciled. {ynab_error_message(error)}", "error")
             self.refresh()
             return
 
@@ -479,14 +479,14 @@ class ReconcileView:
         finally:
             self.busy = False
             self.refresh()
-        shell.notify(f"{plural(count, 'transaction')} locked in YNAB")
+        shell.notify(f"{plural(count, 'transaction')} reconciled in YNAB")
 
 
 @shell.view(
     shell.RECONCILE_PATH,
     key="reconcile",
     title="Reconcile",
-    subtitle="Lock what the bank confirmed",
+    subtitle="Reconcile what the bank confirmed",
     icon="reconcile",
     order=30,
 )

@@ -2,7 +2,7 @@
 
 The scope ("since" the last reconciliation, or all time), the unreconciled transactions of the
 open accounts in it, the rows that could explain a difference with the bank, and the words and
-the log entry of a lock. The view (`view`) keeps the selection and draws it.
+the log entry of a reconcile. The view (`view`) keeps the selection and draws it.
 """
 
 from __future__ import annotations
@@ -23,10 +23,10 @@ from ynab_unlinked.web.wording import plural
 SINCE = "since"
 ALL_TIME = "all"
 LOCK_TIMED_OUT = (
-    "YNAB did not answer in time and may have locked them anyway. Checking with YNAB now."
+    "YNAB did not answer in time and may have reconciled them anyway. Checking with YNAB now."
 )
-"""A lock that timed out: YNAB may have applied it before the answer was lost."""
-UNCLEARED_SKIPPED = "Uncleared rows are skipped. Turn on “include uncleared” to lock them too."
+"""A reconcile that timed out: YNAB may have applied it before the answer was lost."""
+UNCLEARED_SKIPPED = "Uncleared rows are skipped. Turn on “include uncleared” to reconcile them too."
 
 
 def scope_start(last_reconciliation: dt.date | None) -> dt.date | None:
@@ -78,7 +78,7 @@ class ReconcileData:
     ) -> list[tuple[StoredAccount, list[StoredTransaction]]]:
         """Unreconciled transactions of open accounts from `since` on, newest first.
 
-        `locked` are the ids locked in this visit: hidden even before a sync catches up.
+        `locked` are the ids reconciled in this visit: hidden even before a sync catches up.
         """
         per_account: dict[str, list[StoredTransaction]] = {}
         for transaction in reversed(self.unreconciled):
@@ -114,11 +114,11 @@ def parse_bank_balance(text: str, currency_format: CurrencyFormat) -> int | None
 
 
 LockBatch = tuple[StoredAccount, Sequence[StoredTransaction]]
-"""One account and the transactions of it to lock."""
+"""One account and the transactions of it to reconcile."""
 
 
 def lock_confirmation(batches: Sequence[LockBatch]) -> tuple[str, list[str], str]:
-    """The confirmation of a lock: its title, what will change, and the action's label."""
+    """The confirmation of a reconcile: its title, what will change, and the action's label."""
     count = sum(len(transactions) for _, transactions in batches)
     lines = [
         f"{account.name} · {plural(len(transactions), 'transaction')}"
@@ -131,12 +131,12 @@ def lock_confirmation(batches: Sequence[LockBatch]) -> tuple[str, list[str], str
     )
     if uncleared:
         lines.append(f"{uncleared} of them {'is' if uncleared == 1 else 'are'} still uncleared")
-    title = f"Lock {plural(count, 'transaction')} in {plural(len(batches), 'account')}?"
-    return title, [*lines, "They are marked reconciled in YNAB."], f"Lock {count}"
+    title = f"Reconcile {plural(count, 'transaction')} in {plural(len(batches), 'account')}?"
+    return title, [*lines, "They are marked reconciled in YNAB."], f"Reconcile {count}"
 
 
 def lock_log(batches: Sequence[LockBatch]) -> tuple[str, dict[str, Any]]:
-    """The activity log message and details of a lock (ARCHITECTURE 3.4)."""
+    """The activity log message and details of a reconcile (ARCHITECTURE 3.4)."""
     count = sum(len(transactions) for _, transactions in batches)
     message = f"Reconciled {plural(count, 'transaction')} in {plural(len(batches), 'account')}"
     details: dict[str, Any] = {
@@ -155,8 +155,8 @@ def lock_checkpoint(
     *,
     include_uncleared: bool,
 ) -> dt.date | None:
-    """The next `last_reconciliation_date` after locking `locked`, `pending` being every row
-    still not reconciled in the scope (the locked ones included or not)."""
+    """The next `last_reconciliation_date` after reconciling `locked`, `pending` being every
+    row still not reconciled in the scope (the reconciled ones included or not)."""
     locking = {transaction.id for transaction in locked}
     return next_reconciliation_date(
         [transaction.date for transaction in locked],

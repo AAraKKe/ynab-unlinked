@@ -133,7 +133,7 @@ async def test_the_header_counts_what_is_left_in_open_accounts(user: User, seed:
     await open_reconcile(user)
 
     await user.should_see("2 accounts · 5 transactions not reconciled")
-    await user.should_see("Lock 3 transactions in 2 accounts")
+    await user.should_see("Reconcile 3 transactions in 2 accounts")
     await user.should_see("uncleared stay untouched")
     await user.should_see("💳 Oro")
     await user.should_not_see("💳 Old card")
@@ -186,15 +186,15 @@ async def test_uncleared_rows_are_only_selectable_with_include_uncleared(user: U
     await user.should_see(marker="row-oro-zara")
 
     user.find(marker="row-oro-zara").click()
-    await user.should_see("Lock 3 transactions in 2 accounts")
+    await user.should_see("Reconcile 3 transactions in 2 accounts")
     await user.should_see("Uncleared rows are skipped", retries=5)
 
     user.find(marker="include-uncleared").click()
-    await user.should_see("Lock 5 transactions in 2 accounts")
+    await user.should_see("Reconcile 5 transactions in 2 accounts")
     await user.should_not_see("uncleared stay untouched")
 
     user.find(marker="row-oro-zara").click()
-    await user.should_see("Lock 4 transactions in 2 accounts")
+    await user.should_see("Reconcile 4 transactions in 2 accounts")
     assert user.find(marker=f"count-{ORO}").elements.pop().text == "2"
 
 
@@ -205,14 +205,17 @@ async def test_lock_all_reconciles_exactly_the_selected_rows(
     await open_reconcile(user)
     user.find(marker=f"toggle-{CHECKING}").click()
     user.find(marker="row-chk-payroll").click()
-    await user.should_see("Lock 2 transactions in 1 account")
+    await user.should_see("Reconcile 2 transactions in 1 account")
 
     user.find(marker="lock-all").click()
-    await user.should_see("Lock 2 transactions in 1 account?", retries=20)
+    await user.should_see("Reconcile 2 transactions in 1 account?", retries=20)
     await user.should_see("💳 Oro · 2 transactions")
+    assert user.find(marker="confirm-action").elements.pop().default_slot.children[-1].text == (
+        "Reconcile 2"
+    )
     user.find(marker="confirm-action").click()
 
-    await user.should_see("2 transactions locked", retries=20)
+    await user.should_see("2 transactions reconciled", retries=20)
     assert updated(ynab_api) == {"oro-mercadona": RECONCILED, "oro-glovo": RECONCILED}
     # Payroll (31 Oct, cleared) was skipped: the next "since" scope must still show it. The
     # uncleared Zara (26 Oct) and gym could not be picked, so they do not hold it back
@@ -225,6 +228,7 @@ async def test_lock_all_reconciles_exactly_the_selected_rows(
             {"count": 2, "accounts": [{"id": str(ORO), "name": "💳 Oro", "count": 2}]},
         )
     ]
+    await user.should_see("2 transactions reconciled in YNAB")
     await user.should_see(marker="see-networth")
     user.find(marker=f"toggle-{ORO}").click()
     await user.should_see(marker="row-oro-glovo")
@@ -238,17 +242,17 @@ async def test_an_uncleared_row_skipped_with_include_uncleared_on_holds_the_chec
     seed()
     await open_reconcile(user)
     user.find(marker="include-uncleared").click()
-    await user.should_see("Lock 5 transactions in 2 accounts")
+    await user.should_see("Reconcile 5 transactions in 2 accounts")
     user.find(marker=f"toggle-{ORO}").click()
     await user.should_see(marker="row-oro-zara")
     user.find(marker="row-oro-zara").click()
-    await user.should_see("Lock 4 transactions in 2 accounts")
+    await user.should_see("Reconcile 4 transactions in 2 accounts")
 
     user.find(marker="lock-all").click()
     await user.should_see(marker="confirm-action", retries=20)
     user.find(marker="confirm-action").click()
 
-    await user.should_see("4 transactions locked", retries=20)
+    await user.should_see("4 transactions reconciled", retries=20)
     assert "oro-zara" not in updated(ynab_api)
     assert LatestConfig.load().last_reconciliation_date == oct_(26)
 
@@ -259,13 +263,13 @@ async def test_locking_everything_moves_the_checkpoint_to_the_latest_locked_date
     seed()
     await open_reconcile(user)
     user.find(marker="include-uncleared").click()
-    await user.should_see("Lock 5 transactions in 2 accounts")
+    await user.should_see("Reconcile 5 transactions in 2 accounts")
 
     user.find(marker="lock-all").click()
     await user.should_see(marker="confirm-action", retries=20)
     user.find(marker="confirm-action").click()
 
-    await user.should_see("5 transactions locked", retries=20)
+    await user.should_see("5 transactions reconciled", retries=20)
     # No grace days taken off: the "since" pill already starts a week before it
     assert LatestConfig.load().last_reconciliation_date == oct_(31)
 
@@ -281,7 +285,7 @@ async def test_the_account_lock_touches_only_that_account(
     await user.should_see("1 of them is still uncleared", retries=20)
     user.find(marker="confirm-action").click()
 
-    await user.should_see("2 transactions locked", retries=20)
+    await user.should_see("2 transactions reconciled", retries=20)
     assert updated(ynab_api) == {"chk-payroll": RECONCILED, "chk-gym": RECONCILED}
     assert user.find(marker=f"count-{ORO}").elements.pop().text == "3"
     await user.should_see(marker="lock-more")
@@ -297,7 +301,7 @@ async def test_cancelling_the_confirmation_changes_nothing(
     await user.should_see(marker="confirm-cancel", retries=20)
     user.find(marker="confirm-cancel").click()
 
-    await user.should_see("Lock 3 transactions in 2 accounts")
+    await user.should_see("Reconcile 3 transactions in 2 accounts")
     ynab_api.api("transactions").update_transactions.assert_not_called()
     assert LatestConfig.load().last_reconciliation_date is None
 
@@ -315,8 +319,8 @@ async def test_a_failed_lock_keeps_everything_as_it_was(
     await user.should_see(marker="confirm-action", retries=20)
     user.find(marker="confirm-action").click()
 
-    await user.should_see("Nothing was locked. YNAB answered 500", retries=20)
-    await user.should_see("Lock 3 transactions in 2 accounts")
+    await user.should_see("Nothing was reconciled. YNAB answered 500", retries=20)
+    await user.should_see("Reconcile 3 transactions in 2 accounts")
     assert LatestConfig.load().last_reconciliation_date is None
     assert Store(store_file).activity(state().require()[0].budget.id, kind="reconcile") == []
 
@@ -338,7 +342,7 @@ async def test_a_lock_that_timed_out_says_ynab_may_have_applied_it_and_syncs_to_
     user.find(marker="confirm-action").click()
 
     await user.should_see(LOCK_TIMED_OUT, retries=20)
-    await user.should_not_see("Nothing was locked")
+    await user.should_not_see("Nothing was reconciled")
     invalidate.assert_called()
 
 
@@ -356,12 +360,12 @@ async def test_a_failed_settings_save_after_the_lock_still_logs_syncs_and_frees_
 
     # YNAB already changed: the view says so, logs it and syncs, and can be used again
     await user.should_see(SAVE_FAILED, retries=20)
-    await user.should_see("3 transactions locked", retries=20)
+    await user.should_see("3 transactions reconciled", retries=20)
     invalidate.assert_called()
     activity = Store(store_file).activity(state().require()[0].budget.id, kind="reconcile")
     assert [a.message for a in activity] == ["Reconciled 3 transactions in 2 accounts"]
     await user.should_see(marker="see-networth")
-    await user.should_not_see("Locking 3 transactions in YNAB…")
+    await user.should_not_see("Reconciling 3 transactions in YNAB…")
 
 
 async def test_the_since_scope_starts_a_week_before_the_last_reconciliation(
