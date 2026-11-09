@@ -58,11 +58,18 @@ async def _open_tab(user: User, tab: str) -> None:
     user.find(marker=f"tab-{tab}").click()
 
 
+async def _open_net_worth(user: User) -> None:
+    """The Net worth tab reads the categories (for the goal) before its last fields: wait for
+    the save button, its end, so a slow runner has drawn everything."""
+    await _open_tab(user, "net-worth")
+    await user.should_see(marker="save-networth", retries=40)
+
+
 async def test_net_worth_saves_the_adjustment_memo_and_a_debt_mapping(
     tracked: LatestConfig, user: User
 ):
-    await _open_tab(user, "net-worth")
-    await user.should_see(marker=f"mapping-{CARD_ID}", retries=20)
+    await _open_net_worth(user)
+    await user.should_see(marker=f"mapping-{CARD_ID}")
     await user.should_see("not netted")
 
     add = user.find(marker=f"map-{CARD_ID}").elements.pop()
@@ -96,8 +103,8 @@ async def test_net_worth_keeps_the_mappings_of_debts_it_does_not_list(
     tracked.debt_mappings = [DebtMapping(debt_account_id=CARD_ID, mapped_to=[CHECKING_ID])]
     tracked.save()
     state().reload()
-    await _open_tab(user, "net-worth")
-    await user.should_see("Count a credit card or a loan in Accounts to map it here.", retries=20)
+    await _open_net_worth(user)
+    await user.should_see("Count a credit card or a loan in Accounts to map it here.")
 
     user.find(marker="save-networth").click()
 
@@ -106,8 +113,8 @@ async def test_net_worth_keeps_the_mappings_of_debts_it_does_not_list(
 
 
 async def test_an_empty_adjustment_payee_is_not_saved(tracked: LatestConfig, user: User):
-    await _open_tab(user, "net-worth")
-    await user.should_see(marker="payee", retries=20)
+    await _open_net_worth(user)
+    await user.should_see(marker="payee")
 
     user.find(marker="payee").clear()
     user.find(marker="save-networth").click()

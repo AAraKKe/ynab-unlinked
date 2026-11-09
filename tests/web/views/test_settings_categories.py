@@ -71,7 +71,7 @@ def categories(config_v4: LatestConfig, ynab_api: YnabClientStub, store_file: Pa
 
 async def open_tab(user: User, slug: str, marker: str) -> None:
     await user.open(f"/settings?tab={slug}")
-    await user.should_see(marker=marker, retries=20)
+    await user.should_see(marker=marker, retries=40)
 
 
 async def test_before_a_sync_the_tab_says_categories_come_with_it(
