@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import inspect
 import uuid
-from unittest.mock import MagicMock
+from typing import Any
+from unittest.mock import DEFAULT, MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
@@ -18,6 +20,7 @@ from tests.cli.commands.apps.reconcile.harness import (
 )
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.cli.choices import Choice
+from ynab_unlinked.cli.commands.apps.reconcile import Reconcile
 from ynab_unlinked.config import LatestConfig
 
 __all__ = ["CHECKING_ID", "CLEARED", "RECONCILED", "SAVINGS_ID", "UNCLEARED"]
@@ -72,7 +75,19 @@ def stored_config(config: str) -> LatestConfig:
 
 @pytest.fixture
 def tui(mocker: MockerFixture) -> TuiStub:
-    return TuiStub(mocker.patch("ynab_unlinked.cli.commands.reconcile.Reconcile", autospec=True))
+    # Not `autospec=True`: specifying every attribute of a Textual app took 80 ms a test.
+    # The command must still build it with the real signature and call real methods.
+    signature = inspect.signature(Reconcile)
+
+    def build(*args: Any, **kwargs: Any) -> Any:
+        signature.bind(*args, **kwargs)
+        return DEFAULT
+
+    app_class = mocker.patch(
+        "ynab_unlinked.cli.commands.reconcile.Reconcile", spec=Reconcile, side_effect=build
+    )
+    app_class.return_value = MagicMock(spec=Reconcile)
+    return TuiStub(app_class)
 
 
 @pytest.fixture

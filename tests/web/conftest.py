@@ -1,3 +1,4 @@
+import gc
 import os
 from collections.abc import AsyncIterator
 
@@ -5,9 +6,8 @@ import httpx
 import pytest
 from nicegui import core, ui
 from nicegui.testing.general import prepare_simulation
-from nicegui.testing.user import User
 
-from tests.helpers.web import BASE_URL, PORT, TOKEN, fresh_nicegui
+from tests.helpers.web import BASE_URL, PORT, TOKEN, User, fresh_nicegui
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.web import app as web_app
 from ynab_unlinked.web import state as web_state
@@ -27,6 +27,11 @@ async def guest(
     # A fresh AppState per test: a sync a previous test left running (views sync a stale
     # store on open) must not leak its error or its task into this one.
     monkeypatch.setattr(web_state, "_state", None)
+    # NiceGUI's reset runs a full `gc.collect()` before and after every test, walking the whole
+    # heap: every library, plus the render caches Textual keeps from the reconcile TUI tests.
+    # What is alive now is not this test's garbage, so freezing it keeps those collections to
+    # what the test creates. They took a third of the suite's time.
+    gc.freeze()
     with fresh_nicegui():
         os.environ["NICEGUI_USER_SIMULATION"] = "true"
         try:

@@ -52,6 +52,9 @@ from ynab_unlinked.web.views.networth.drawer import account_drawer
 from ynab_unlinked.web.views.networth.table import AccountsTable
 from ynab_unlinked.web.wording import plural, short_date
 
+TICK_SECONDS = 1.0
+"""How often the view looks for a sync that landed or a change of palette."""
+
 
 class NetWorthView:
     def __init__(self) -> None:
@@ -99,7 +102,7 @@ class NetWorthView:
 
     async def render(self) -> None:
         with self.root:
-            ui.timer(1.0, self.tick)
+            ui.timer(TICK_SECONDS, self.tick)
         await self.refresh()
 
     async def tick(self) -> None:

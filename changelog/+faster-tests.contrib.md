@@ -1,0 +1,1 @@
+The test suite runs about five times faster: the web tests check the page every 5 ms instead of every 100 ms and no longer walk the whole heap on every garbage collection NiceGUI forces, the reconcile TUI tests run without animations, and no test waits for a real one second timer.

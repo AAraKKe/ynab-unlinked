@@ -5,6 +5,8 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
+from nicegui import ui
+from nicegui.testing import User as NiceGUIUser
 from nicegui.testing.general import nicegui_reset_globals
 from pytest_mock import MockerFixture
 
@@ -35,14 +37,62 @@ def fresh_nicegui() -> Iterator[None]:
         sys.modules.update(ours)
 
 
+POLL_SECONDS = 0.005
+"""How often the helpers below look again. Handlers run off the loop finish in a few ms."""
+
+
+async def _poll(check: Callable[[], bool], seconds: float) -> None:
+    """Return once `check` passes or about `seconds` went by.
+
+    Counts sleeps instead of reading a clock: `today` freezes `time.monotonic`.
+    """
+    for _ in range(round(seconds / POLL_SECONDS)):
+        if check():
+            return
+        await asyncio.sleep(POLL_SECONDS)
+
+
 async def eventually(check: Callable[[], bool]) -> None:
     """Wait for a background handler (a click that reads the store or saves) to finish."""
     # Up to 10 s: a busy CI runner can take seconds to run a handler off the loop
-    for _ in range(500):
-        if check():
-            return
-        await asyncio.sleep(0.02)
+    await _poll(check, 10)
     assert check()
+
+
+class User(NiceGUIUser):
+    """NiceGUI's simulated user, looking at the page every 5 ms instead of every 100 ms.
+
+    NiceGUI checks `retries` times, 100 ms apart (50 ms for `should_not_see`), so whatever
+    shows up after a handler that ran off the loop cost a full 100 ms per check, most of the
+    web tests' time. The wait before failing stays the same.
+    """
+
+    async def should_see(
+        self,
+        target: str | type[ui.element] | None = None,
+        *,
+        kind: type[ui.element] | None = None,
+        marker: str | list[str] | None = None,
+        content: str | list[str] | None = None,
+        retries: int = 3,
+    ) -> None:
+        await _poll(lambda: self._sees(target, kind, marker, content), retries * 0.1)
+        # One last look that passes, or fails with NiceGUI's own message
+        await super().should_see(target, kind=kind, marker=marker, content=content, retries=1)  # type: ignore[call-overload]
+
+    async def should_not_see(
+        self,
+        target: str | type[ui.element] | None = None,
+        *,
+        kind: type[ui.element] | None = None,
+        marker: str | list[str] | None = None,
+        content: str | list[str] | None = None,
+        retries: int = 3,
+    ) -> None:
+        await _poll(lambda: not self._sees(target, kind, marker, content), retries * 0.05)
+        await super().should_not_see(  # type: ignore[call-overload]
+            target, kind=kind, marker=marker, content=content, retries=1
+        )
 
 
 def record_threads(mocker: MockerFixture, owner: type, method: str) -> list[str]:
