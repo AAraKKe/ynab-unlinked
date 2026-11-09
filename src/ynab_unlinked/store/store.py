@@ -11,7 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from urllib3.exceptions import HTTPError
-from ynab import Account, ApiException, TransactionClearedStatus, TransactionDetail
+from ynab import (
+    Account,
+    ApiException,
+    CategoryGroupWithCategories,
+    TransactionClearedStatus,
+    TransactionDetail,
+)
 
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 from ynab_unlinked.store import migrations
@@ -24,7 +30,17 @@ STALE_KNOWLEDGE_STATUS = 409
 
 
 _UNRECONCILED = (TransactionClearedStatus.CLEARED, TransactionClearedStatus.UNCLEARED)
-_BUDGET_TABLES = ("transactions", "accounts", "sync_state", "ghost_checks")
+_BUDGET_TABLES = (
+    "transactions",
+    "subtransactions",
+    "accounts",
+    "categories",
+    "sync_state",
+    "ghost_checks",
+)
+
+STARTING_BALANCE_PAYEE = "Starting Balance"
+"""The payee YNAB gives the first transaction of every account."""
 
 # YNAB allows 200 requests an hour: the ghost repair leaves most of them to the import
 GHOST_CHECKS_PER_SYNC = 50
@@ -53,6 +69,7 @@ class StoredTransaction:
     transfer_account_id: str | None
     matched_transaction_id: str | None = None
     """The transaction YNAB matched this one with; the other row is merged away."""
+    category_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -68,11 +85,48 @@ class StoredAccount:
 
 
 @dataclass(frozen=True)
+class StoredCategory:
+    id: str
+    name: str
+    group_id: str
+    group_name: str
+    hidden: bool
+    internal: bool
+    """YNAB's own categories (Inflow: Ready to Assign, Uncategorized), not the user's."""
+    balance: int
+    """Available this month, milliunits."""
+    goal_type: str | None = None
+    """YNAB's target type: TB, TBD (a balance to reach), MF, NEED, DEBT."""
+    goal_target: int | None = None
+    goal_target_date: dt.date | None = None
+    note: str | None = None
+
+
+@dataclass(frozen=True)
+class Line:
+    """One line of money in an account: a transaction, or one line of a split transaction.
+
+    The lines of a split replace it, so the amounts of an account's lines add up to its
+    balance like its transactions do.
+    """
+
+    transaction_id: str
+    account_id: str
+    date: dt.date
+    amount: int
+    payee_name: str | None
+    category_id: str | None
+    category_name: str | None
+    transfer_account_id: str | None
+
+
+@dataclass(frozen=True)
 class SyncResult:
     full: bool
     transactions_changed: int
     accounts: int
     server_knowledge: int
+    categories: int = 0
     ghosts_removed: int = 0
     """Rows YNAB merged away without a tombstone, flagged deleted by the ghost repair."""
 
@@ -341,10 +395,16 @@ class Store:
         accounts = [account for account in client.accounts(budget_id) if not account.deleted]
         progress.done(f"{len(accounts)} accounts received")
 
+        progress.start("Fetching categories from YNAB")
+        groups = client.categories(budget_id)
+        categories = sum(len(group.categories) for group in groups if not group.deleted)
+        progress.done(f"{categories} categories received")
+
         progress.start("Saving to the local store")
         with self._connect() as conn:
             self._upsert_transactions(conn, budget_id, transactions)
             self._replace_accounts(conn, budget_id, accounts)
+            self._replace_categories(conn, budget_id, groups)
             # With two app runs on one file, an older delta can be written last: never let
             # the knowledge go back
             conn.execute(
@@ -361,6 +421,7 @@ class Store:
             transactions_changed=len(transactions),
             accounts=len(accounts),
             server_knowledge=new_knowledge,
+            categories=categories,
         )
         return result, {t.id for t in transactions}
 
@@ -378,8 +439,8 @@ class Store:
         conn.executemany(
             "INSERT OR REPLACE INTO transactions (budget_id, id, account_id, date, amount, "
             "cleared, approved, deleted, payee_name, category_name, import_id, memo, "
-            "transfer_account_id, matched_transaction_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "transfer_account_id, matched_transaction_id, category_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     budget_id,
@@ -396,8 +457,73 @@ class Store:
                     t.memo,
                     None if t.transfer_account_id is None else str(t.transfer_account_id),
                     None if t.matched_transaction_id is None else str(t.matched_transaction_id),
+                    _text(t.category_id),
                 )
                 for t in transactions
+            ],
+        )
+        # A changed split comes back whole, so its lines are replaced, never merged
+        conn.executemany(
+            "DELETE FROM subtransactions WHERE budget_id = ? AND transaction_id = ?",
+            [(budget_id, t.id) for t in transactions],
+        )
+        conn.executemany(
+            "INSERT OR REPLACE INTO subtransactions (budget_id, id, transaction_id, amount, "
+            "memo, payee_name, category_id, category_name, transfer_account_id, deleted) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    budget_id,
+                    sub.id,
+                    t.id,
+                    sub.amount,
+                    sub.memo,
+                    sub.payee_name,
+                    _text(sub.category_id),
+                    sub.category_name,
+                    _text(sub.transfer_account_id),
+                    sub.deleted,
+                )
+                for t in transactions
+                for sub in t.subtransactions
+            ],
+        )
+
+    @staticmethod
+    def _replace_categories(
+        conn: sqlite3.Connection, budget_id: str, groups: Sequence[CategoryGroupWithCategories]
+    ) -> None:
+        conn.execute("DELETE FROM categories WHERE budget_id = ?", (budget_id,))
+        live = [
+            (group, category)
+            for group in groups
+            if not group.deleted
+            for category in group.categories
+            if not category.deleted
+        ]
+        conn.executemany(
+            "INSERT INTO categories (budget_id, id, name, group_id, group_name, position, "
+            "hidden, internal, balance, goal_type, goal_target, goal_target_date, note) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    budget_id,
+                    str(category.id),
+                    category.name,
+                    str(group.id),
+                    group.name,
+                    position,
+                    category.hidden or group.hidden,
+                    category.internal or group.internal,
+                    category.balance,
+                    category.goal_type,
+                    category.goal_target,
+                    None
+                    if category.goal_target_date is None
+                    else category.goal_target_date.isoformat(),
+                    category.note,
+                )
+                for position, (group, category) in enumerate(live)
             ],
         )
 
@@ -449,6 +575,80 @@ class Store:
                 balance=row["balance"],
                 cleared_balance=row["cleared_balance"],
                 uncleared_balance=row["uncleared_balance"],
+            )
+            for row in rows
+        ]
+
+    def categories(self, budget_id: str) -> list[StoredCategory]:
+        """Every category of the budget, hidden and internal ones included, in YNAB's order."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM categories WHERE budget_id = ? ORDER BY position", (budget_id,)
+            ).fetchall()
+        return [
+            StoredCategory(
+                id=row["id"],
+                name=row["name"],
+                group_id=row["group_id"],
+                group_name=row["group_name"],
+                hidden=bool(row["hidden"]),
+                internal=bool(row["internal"]),
+                balance=row["balance"],
+                goal_type=row["goal_type"],
+                goal_target=row["goal_target"],
+                goal_target_date=None
+                if row["goal_target_date"] is None
+                else dt.date.fromisoformat(row["goal_target_date"]),
+                note=row["note"],
+            )
+            for row in rows
+        ]
+
+    def lines(
+        self,
+        budget_id: str,
+        *,
+        since: dt.date | None = None,
+        until: dt.date | None = None,
+    ) -> list[Line]:
+        """The lines of every non deleted transaction, oldest first; `since`/`until` inclusive.
+
+        A split transaction is replaced by its lines, which take its date and account (and its
+        payee when they name none). A transaction is one line.
+        """
+        dates = ""
+        params: list[str] = []
+        if since is not None:
+            dates += " AND t.date >= ?"
+            params.append(since.isoformat())
+        if until is not None:
+            dates += " AND t.date <= ?"
+            params.append(until.isoformat())
+        query = (
+            "SELECT t.id AS transaction_id, t.account_id, t.date, t.amount, t.payee_name, "
+            "t.category_id, t.category_name, t.transfer_account_id FROM transactions t "
+            f"WHERE t.budget_id = ? AND t.deleted = 0{dates} AND NOT EXISTS ("
+            "  SELECT 1 FROM subtransactions s WHERE s.budget_id = t.budget_id"
+            "  AND s.transaction_id = t.id AND s.deleted = 0) "
+            "UNION ALL "
+            "SELECT t.id, t.account_id, t.date, s.amount, COALESCE(s.payee_name, t.payee_name), "
+            "s.category_id, s.category_name, s.transfer_account_id FROM subtransactions s "
+            "JOIN transactions t ON t.budget_id = s.budget_id AND t.id = s.transaction_id "
+            f"WHERE t.budget_id = ? AND t.deleted = 0 AND s.deleted = 0{dates} "
+            "ORDER BY date, transaction_id"
+        )
+        with self._connect() as conn:
+            rows = conn.execute(query, [budget_id, *params, budget_id, *params]).fetchall()
+        return [
+            Line(
+                transaction_id=row["transaction_id"],
+                account_id=row["account_id"],
+                date=dt.date.fromisoformat(row["date"]),
+                amount=row["amount"],
+                payee_name=row["payee_name"],
+                category_id=row["category_id"],
+                category_name=row["category_name"],
+                transfer_account_id=row["transfer_account_id"],
             )
             for row in rows
         ]
@@ -696,6 +896,11 @@ class Store:
         ]
 
 
+def _text(value: object | None) -> str | None:
+    """An id of the SDK (a UUID) as the store keeps it."""
+    return None if value is None else str(value)
+
+
 def _stored_transaction(row: sqlite3.Row) -> StoredTransaction:
     return StoredTransaction(
         id=row["id"],
@@ -711,4 +916,5 @@ def _stored_transaction(row: sqlite3.Row) -> StoredTransaction:
         memo=row["memo"],
         transfer_account_id=row["transfer_account_id"],
         matched_transaction_id=row["matched_transaction_id"],
+        category_id=row["category_id"],
     )

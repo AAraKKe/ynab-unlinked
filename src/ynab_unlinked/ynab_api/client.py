@@ -8,6 +8,8 @@ from ynab import (
     AccountsApi,
     ApiClient,
     ApiException,
+    CategoriesApi,
+    CategoryGroupWithCategories,
     Configuration,
     NewTransaction,
     PatchTransactionsWrapper,
@@ -71,11 +73,12 @@ class _TimedApiClient(ApiClient):
 class ApisType(TypedDict):
     budget: type[PlansApi]
     accounts: type[AccountsApi]
+    categories: type[CategoriesApi]
     transactions: type[TransactionsApi]
 
 
-SupportedApisType = PlansApi | AccountsApi | TransactionsApi
-SupportedApisNames = Literal["budget", "accounts", "transactions"]
+SupportedApisType = PlansApi | AccountsApi | CategoriesApi | TransactionsApi
+SupportedApisNames = Literal["budget", "accounts", "categories", "transactions"]
 
 
 class BalanceAdjustment(Protocol):
@@ -95,6 +98,7 @@ class Client:
         self._apis: ApisType = {
             "budget": PlansApi,
             "accounts": AccountsApi,
+            "categories": CategoriesApi,
             "transactions": TransactionsApi,
         }
 
@@ -103,6 +107,9 @@ class Client:
 
     @overload
     def api(self, api_name: Literal["accounts"]) -> AccountsApi: ...
+
+    @overload
+    def api(self, api_name: Literal["categories"]) -> CategoriesApi: ...
 
     @overload
     def api(self, api_name: Literal["transactions"]) -> TransactionsApi: ...
@@ -127,6 +134,16 @@ class Client:
         api = self.api("accounts")
         response = api.get_accounts(budget_id)
         return response.data.accounts
+
+    def categories(self, budget_id: str) -> list[CategoryGroupWithCategories]:
+        """Every category group of the budget with its categories, in the budget's order.
+
+        Balances are those of the current month. Deleted groups and categories are only sent
+        by delta requests, so none come back here.
+        """
+        api = self.api("categories")
+        response = api.get_categories(budget_id)
+        return response.data.category_groups
 
     def transactions(
         self,

@@ -38,8 +38,8 @@ def upsert(
         conn.executemany(
             "INSERT OR REPLACE INTO transactions (budget_id, id, account_id, date, amount, "
             "cleared, approved, deleted, payee_name, category_name, import_id, memo, "
-            "transfer_account_id, matched_transaction_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "transfer_account_id, matched_transaction_id, category_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     budget_id,
@@ -56,6 +56,7 @@ def upsert(
                     t.memo,
                     t.transfer_account_id,
                     t.matched_transaction_id,
+                    t.category_id,
                 )
                 for t in transactions
             ],
