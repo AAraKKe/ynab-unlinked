@@ -305,5 +305,96 @@ def volatility_options(
     }
 
 
+DRAWER_HEIGHT = 200
+
+
+def category_months_options(
+    months: Sequence[str],
+    spent: Sequence[int],
+    palette: Palette,
+    currency_format: CurrencyFormat,
+    mean: float,
+) -> dict[str, Any]:
+    """One category's spending each month (`YYYY-MM` keys), its average dashed."""
+    return {
+        "animationDuration": 400,
+        "textStyle": {"fontFamily": "Inter, system-ui, sans-serif"},
+        "grid": {"left": 4, "right": 8, "top": 16, "bottom": 4, "containLabel": True},
+        "tooltip": {
+            **_tooltip(palette),
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow", "shadowStyle": {"color": palette.hair}},
+            ":formatter": (
+                "(params) => { const p = Array.isArray(params) ? params[0] : params;"
+                f" return ({MONTH_JS})(p.name, 1, true) + ': ' + ({money_js(currency_format)})(p.value); }}"
+            ),
+        },
+        "xAxis": _month_axis(palette, months),
+        "yAxis": _value_axis(palette, compact_js(currency_format)),
+        "series": [
+            {
+                "type": "bar",
+                "name": "Spent",
+                "color": palette.series[INCOME_SLOT],
+                "barMaxWidth": 16,
+                "itemStyle": {"borderRadius": [3, 3, 0, 0]},
+                "emphasis": {"disabled": True},
+                "data": [value / 1000 for value in spent],
+                "markLine": {
+                    "silent": True,
+                    "symbol": "none",
+                    "label": {"show": False},
+                    "lineStyle": {"color": palette.text_2, "type": "dashed", "width": 1},
+                    "data": [{"yAxis": round(mean / 1000, 2)}],
+                },
+            }
+        ],
+    }
+
+
+def histogram_options(
+    bins: Sequence[tuple[int, int, int]], palette: Palette, currency_format: CurrencyFormat
+) -> dict[str, Any]:
+    """How many months fell in each slice (low, high, months) of a category's monthly amounts."""
+    keys = [f"{low / 1000}|{high / 1000}" for low, high, _ in bins]
+    slice_js = (
+        f"(value) => {{ const [low, high] = String(value).split('|').map(Number);"
+        f" const c = {compact_js(currency_format)}; return c(low) + '–' + c(high); }}"
+    )
+    return {
+        "animationDuration": 400,
+        "textStyle": {"fontFamily": "Inter, system-ui, sans-serif"},
+        "grid": {"left": 4, "right": 8, "top": 16, "bottom": 4, "containLabel": True},
+        "tooltip": {
+            **_tooltip(palette),
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow", "shadowStyle": {"color": palette.hair}},
+            ":formatter": (
+                "(params) => { const p = Array.isArray(params) ? params[0] : params;"
+                f" return ({slice_js})(p.name) + ': ' + p.value + (p.value === 1 ? ' month' : ' months'); }}"
+            ),
+        },
+        "xAxis": {
+            "type": "category",
+            "data": keys,
+            "axisLine": {"show": False},
+            "axisTick": {"show": False},
+            "axisLabel": {**_axis_label(palette), "interval": 0, ":formatter": slice_js},
+        },
+        "yAxis": {**_value_axis(palette, "(v) => v"), "minInterval": 1},
+        "series": [
+            {
+                "type": "bar",
+                "name": "Months",
+                "color": palette.series[4],
+                "barCategoryGap": "8%",
+                "itemStyle": {"borderRadius": [3, 3, 0, 0]},
+                "emphasis": {"disabled": True},
+                "data": [months for _, _, months in bins],
+            }
+        ],
+    }
+
+
 def chart(options: dict[str, Any], height: int) -> ui.echart:
     return ui.echart(options, renderer="svg").style(f"height:{height}px;width:100%")

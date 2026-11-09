@@ -201,3 +201,72 @@ def test_a_sparkline_spans_its_box():
     points = spending.spark([0, 5, 10])
 
     assert points.split() == ["0.0,20.0", "36.0,11.0", "72.0,2.0"]
+
+
+async def test_a_group_filters_the_table_and_lists_all_of_it(synced: Store, no_sync, user: User):
+    await user.open("/spending")
+    await user.should_see(marker="sp-categories", retries=20)
+
+    user.find(marker="filter-group-Everyday").click()
+
+    await user.should_not_see(marker=f"category-{RENT}", retries=20)
+    await user.should_see(marker=f"category-{GROCERIES}")
+    await user.should_see(marker=f"category-{TRIP}")
+
+
+async def test_a_word_of_the_legend_filters_and_shows_again(synced: Store, no_sync, user: User):
+    await user.open("/spending")
+    await user.should_see(marker="sp-legend", retries=20)
+
+    user.find(marker="word-steady").click()
+
+    await user.should_not_see(marker=f"category-{TRIP}", retries=20)
+    await user.should_see(marker=f"category-{RENT}")
+    user.find(marker="sp-word-clear").click()
+    await user.should_see(marker=f"category-{TRIP}", retries=20)
+
+
+async def test_a_row_opens_the_months_of_its_category(synced: Store, no_sync, user: User):
+    await user.open("/spending")
+    await user.should_see(marker="sp-categories", retries=20)
+
+    user.find(marker=f"category-{RENT}").click()
+
+    await user.should_see(marker="category-drawer", retries=20)
+    assert "Months it spent in 11 of 11" in texts(user, "drawer-stats")
+    months = user.find(marker="drawer-months").elements.pop()
+    assert months.options["series"][0]["data"] == [1_000.0] * 11
+
+
+async def test_a_dot_of_the_chart_opens_its_category(synced: Store, no_sync, user: User):
+    await user.open("/spending")
+    await user.should_see(marker="sp-scatter", retries=20)
+    chart = user.find(marker="sp-scatter")
+    dots = chart.elements.copy().pop().options["series"][0]["data"]
+    vacation = [dot["label"]["formatter"] for dot in dots].index("🏝 Vacation")
+
+    chart.trigger("componentClick", {"componentType": "series", "dataIndex": vacation})
+
+    await user.should_see(marker="category-drawer", retries=20)
+    assert texts(user, "category-drawer").startswith("🏝 Vacation Everyday")
+
+
+def test_a_histogram_counts_months_in_equal_slices():
+    bins = spending.histogram([0, 100, 100, 600], bins=3)
+
+    assert [(b.low, b.high, b.months) for b in bins] == [(0, 200, 3), (200, 400, 0), (400, 600, 1)]
+
+
+def test_a_group_mix_splits_its_spending_by_how_it_moves():
+    trends = [
+        CategoryTrend("a", "A", "Bills", (300,) * 6, Volatility(300, 0.1, "steady", 6)),
+        CategoryTrend("b", "B", "Bills", (100,) * 6, Volatility(100, 1.0, "spiky", 6)),
+        CategoryTrend("c", "C", "Fun", (50,) * 6, Volatility(50, None, None, 1)),
+    ]
+    page = CashFlow(dt.date(2026, 1, 1), dt.date(2026, 6, 30), (), tuple(trends))
+
+    assert [(p.label, p.share) for p in spending.group_mix(page, "Bills")] == [
+        ("steady", 0.75),
+        ("spiky", 0.25),
+    ]
+    assert [p.label for p in spending.group_mix(page, "Fun")] == ["unrated"]

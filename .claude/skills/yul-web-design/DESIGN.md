@@ -234,13 +234,29 @@ asks for a longer range.
   average dashed with "average 60.2%". "Came in from": the top six payees of the range as
   bars.
 - **Spending**: three tiles (Spending a month, Core, One-offs), then side by side "By group"
-  (bars: a month · share) and "Steady or swingy?" (one dot per category: average a month
-  across on a log scale, how much it moves up; the six largest named, overlapping names
-  hidden; a faint line: top right is big and swingy, bottom right the fixed costs). Then
-  "Categories", most spent first, twenty then "Show all N": name, a month, share, a
-  sparkline of its months (series 1) and how it moves as a pill with its number: "● steady"
-  (ok), "◐ variable" (plain), "▲ spiky" (warn), "◆ lumpy" (accent), or "not enough months".
-  A faint paragraph explains the four words.
+  and "Steady or swingy?".
+  - **By group**: a key of the four words' colours, then one row per group: its bar (a
+    month · share) and under it a thin split of its spending by how its categories move
+    (steady in good, variable in text-2, spiky in warn, lumpy in accent-2, not enough months
+    in border-2; each part titled with its share). A click on a group filters by it, again
+    from the filter pills.
+  - **Steady or swingy?**: one dot per category (of the filters): average a month across on
+    a log scale, how much it moves up; the six largest named, overlapping names hidden; a
+    faint line: top right is big and swingy, bottom right the fixed costs. A click on a dot
+    opens the category drawer.
+  - **How it moves**: a card with the four words as tiles, each its pill and a sentence with
+    examples and its threshold ("Moves under 25%."); a click shows only that kind (the tile
+    accent bordered), again shows every kind. A faint line says how the number is worked out.
+  - **Categories**: group filter pills (All groups, then each group), and "Only ▲ spiky · ×
+    Every kind" when a word filters. Most spent first, twenty then "Show all N" unless a
+    filter is on (then every match). Each row: name, a month, share, a sparkline (series 1)
+    and the word as a pill with its number, or "not enough months"; a click opens the drawer.
+  - **Category drawer** (the account drawer's dialog): the name, its group and the complete
+    months, "290.91€ a month", the word with "moves 122%" and its sentence; "Each month"
+    (bars, series 1, its average dashed); "How the months spread" (a histogram of its monthly
+    amounts in six slices from its first month of spending to its last, series 5); "The
+    numbers" (average first to last month, median, lowest, highest, spread, months it spent
+    in, as a key value grid).
 
 ### Settings
 

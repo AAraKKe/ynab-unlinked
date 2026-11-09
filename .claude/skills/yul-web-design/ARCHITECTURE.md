@@ -777,8 +777,9 @@ web/
                        stacked bars, net line, a transparent column per month for clicks
                        bridge_options(steps, labels, palette, currency_format) / bridge_chart:
                        the period panel's waterfall
-    cashflow_chart.py  income_spending_options, rate_options, volatility_options, chart():
-                       the charts of Cash flow and Spending
+    cashflow_chart.py  income_spending_options, rate_options, volatility_options,
+                       category_months_options, histogram_options, chart(): the charts of
+                       Cash flow and Spending
     category_picker.py category_picker(groups, on_pick, *, label, marker): a button opening
                        a menu of groups and categories with a search field on top
   views/
@@ -810,9 +811,12 @@ web/
                        runway_text, spending_hint, complete_note
       view.py          CashFlowView and the view
     spending/          /spending    tiles, by group, steady or swingy, categories
-      data.py          DEFAULT_RANGE, SHOWN, WORDS (Word: text, pill kind, hint), load, word,
-                       spark, share
-      view.py          SpendingView and the view
+      data.py          DEFAULT_RANGE, SHOWN, WORDS (Word: text, pill kind, hint), ORDER,
+                       UNRATED, load, word, spark, share, matches, filtered, MixPart,
+                       group_mix, plotted (the chart's dots, in order), Bin, histogram, Stats,
+                       stats
+      view.py          SpendingView (filters, legend, clicks) and the view
+      drawer.py        category_drawer(trend, flow, *, palette, currency_format, formatter)
     reconcile/         /reconcile   per account cleared vs bank balance, reconcile (2.3)
       data.py          scope_start, gap_candidates, ReconcileData (read,
                        open_transactions, has_anything), LOCK_TIMED_OUT, UNCLEARED_SKIPPED,
@@ -1111,8 +1115,13 @@ account id), so a re-render after a sync keeps it.
 
 Cash flow: `range-{key}`, `cf-income`, `cf-spending`, `cf-rate`, `cf-runway`, `cf-chart`,
 `cf-rate-chart`, `cf-sources`, `cf-empty`. Spending: `range-{key}`, `sp-total`, `sp-core`,
-`sp-one-offs`, `sp-groups`, `group-{name}`, `sp-scatter`, `sp-categories`,
-`category-{category_id}` (`category-none` for uncategorized), `sp-show-all`, `sp-empty`.
+`sp-one-offs`, `sp-groups`, `sp-mix-key`, `group-{name}` (a click filters), `mix-{name}`,
+`sp-scatter` (its `componentClick` by `dataIndex` opens a category), `sp-legend`,
+`word-{steady|variable|spiky|lumpy}` (a click filters), `sp-group-filter`
+(`filter-group-{name}`, `filter-group-__all__`), `sp-word-clear`, `sp-categories`,
+`category-{category_id}` (`category-none` for uncategorized; a click opens the drawer),
+`sp-no-match`, `sp-show-all`, `sp-empty`. Category drawer: `category-drawer`, `drawer-word`,
+`drawer-months`, `drawer-histogram`, `drawer-stats`.
 Sidebar: `nav-group-finances` above `nav-networth`, `nav-cashflow`, `nav-spending`.
 
 #### Onboarding
