@@ -89,6 +89,8 @@ class PeriodTabs:
     def _draw_panel(self) -> None:
         if self.panel is None or self.panel.is_deleted or self.snapshot is None:
             return
+        if self.palette is None:
+            return
         shown = self.month if self.month is not None else self.period
         if shown is None:
             return
@@ -99,6 +101,7 @@ class PeriodTabs:
                 words.account_names(self.snapshot),
                 self._closed(),
                 state().require_formatter(),
+                self.palette,
                 selected=self.month is not None,
                 on_clear=self.clear,
             )
@@ -116,6 +119,7 @@ class PeriodTabs:
     def restyle(self, palette: Palette) -> None:
         self.palette = palette
         self._restyle_chart()
+        self._draw_panel()
 
     async def pick(self, index: int) -> None:
         """A click on a month: show it, or the whole range again when it was the one shown."""

@@ -736,6 +736,8 @@ web/
     flow_chart.py      months_options(months, palette, currency_format, selected=None),
                        months_chart(..., on_pick(index), selected=None): Net worth › Months'
                        stacked bars, net line, a transparent column per month for clicks
+                       bridge_options(steps, labels, palette, currency_format) / bridge_chart:
+                       the period panel's waterfall
     category_picker.py category_picker(groups, on_pick, *, label, marker): a button opening
                        a menu of groups and categories with a search field on top
   views/

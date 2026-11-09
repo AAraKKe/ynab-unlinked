@@ -23,7 +23,7 @@ from ynab_unlinked.core.finance import AccountMove, Flows, Period
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store
 from ynab_unlinked.web import theme
-from ynab_unlinked.web.components.flow_chart import months_options
+from ynab_unlinked.web.components.flow_chart import bridge_options, months_options
 from ynab_unlinked.web.state import AppState
 from ynab_unlinked.web.theme import palette_for
 from ynab_unlinked.web.views.networth import flows
@@ -318,3 +318,45 @@ def test_only_the_two_ends_of_a_month_bar_are_rounded():
     # May: saved goes up, assets down, each with its own end
     assert saved[1]["itemStyle"]["borderRadius"] == [3, 3, 0, 0]
     assert assets[1]["itemStyle"]["borderRadius"] == [0, 0, 3, 3]
+
+
+def test_the_waterfall_starts_each_step_where_the_last_one_ended_and_the_net_at_zero():
+    steps = [
+        (step.label, step.amount, step.kind)
+        for step in flows.bridge(Flows(income=3_000_000, spending=-1_000_000, assets=-400_000))
+    ]
+
+    options = bridge_options(
+        steps,
+        ["a", "b", "c", "d"],
+        palette_for(theme.DEFAULT_THEME, True),
+        FORMATTER.currency_format,
+    )
+
+    assert [point["value"][1:] for point in options["series"][0]["data"]] == [
+        [0, 3_000],
+        [3_000, 2_000],
+        [2_000, 1_600],
+        [0, 1_600],
+    ]
+
+
+def test_spending_larger_than_income_takes_the_waterfall_below_zero():
+    steps = [
+        (step.label, step.amount, step.kind)
+        for step in flows.bridge(Flows(income=4_600_000, spending=-11_100_000, assets=200_000))
+    ]
+
+    options = bridge_options(
+        steps,
+        ["a", "b", "c", "d"],
+        palette_for(theme.DEFAULT_THEME, True),
+        FORMATTER.currency_format,
+    )
+
+    assert [point["value"][1:] for point in options["series"][0]["data"]] == [
+        [0, 4_600],
+        [4_600, -6_500],
+        [-6_500, -6_300],
+        [0, -6_300],
+    ]

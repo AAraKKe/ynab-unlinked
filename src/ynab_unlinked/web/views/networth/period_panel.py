@@ -1,7 +1,7 @@
 """The panel under the Months chart: where the change of the selected month, or of the whole
 range when no month is selected, came from.
 
-A sentence, the bridge from income to the net change, the accounts that moved most and why,
+A sentence, the waterfall from income to the net change, the accounts that moved most and why,
 and where the money came in from and went to.
 """
 
@@ -15,6 +15,9 @@ from nicegui import ui
 from ynab_unlinked.core.finance import Period
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.web.components import button, closed_pill
+from ynab_unlinked.web.components.flow_chart import bridge_chart
+from ynab_unlinked.web.state import state
+from ynab_unlinked.web.theme import Palette
 from ynab_unlinked.web.views.networth import flows as words
 from ynab_unlinked.web.views.networth.data import signed
 
@@ -30,6 +33,7 @@ def period_panel(
     names: dict[str, str],
     closed: Collection[str],
     formatter: Formatter,
+    palette: Palette,
     *,
     selected: bool,
     on_clear: Callable[[], Any],
@@ -59,7 +63,7 @@ def period_panel(
         with ui.element("div").classes("yul-nwp-cols"):
             with ui.element("div"):
                 ui.label("Where the change came from").classes("yul-section")
-                _bridge(period, formatter)
+                _bridge(period, formatter, palette)
                 ui.label("Accounts that moved most").classes("yul-section")
                 moves = words.moved(period)
                 if not moves:
@@ -101,33 +105,24 @@ def _amounts(title: str, rows: list[tuple[str, int]], formatter: Formatter, *, m
                 ui.label(formatter.format_amount_milli(amount)).classes("yul-num")
 
 
-def _bridge(period: Period, formatter: Formatter) -> None:
-    """Floating bars from zero: each step starts where the one before it ended."""
+def _bridge(period: Period, formatter: Formatter, palette: Palette) -> None:
+    """The waterfall from income to the net change, and its values as text for screen
+    readers."""
+    config, _ = state().require()
     steps = words.bridge(period.flows)
-    running, ends = 0, [0]
-    for step in steps[:-1]:
-        running += step.amount
-        ends.append(running)
-    low, high = min(*ends, 0), max(*ends, 0)
-    span = (high - low) or 1
-
-    def left(value: int) -> float:
-        return (value - low) / span * 100
-
-    with ui.element("div").classes("yul-nwp-bridge").mark("bridge"):
-        running = 0
-        for step in steps:
-            start, end = (
-                (0, step.amount) if step.kind == "net" else (running, running + step.amount)
-            )
-            if step.kind != "net":
-                running = end
-            ui.label(step.label).classes("yul-nwp-step" + (" net" if step.kind == "net" else ""))
-            with ui.element("div").classes("yul-nwp-track"):
-                width = max(abs(end - start) / span * 100, 0.8)
-                ui.element("i").classes(f"yul-nwp-bar {step.kind}").style(
-                    f"left:{left(min(start, end)):.2f}%;width:{width:.2f}%"
+    values = [signed(formatter, step.amount) for step in steps]
+    bridge_chart(
+        [(step.label, step.amount, step.kind) for step in steps],
+        values,
+        palette,
+        config.budget.currency_format,
+    ).mark("bridge")
+    with ui.element("div").classes("yul-nwp-steps"):
+        for step, value in zip(steps, values, strict=True):
+            with ui.element("span").classes(
+                "yul-nwp-step" + (" net" if step.kind == "net" else "")
+            ):
+                ui.label(step.label)
+                ui.label(value).classes("yul-num " + _TONES.get(step.kind, "")).mark(
+                    f"step-{step.kind}"
                 )
-            ui.label(signed(formatter, step.amount)).classes(
-                "yul-num yul-small " + _TONES.get(step.kind, "")
-            ).mark(f"step-{step.kind}")

@@ -193,8 +193,10 @@ is about today's balances, leaves them out.
   months fade); clicking the same month again, a click outside the chart, or the ghost
   "× Whole range" in the panel goes back. The panel: the period, "start → end" worth, the
   change in good or bad, one sentence ("You saved 1,200.00€, but your assets lost
-  2,100.00€."), then two columns: the bridge (Income, Spending, Assets, Other, then Net as an
-  outlined bar, each bar starting where the one before ended) and "Accounts that moved most"
+  2,100.00€."), then two columns: a vertical waterfall (Income up from zero in series 1, Spending
+  hanging from its top in series 2, Assets in series 5, Other in text-3, each starting where the
+  one before ended and joined to the next by a dashed line, then Net as a text-2 bar from zero;
+  each bar's value over it, and the values as text for screen readers) and "Accounts that moved most"
   (five, each with why: "income +4,850.00€ · spending -3,650.00€ · transfers -1,520.00€");
   "Came in from" (five payees: income is by payee) and "Spent most on" (five categories).
   One column under 860px. A sync that changes nothing does not redraw the tab.

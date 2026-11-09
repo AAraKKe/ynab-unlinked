@@ -965,19 +965,10 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   border-bottom: 1px solid var(--hair); font-size: 13px;
 }
 .yul-nwp-move:last-child { border-bottom: 0; }
-.yul-nwp-bridge {
-  display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 8px 10px; align-items: center;
-  margin: 2px 0 6px;
-}
-.yul-nwp-step { font-size: 12.5px; color: var(--text-2); }
+/* The waterfall's values for screen readers: the bars already carry them */
+.yul-nwp-steps { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.yul-nwp-step { display: inline-flex; gap: 6px; color: var(--text-2); }
 .yul-nwp-step.net { color: var(--text); font-weight: 600; }
-.yul-nwp-track { position: relative; height: 14px; }
-.yul-nwp-bar { position: absolute; top: 0; height: 14px; border-radius: 4px; }
-.yul-nwp-bar.income { background: var(--series-1); }
-.yul-nwp-bar.spending { background: var(--series-2); }
-.yul-nwp-bar.valuation { background: var(--series-5); }
-.yul-nwp-bar.other { background: var(--text-3); }
-.yul-nwp-bar.net { border: 1.5px solid var(--text); }
 
 /* ---- motion ---- */
 @keyframes yul-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
