@@ -62,14 +62,14 @@ def _tooltip_js(currency_format: CurrencyFormat, palette: Palette) -> str:
         " + '<b style=\"font-weight:600;font-variant-numeric:tabular-nums\">' + money(p.value)"
         " + '</b></div>').join('');"
         f"return '<div style=\"color:{palette.text_3};margin-bottom:4px\">'"
-        f" + ({_MONTH_JS})(ps[0].name, 1, true)"
+        f" + ({MONTH_JS})(ps[0].name, 1, true)"
         " + '</div>' + rows;"
         "}"
     )
 
 
 # `2026-09` as `Sep`, `Sep 2026` for the first month and every January (or always with `full`)
-_MONTH_JS = (
+MONTH_JS = (
     "(value, index, full) => {"
     "const [year, month] = String(value).split('-');"
     "const name = new Date(Date.UTC(+year, +month - 1, 1))"
@@ -176,7 +176,7 @@ def months_options(
                 **axis_label,
                 "hideOverlap": True,
                 "cursor": "pointer",
-                ":formatter": f"(value, index) => ({_MONTH_JS})(value, index, false)",
+                ":formatter": f"(value, index) => ({MONTH_JS})(value, index, false)",
             },
         },
         "yAxis": {

@@ -42,12 +42,14 @@ from ynab_unlinked.web.components import (
 )
 
 # Every page's path, re-exported: views navigate with `shell.<NAME>_PATH`
+from ynab_unlinked.web.paths import CASHFLOW_PATH as CASHFLOW_PATH
 from ynab_unlinked.web.paths import HOME_PATH as HOME_PATH
 from ynab_unlinked.web.paths import IMPORT_PATH as IMPORT_PATH
 from ynab_unlinked.web.paths import NETWORTH_PATH as NETWORTH_PATH
 from ynab_unlinked.web.paths import ONBOARDING_PATH as ONBOARDING_PATH
 from ynab_unlinked.web.paths import RECONCILE_PATH as RECONCILE_PATH
 from ynab_unlinked.web.paths import SETTINGS_PATH as SETTINGS_PATH
+from ynab_unlinked.web.paths import SPENDING_PATH as SPENDING_PATH
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.storage import tab_storage, user_storage
 
@@ -100,6 +102,9 @@ class View:
     live: bool
     """Shows the store: re-rendered after a sync from the chip. False for views with forms."""
     builder: Callable[..., Any]
+    group: str | None = None
+    """The sidebar heading the entry sits under ("Finances"); views of a group are adjacent
+    in `order`."""
 
     def resolved_subtitle(self) -> str:
         return self.subtitle() if callable(self.subtitle) else self.subtitle
@@ -118,6 +123,7 @@ def view(
     order: int = 50,
     bottom: bool = False,
     live: bool = True,
+    group: str | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Register a view: a sidebar entry and the builder for `path`.
 
@@ -125,7 +131,8 @@ def view(
     `PageArguments` parameter to read the query string. `icon` is a key of
     `components.ICONS`; `bottom` puts the entry under the sidebar spacer (Settings). `live`
     views show what the store has and are rendered again after a sync from the chip; pass
-    `live=False` for a view whose state the user is editing (Import, Settings).
+    `live=False` for a view whose state the user is editing (Import, Settings). `group` puts it
+    under a sidebar heading.
     Registering a path again replaces the earlier view.
     """
 
@@ -140,6 +147,7 @@ def view(
             bottom=bottom,
             live=live,
             builder=builder,
+            group=group,
         )
         return builder
 
@@ -389,7 +397,11 @@ def _sidebar(frame: ui.element) -> dict[str, ui.element]:
             ui.label("yul").classes("yul-mark")
             ui.label("yul").classes("yul-brand-name")
         registered = views()
+        group: str | None = None
         for v in (v for v in registered if not v.bottom):
+            if v.group is not None and v.group != group:
+                ui.label(v.group).classes("yul-nav-group").mark(f"nav-group-{v.group.lower()}")
+            group = v.group
             nav[v.key] = _nav_item(v)
         ui.element("div").classes("yul-side-spacer")
         for v in (v for v in registered if v.bottom):

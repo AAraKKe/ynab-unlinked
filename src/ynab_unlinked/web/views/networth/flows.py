@@ -13,65 +13,30 @@ from dataclasses import dataclass
 
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.core.finance import (
-    RECONCILIATION_PAYEE,
     AccountMove,
     Flows,
     Period,
     Rules,
     annualised,
-    month_start,
 )
 from ynab_unlinked.core.finance import period as read_period
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store
-from ynab_unlinked.web import accounts as tracking
+from ynab_unlinked.web import finances
+from ynab_unlinked.web.finances import RANGE_MONTHS, months_range, period_title
 from ynab_unlinked.web.views.networth.data import Snapshot, signed
 
 TABS = {"overview": "Overview", "months": "Months", "movers": "Movers"}
 
-RANGE_MONTHS = {"1M": 1, "3M": 3, "6M": 6, "1Y": 12}
-"""How many calendar months each range pill shows, the current one included. YTD starts in
-January and All at the first transaction."""
+__all__ = ["RANGE_MONTHS", "months_range", "period_title"]
 
 TOP_ACCOUNTS = 5
 TOP_CATEGORIES = 5
 
 
-def months_range(key: str, today: dt.date, earliest: dt.date) -> tuple[dt.date, dt.date]:
-    """The first day of the first month a range pill covers, and today.
-
-    Whole months, so the bars of the Months tab add up to its totals. Never before the month
-    of the first transaction.
-    """
-    first = month_start(earliest)
-    if key == "YTD":
-        start = dt.date(today.year, 1, 1)
-    elif (months := RANGE_MONTHS.get(key)) is not None:
-        index = today.year * 12 + today.month - months
-        start = dt.date(index // 12, index % 12 + 1, 1)
-    else:
-        start = first
-    return max(start, first), today
-
-
 def rules(snapshot: Snapshot, config: LatestConfig) -> Rules:
-    """The counted accounts (on the budget or tracking), the "not spending" categories, the
-    accounts whose return is followed and the payees of balance adjustments."""
-    accounts = snapshot.history
-    on_budget = {
-        account.id: snapshot.stored[account.id].on_budget if account.id in snapshot.stored else True
-        for account in accounts
-    }
-    return Rules(
-        on_budget=on_budget,
-        not_spending=frozenset(config.finances.not_spending),
-        returns=frozenset(
-            account.id
-            for account in accounts
-            if tracking.follows_return(config, account, on_budget[account.id])
-        ),
-        adjustment_payees=frozenset({RECONCILIATION_PAYEE, config.adjustments.payee}),
-    )
+    """`web.finances.rules` for the accounts of the snapshot."""
+    return finances.rules(config, snapshot.stored.values())
 
 
 def account_names(snapshot: Snapshot) -> dict[str, str]:
@@ -84,15 +49,8 @@ def load_period(
 ) -> Period:
     """Read one period from the store. Blocking: run it through `run.io_bound`."""
     budget_id = config.budget.id
-    names = {category.id: category.name for category in store.categories(budget_id)}
+    names = finances.category_names(store, budget_id)
     return read_period(store, budget_id, rules(snapshot, config), start, end, names)
-
-
-def period_title(start: dt.date, end: dt.date) -> str:
-    """`April 2026` for a whole month (or this month so far), `Jan 2026 – Nov 2026` otherwise."""
-    if (start.year, start.month) == (end.year, end.month):
-        return start.strftime("%B %Y")
-    return f"{start.strftime('%b %Y')} – {end.strftime('%b %Y')}"
 
 
 @dataclass(frozen=True)

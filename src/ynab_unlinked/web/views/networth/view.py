@@ -40,13 +40,13 @@ from ynab_unlinked.web.components.history_chart import (
     history_options,
     set_options,
 )
+from ynab_unlinked.web.finances import RANGES
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.networth import data, flows
 from ynab_unlinked.web.views.networth.data import (
     DEFAULT_RANGE,
     DRAWER_TRANSACTIONS,
     GROUPINGS,
-    RANGES,
     Snapshot,
     assign_slots,
     default_picked,
@@ -507,6 +507,7 @@ class NetWorthView:
     subtitle="All your accounts in one figure",
     icon="networth",
     order=40,
+    group="Finances",
 )
 async def networth_view(args: PageArguments) -> None:
     await NetWorthView(args.query_parameters.get("tab", "overview")).render()

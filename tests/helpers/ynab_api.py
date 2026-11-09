@@ -1,6 +1,11 @@
 from unittest.mock import MagicMock
 
-from ynab import CategoriesResponse, CategoriesResponseData
+from ynab import (
+    CategoriesResponse,
+    CategoriesResponseData,
+    MonthSummariesResponse,
+    MonthSummariesResponseData,
+)
 
 from ynab_unlinked.ynab_api.client import Client, SupportedApisNames
 
@@ -19,6 +24,10 @@ class YnabClientStub(Client):
                 # Every sync reads the categories: a budget without any unless a test says so
                 registered_mock.get_categories.return_value = CategoriesResponse(
                     data=CategoriesResponseData(category_groups=[], server_knowledge=0)
+                )
+            if api_name == "months":
+                registered_mock.get_plan_months.return_value = MonthSummariesResponse(
+                    data=MonthSummariesResponseData(months=[], server_knowledge=0)
                 )
             self.registry[api_name] = registered_mock
 

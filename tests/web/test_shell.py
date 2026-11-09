@@ -66,6 +66,25 @@ async def test_the_sidebar_navigates_between_views(user: User):
 
 
 @pytest.mark.version("V4")
+async def test_the_finance_pages_sit_under_one_heading(user: User):
+    await user.open("/")
+
+    # Elements get increasing ids in the order they are drawn
+    order = [
+        user.find(marker=marker).elements.pop().id
+        for marker in (
+            "nav-reconcile",
+            "nav-group-finances",
+            "nav-networth",
+            "nav-cashflow",
+            "nav-spending",
+            "nav-settings",
+        )
+    ]
+    assert order == sorted(order)
+
+
+@pytest.mark.version("V4")
 async def test_files_dropped_anywhere_reach_the_import_view(user: User):
     await user.open("/reconcile")
     upload = user.find(marker="drop-upload").elements.pop()

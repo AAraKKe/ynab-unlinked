@@ -15,6 +15,7 @@ from ynab import (
     Account,
     ApiException,
     CategoryGroupWithCategories,
+    MonthSummary,
     TransactionClearedStatus,
     TransactionDetail,
 )
@@ -35,6 +36,7 @@ _BUDGET_TABLES = (
     "subtransactions",
     "accounts",
     "categories",
+    "months",
     "sync_state",
     "ghost_checks",
 )
@@ -400,11 +402,16 @@ class Store:
         categories = sum(len(group.categories) for group in groups if not group.deleted)
         progress.done(f"{categories} categories received")
 
+        progress.start("Fetching months from YNAB")
+        months = client.months(budget_id)
+        progress.done(f"{len(months)} months received")
+
         progress.start("Saving to the local store")
         with self._connect() as conn:
             self._upsert_transactions(conn, budget_id, transactions)
             self._replace_accounts(conn, budget_id, accounts)
             self._replace_categories(conn, budget_id, groups)
+            self._replace_months(conn, budget_id, months)
             # With two app runs on one file, an older delta can be written last: never let
             # the knowledge go back
             conn.execute(
@@ -486,6 +493,20 @@ class Store:
                 )
                 for t in transactions
                 for sub in t.subtransactions
+            ],
+        )
+
+    @staticmethod
+    def _replace_months(
+        conn: sqlite3.Connection, budget_id: str, months: Sequence[MonthSummary]
+    ) -> None:
+        conn.execute("DELETE FROM months WHERE budget_id = ?", (budget_id,))
+        conn.executemany(
+            "INSERT OR REPLACE INTO months (budget_id, month, note, income, budgeted, activity) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (budget_id, m.month.isoformat(), m.note, m.income, m.budgeted, m.activity)
+                for m in months
             ],
         )
 
@@ -603,6 +624,16 @@ class Store:
             )
             for row in rows
         ]
+
+    def month_notes(self, budget_id: str) -> dict[dt.date, str]:
+        """The note of every month that has one, keyed by the month's first day."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT month, note FROM months WHERE budget_id = ? AND note IS NOT NULL "
+                "AND trim(note) != ''",
+                (budget_id,),
+            ).fetchall()
+        return {dt.date.fromisoformat(row["month"]): row["note"].strip() for row in rows}
 
     def lines(
         self,

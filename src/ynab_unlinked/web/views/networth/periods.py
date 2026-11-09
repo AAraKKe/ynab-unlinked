@@ -23,10 +23,11 @@ from ynab_unlinked.web.components import closed_pill, glass_card, stat_tile
 from ynab_unlinked.web.components.controls import pill_group
 from ynab_unlinked.web.components.flow_chart import months_chart, months_options
 from ynab_unlinked.web.components.history_chart import set_options
+from ynab_unlinked.web.finances import RANGES
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.theme import Palette
 from ynab_unlinked.web.views.networth import flows as words
-from ynab_unlinked.web.views.networth.data import RANGES, Snapshot, signed
+from ynab_unlinked.web.views.networth.data import Snapshot, signed
 from ynab_unlinked.web.views.networth.period_panel import period_panel
 
 

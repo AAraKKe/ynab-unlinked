@@ -30,6 +30,7 @@ src/ynab_unlinked/
     balances.py          net worth, debt netting, adjustments (2.5)
     history.py           balance and net worth series from the store (2.7)
     finance.py           where a period's money came from and went: Flows, Rules, period() (2.8)
+    cashflow.py          income and spending by month, category trends and volatility (2.9)
   entities/              parsers, now with sniff() and a LoaderSpec per package (2.4)
   config/                V1..V4, migrations (2.6)
   store/                 SQLite transaction store and sync (2.7)
@@ -598,10 +599,13 @@ activity; the caller decides what is worth an entry. The schema steps are
 `ynab_api.Client` gains `transactions_delta(budget_id, server_knowledge) -> tuple[list[TransactionDetail], int]`
 and `transactions_with_knowledge(budget_id, since_date=None) -> tuple[list[TransactionDetail], int]`,
 and `transaction_exists(budget_id, transaction_id) -> bool` (False on a 404, other errors raise),
-and `categories(budget_id) -> list[CategoryGroupWithCategories]` (GET /categories, every sync).
+and `categories(budget_id) -> list[CategoryGroupWithCategories]` (GET /categories, every sync),
+and `months(budget_id) -> list[MonthSummary]` (GET /months, every sync, deleted left out).
 
 Migration 0006 adds `transactions.category_id` and the `subtransactions` and `categories`
 tables, and empties `sync_state`, so the next sync is a full one that fills them in.
+Migration 0007 adds `months` (month, note, income, budgeted, activity), replaced on every
+sync; `Store.month_notes(budget_id) -> dict[dt.date, str]` gives the months with a note.
 
 ```python
 # core/history.py
@@ -677,6 +681,36 @@ def annualised(rate, days) -> float          # unchanged for a year or less
 def months_between(start, end) -> list[dt.date]; month_start(day); month_end(day)
 ```
 
+### 2.9 Cash flow (`core/cashflow.py`)
+
+```python
+STEADY_BELOW = 0.25; VARIABLE_BELOW = 0.75; LUMPY_SAME_BELOW = 0.25; MIN_MONTHS = 6
+UNUSUAL_ABOVE = 1.25        # a month this many times its median gets a label
+
+@dataclass(frozen=True)
+class Volatility: mean: float; cv: float | None; label: str | None; active: int
+def volatility(spent: Sequence[int]) -> Volatility
+    # cv = population stdev / mean over every month (zero when nothing was spent).
+    # lumpy: spent in at most half the months, those alike (their own cv < 0.25);
+    # else steady / variable / spiky by cv. No label under MIN_MONTHS months or with one
+    # month of spending.
+
+@dataclass(frozen=True)
+class FlowMonth: month; income; spending (positive); complete; label: str | None
+    saved, rate
+@dataclass(frozen=True)
+class CategoryTrend: category_id; name; group; spent: tuple[int, ...]; volatility
+@dataclass(frozen=True)
+class CashFlow:
+    start; end; months; categories (most spent first); income (PayeeIncome, most first)
+    complete, mean_income, median_income, mean_spending, savings_rate, core_spending(), groups()
+
+def cash_flow(store, budget_id, rules, start, end, *, categories=None, notes=None) -> CashFlow
+    # blocking; averages over complete months; a label is the month's note in YNAB (first
+    # line, 28 characters), else the payee or category most above its usual in a month far
+    # above the median
+```
+
 ## 3. Web app (`web/`, extra `web`)
 
 ```
@@ -703,7 +737,11 @@ web/
   ynab.py              fetch_budgets(token), load_budget(client, id) -> Budget,
                        stored_accounts(sdk accounts), fallback_accounts(config)
   paths.py             every page's path (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,
-                       SETTINGS_PATH, ONBOARDING_PATH), NiceGUI-free for the data modules
+                       CASHFLOW_PATH, SPENDING_PATH, SETTINGS_PATH, ONBOARDING_PATH),
+                       NiceGUI-free for the data modules
+  finances.py          pure: RANGES, RANGE_MONTHS, months_range (whole months), period_title,
+                       rules(config, stored) (closed accounts too), category_names, earliest,
+                       load_cash_flow, liquid (cash and savings after debt), previous_range
   shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay,
                        save_config(); re-exports the paths (views use shell.<NAME>_PATH)
                        and sync_label / sync_message
@@ -738,6 +776,8 @@ web/
                        stacked bars, net line, a transparent column per month for clicks
                        bridge_options(steps, labels, palette, currency_format) / bridge_chart:
                        the period panel's waterfall
+    cashflow_chart.py  income_spending_options, rate_options, volatility_options, chart():
+                       the charts of Cash flow and Spending
     category_picker.py category_picker(groups, on_pick, *, label, marker): a button opening
                        a menu of groups and categories with a search field on top
   views/
@@ -764,6 +804,14 @@ web/
       tables.py        badge, plan_table(plan, formatter, key, actions=None), RowActions,
                        transactions_table
       cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
+    cashflow/          /cashflow    tiles, income and spending, savings rate, came in from
+      data.py          DEFAULT_RANGE, CashFlowPage, load, percent, rate_change, runway,
+                       runway_text, spending_hint, complete_note
+      view.py          CashFlowView and the view
+    spending/          /spending    tiles, by group, steady or swingy, categories
+      data.py          DEFAULT_RANGE, SHOWN, WORDS (Word: text, pill kind, hint), load, word,
+                       spark, share
+      view.py          SpendingView and the view
     reconcile/         /reconcile   per account cleared vs bank balance, reconcile (2.3)
       data.py          scope_start, gap_candidates, ReconcileData (read,
                        open_transactions, has_anything), LOCK_TIMED_OUT, UNCLEARED_SKIPPED,
@@ -854,8 +902,9 @@ from ynab_unlinked.web.state import state
 @shell.view("/networth", key="networth", title="Net worth",
             subtitle="All your accounts in one figure",   # str or Callable[[], str]
             icon="networth",                         # key of components.ICONS
-            order=40)                                # bottom=True puts it under the spacer,
-                                                     # live=False for views with forms
+            order=40,                                # bottom=True puts it under the spacer,
+            group="Finances")                        # live=False for views with forms;
+                                                     # group: the sidebar heading above it
 async def networth_view(args: PageArguments) -> None:   # the parameter is optional
     ...  # already inside shell.page(title, subtitle): just render the body
 ```
@@ -1056,6 +1105,14 @@ entry per adjustment (3.4, no batch kind), `state().invalidate()` and the toast 
 balances". The deltas in the rows are the confirmation of rule 8; there is no dialog. A
 failure keeps the mode and what was typed. What was typed lives in `AccountsTable.typed` (by
 account id), so a re-render after a sync keeps it.
+
+#### Cash flow and Spending
+
+Cash flow: `range-{key}`, `cf-income`, `cf-spending`, `cf-rate`, `cf-runway`, `cf-chart`,
+`cf-rate-chart`, `cf-sources`, `cf-empty`. Spending: `range-{key}`, `sp-total`, `sp-core`,
+`sp-one-offs`, `sp-groups`, `group-{name}`, `sp-scatter`, `sp-categories`,
+`category-{category_id}` (`category-none` for uncategorized), `sp-show-all`, `sp-empty`.
+Sidebar: `nav-group-finances` above `nav-networth`, `nav-cashflow`, `nav-spending`.
 
 #### Onboarding
 

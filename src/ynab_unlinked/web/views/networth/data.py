@@ -37,7 +37,6 @@ from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
 from ynab_unlinked.web.buckets import NET_WORTH_ORDER
 from ynab_unlinked.ynab_api import Client
 
-RANGES = ("1M", "3M", "6M", "YTD", "1Y", "All")
 DEFAULT_RANGE = "6M"
 GROUPINGS = {"total": "Total", "type": "By type", "account": "By account"}
 MAX_PICKED = 6

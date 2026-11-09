@@ -28,9 +28,14 @@ Import      Files -> Review -> Done
 Reconcile   per account: cleared balance vs bank balance, reconcile transactions
 Net worth   tabs: Overview (history chart, buckets, accounts with inline balance updates)
             · Months (what moved net worth each month) · Movers (how each account moved)
+Cash flow   income against spending, the savings rate, where income comes from
+Spending    by group, steady or swingy, every category with how it moves
 Settings    tabs: Connection · Banks · Accounts · Net worth · Categories · Appearance · Data & privacy
 Onboarding  full screen, first run only
 ```
+
+Net worth, Cash flow and Spending sit under a small caps "Finances" heading in the sidebar
+(hidden in the rail, where a gap keeps the group apart).
 
 Navigation is a left sidebar, 232px with icons and labels, collapsible to a 64px icon rail
 from a "Collapse" entry under Settings (state remembered). The top bar holds the page title, the budget chip, a sync indicator
@@ -207,6 +212,35 @@ is about today's balances, leaves them out.
   longer than one ("+6.1%", "−8.9%/yr", "—" for an account whose return is not followed). A
   faint line under the card explains the three columns. Under 860px the two middle columns
   hide.
+
+### Cash flow and Spending
+
+Both read the store like the Months tab (every line sorted the same way, closed accounts
+counted) and have the same head: the range as a title and the pills `1M 3M 6M YTD 1Y All`,
+1Y by default. Averages, rates and how a category moves use complete months only; the month
+still running shows in the charts, faded. With no complete month in the range, an empty state
+asks for a longer range.
+
+- **Cash flow**: four tiles: Income a month ("median 4,850.00€"), Spending a month ("core
+  2,700.00€ · one-offs 575.00€": the steady and variable categories against the rest),
+  Savings rate (saved over earned; "▲ 4.2 pts vs the 12 months before" when the budget goes
+  back that far), Cash runway (cash and savings after debt over core spending, "27.8
+  months"), and a faint line "Averages over 11 complete months, not this one.". Then
+  "Income and spending": income (series 1) and spending (series 2) side by side per month,
+  top corners rounded, one tooltip per month with what was saved. A month with a label carries
+  it over its taller bar: the note written on that month in YNAB (first line), else, for a
+  month far above its median (1.25×), the payee that brought more than usual or the category
+  that spent more than usual. "Savings rate": its own line chart (never a second axis), the
+  average dashed with "average 60.2%". "Came in from": the top six payees of the range as
+  bars.
+- **Spending**: three tiles (Spending a month, Core, One-offs), then side by side "By group"
+  (bars: a month · share) and "Steady or swingy?" (one dot per category: average a month
+  across on a log scale, how much it moves up; the six largest named, overlapping names
+  hidden; a faint line: top right is big and swingy, bottom right the fixed costs). Then
+  "Categories", most spent first, twenty then "Show all N": name, a month, share, a
+  sparkline of its months (series 1) and how it moves as a pill with its number: "● steady"
+  (ok), "◐ variable" (plain), "▲ spiky" (warn), "◆ lumpy" (accent), or "not enough months".
+  A faint paragraph explains the four words.
 
 ### Settings
 
