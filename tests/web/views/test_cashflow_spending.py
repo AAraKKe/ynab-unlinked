@@ -254,8 +254,7 @@ async def test_a_row_shows_its_category_in_the_charts_place_until_back(
 
     await user.should_see(marker="category-detail", retries=20)
     await user.should_not_see(marker="sp-scatter")
-    first = month_ago(11, 1).strftime("%b")
-    assert texts(user, "detail-months").startswith(f"Bills · {first}")
+    assert texts(user, "detail-title") == "Bills / 🏠 Rent"
     assert texts(user, "detail-stats").startswith("Average 1,000.00€ Median 1,000.00€")
     months = user.find(marker="detail-chart").elements.pop()
     assert months.options["series"][0]["data"] == [1_000.0] * 11
@@ -279,7 +278,7 @@ async def test_a_dot_of_the_chart_opens_its_category(synced: Store, no_sync, use
     chart.trigger("componentClick", {"componentType": "series", "dataIndex": vacation})
 
     await user.should_see(marker="category-detail", retries=20)
-    assert texts(user, "category-detail").startswith("🏝 Vacation Everyday")
+    assert texts(user, "detail-title") == "Everyday / 🏝 Vacation"
 
 
 def test_a_histogram_counts_months_in_equal_slices():

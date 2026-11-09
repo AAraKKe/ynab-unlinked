@@ -196,9 +196,9 @@ is about today's balances, leaves them out.
 - **Period panel**, under the chart (no dialog): with no month selected it shows the whole
   range; a click anywhere in a month's column, or on its name, shows that month (the other
   months fade); clicking the same month again, a click outside the chart, or the ghost
-  "× Whole range" in the panel goes back. The panel: the period, "start → end" worth, the
-  change in good or bad, one sentence ("You saved 1,200.00€, but your assets lost
-  2,100.00€."), then two columns: a vertical waterfall (Income up from zero in series 1, Spending
+  "× Whole range" in the panel goes back. The panel has no head of its own (the tiles and the
+  chart already give the range and its change): a picked month is named next to "Where the
+  change came from", with "× Whole range". Two columns: a vertical waterfall (Income up from zero in series 1, Spending
   hanging from its top in series 2, Assets in series 5, Other in text-3, each starting where the
   one before ended and joined to the next by a dashed line, then Net as a text-2 bar from zero;
   each bar's value over it, and the values as text for screen readers) and "Accounts that moved most"
@@ -245,9 +245,8 @@ asks for a longer range.
     a log scale, how much it moves up; the six largest named, overlapping names hidden; a
     faint line: top right is big and swingy, bottom right the fixed costs. A click on a dot,
     or on a row of the table, slides the category in from the right in the chart's place.
-  - **Category detail** (in the chart's card): a back arrow, the name, "Group · Jan – Nov
-    2026" (the months from its first spending to its last in the range; both years when they
-    differ), "288.94€ a month" over those months, the word with "moves 6%" and its sentence;
+  - **Category detail** (in the chart's card): a back arrow, "Group / Category" (the range is
+    the page's), "288.94€ a month" over the months from its first spending to its last, the word with "moves 6%" and its sentence;
     "Each month" (bars, series 1, a dashed "Average" line, both in the legend); the numbers
     in a row (average, median, lowest month, highest month, spread); "How the months spread"
     (a histogram in six slices, whole unit labels slanted 45°, series 5). A new range updates

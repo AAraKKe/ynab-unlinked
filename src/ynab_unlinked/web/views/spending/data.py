@@ -160,18 +160,6 @@ class Life:
     months: tuple[dt.date, ...]
     spent: tuple[int, ...]
 
-    @property
-    def title(self) -> str:
-        """`Jan – Nov 2026`, `Dec 2025 – Nov 2026`, or `Nov 2026` for one month."""
-        if not self.months:
-            return ""
-        first, last = self.months[0], self.months[-1]
-        if first == last:
-            return first.strftime("%b %Y")
-        if first.year == last.year:
-            return f"{first.strftime('%b')} – {last.strftime('%b %Y')}"
-        return f"{first.strftime('%b %Y')} – {last.strftime('%b %Y')}"
-
 
 def life(trend: CategoryTrend, flow: CashFlow) -> Life:
     months = [month.month for month in flow.complete]

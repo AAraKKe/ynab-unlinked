@@ -2,8 +2,8 @@
 the numbers behind its word.
 
 It slides in over the chart from the right; the back arrow brings the chart back. Everything
-is over the category's life in the range (its first month of spending to its last), which the
-line under its name spells out, so changing the range updates it in place.
+is over the category's life in the range (its first month of spending to its last); the range
+itself is the page's, so changing it updates the detail in place.
 """
 
 from __future__ import annotations
@@ -47,11 +47,9 @@ def category_detail(
             back = button(icon_name="arrow-left", kind="ghost", small=True, on_click=on_back)
             back.props["title"] = "Back to steady or swingy"
             back.mark("detail-back")
-            with ui.element("div").classes("yul-grow"):
-                ui.label(trend.name).classes("yul-nwm-title")
-                ui.label(f"{trend.group} · {life.title}").classes("yul-faint yul-small").mark(
-                    "detail-months"
-                )
+            ui.label(f"{trend.group} / {trend.name}").classes("yul-nwm-title yul-grow").mark(
+                "detail-title"
+            )
             ui.label(f"{money(round(numbers.mean))} a month").classes("yul-nwp-figure yul-num")
         with ui.element("div").classes("yul-row").style("gap:8px;margin-top:6px"):
             if word is not None:

@@ -815,7 +815,7 @@ web/
       data.py          DEFAULT_RANGE, SHOWN, WORDS (Word: text, pill kind, hint), ORDER,
                        UNRATED, load, word, spark, share, matches, filtered, MixPart,
                        group_mix, plotted (the chart's dots, in order), Bin, histogram, Life
-                       (months, spent, title), life, Stats, stats
+                       (months, spent), life, Stats, stats
       view.py          SpendingView (filters redraw only what they change, legend, clicks,
                        the detail in the chart's card) and the view
       detail.py        category_detail(trend, flow, *, palette, currency_format, formatter,
@@ -840,7 +840,7 @@ web/
                        entry), plain_amount, Drafts, read_drafts, diff_label, changed_count,
                        save_label (the "Update balances" fields, their changes and footer)
       flows.py         pure: TABS, RANGE_MONTHS, months_range (whole months), rules, load_period,
-                       period_title, Step / bridge, headline, why, moved, rate_text, months_up,
+                       period_title, Step / bridge, why, moved, rate_text, months_up,
                        best_month, month_bounds, share_of_change, spread
       view.py          NetWorthView (tabs, hero, ranges, chips, buckets, drawer loading) and the view
       periods.py       PeriodTabs (draws Months or Movers, the selected month and its panel,
@@ -1097,7 +1097,7 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
 Tabs: `nw-tabs`, `nw-tab-{overview|months|movers}`. Months: `tile-change`, `tile-saved`,
 `tile-assets`, `tile-months-up`, `months-chart` (its `componentClick` picks a month: a series
 point by `dataIndex`, or the x axis by `value`, the month as `YYYY-MM`), `other-note`. Period
-panel: `period-panel`, `period-title`, `period-clear`, `period-headline`, `bridge`,
+panel: `period-panel`, `period-title` and `period-clear` (a picked month only), `bridge`,
 `step-{income|spending|assets|other|net}`, `moved-{account_id}`, `came-in`, `spent-on`.
 Movers: `movers`, `mover-{account_id}`.
 
@@ -1124,7 +1124,7 @@ Cash flow: `range-{key}`, `cf-income`, `cf-spending`, `cf-rate`, `cf-runway`, `c
 `word-{steady|variable|spiky|lumpy}` (a click filters), `sp-group-filter` (a select:
 `__all__` or a group name), `sp-word-clear`, `sp-categories`, `category-{category_id}`
 (`category-none` for uncategorized; a click shows it), `sp-no-match`, `sp-show-all`,
-`sp-empty`. Category detail: `category-detail`, `detail-back`, `detail-months`,
+`sp-empty`. Category detail: `category-detail`, `detail-back`, `detail-title`,
 `detail-word`, `detail-chart`, `detail-stats`, `detail-histogram`.
 Sidebar: `nav-group-finances` above `nav-networth`, `nav-cashflow`, `nav-spending`.
 

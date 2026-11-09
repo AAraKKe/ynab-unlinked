@@ -147,7 +147,6 @@ async def test_the_panel_shows_the_whole_range_until_a_month_is_picked(
 ):
     await open_months(user)
 
-    assert texts(user, "period-headline") == "You saved 2,100.00€, but your assets lost 400.00€."
     assert texts(user, "step-income") == "+3,000.00€"
     assert texts(user, "step-spending") == "-900.00€"
     assert texts(user, "step-net") == "+1,700.00€"
@@ -155,13 +154,13 @@ async def test_the_panel_shows_the_whole_range_until_a_month_is_picked(
     assert texts(user, f"moved-{OLD}").startswith("💰 Old savings closed")
     assert texts(user, "came-in") == "Employer 3,000.00€"
     await user.should_not_see(marker="period-clear")
+    await user.should_not_see(marker="period-title")
 
 
 async def test_clicking_a_month_shows_it_and_clicking_it_again_shows_the_range(
     synced: Store, no_sync, user: User
 ):
     await open_months(user)
-    range_title = texts(user, "period-title")
     chart = user.find(marker="months-chart")
     keys = chart.elements.copy().pop().options["xAxis"]["data"]
     month = keys.index(ago(5).strftime("%Y-%m"))
@@ -175,7 +174,7 @@ async def test_clicking_a_month_shows_it_and_clicking_it_again_shows_the_range(
     chart.trigger("componentClick", {"componentType": "xAxis", "value": keys[month]})
 
     await user.should_not_see(marker="period-clear", retries=20)
-    assert texts(user, "period-title") == range_title
+    await user.should_not_see(marker="period-title")
 
 
 async def test_the_movers_tab_splits_each_account_into_your_money_and_assets(
@@ -243,24 +242,6 @@ def test_a_range_never_starts_before_the_month_of_the_first_transaction():
     today = dt.date(2026, 11, 9)
 
     assert flows.months_range("1Y", today, dt.date(2026, 7, 20))[0] == dt.date(2026, 7, 1)
-
-
-@pytest.mark.parametrize(
-    ("given", "expected"),
-    [
-        (Flows(income=3_000_000, spending=-1_000_000), "You saved 2,000.00€."),
-        (
-            Flows(income=1_000_000, spending=-1_500_000, assets=800_000),
-            "You spent 500.00€ more than came in, but your assets gained 800.00€.",
-        ),
-        (
-            Flows(income=1_000_000, assets=200_000),
-            "You saved 1,000.00€, and your assets gained 200.00€.",
-        ),
-    ],
-)
-def test_the_headline_says_where_the_change_came_from(given: Flows, expected: str):
-    assert flows.headline(given, FORMATTER) == expected
 
 
 def test_the_bridge_leaves_out_empty_steps_and_ends_with_the_net_change():

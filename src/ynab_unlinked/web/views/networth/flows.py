@@ -77,22 +77,6 @@ def bridge(flows: Flows) -> list[Step]:
     return [step for step in steps if step.amount] + [Step("Net", flows.change, "net")]
 
 
-def headline(flows: Flows, formatter: Formatter) -> str:
-    """One sentence on where the change came from."""
-    saved = flows.saved
-    money = formatter.format_amount_milli
-    first = (
-        f"You saved {money(saved)}"
-        if saved >= 0
-        else f"You spent {money(-saved)} more than came in"
-    )
-    if not flows.assets:
-        return f"{first}."
-    joint = "and" if (saved >= 0) == (flows.assets >= 0) else "but"
-    what = "gained" if flows.assets > 0 else "lost"
-    return f"{first}, {joint} your assets {what} {money(abs(flows.assets))}."
-
-
 def why(move: AccountMove, formatter: Formatter) -> str:
     """What moved one account: `income +4,850 · spending −3,650 · transfers −1,520`."""
     flows = move.flows
