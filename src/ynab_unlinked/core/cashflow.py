@@ -6,7 +6,8 @@ rates and volatility only use complete months: the month that is still running w
 every average down.
 
 A category's volatility is how much its monthly spending moves around its average (the
-coefficient of variation: standard deviation over mean, empty months counted as zero):
+coefficient of variation: standard deviation over mean, empty months counted as zero),
+between the first and the last month it spent in:
 
 - **steady** under `STEADY_BELOW` (rent, a gym);
 - **variable** under `VARIABLE_BELOW` (groceries, eating out);
@@ -41,6 +42,8 @@ VARIABLE_BELOW = 0.75
 LUMPY_SAME_BELOW = 0.25
 """How alike the months a lumpy category spends in must be (their own variation)."""
 MIN_MONTHS = 6
+MIN_LIFETIME = 3
+"""The fewest months from a category's first spending to its last for a label."""
 UNUSUAL_ABOVE = 1.25
 """A month is labelled when its income or spending is this many times its median."""
 LABEL_LENGTH = 28
@@ -52,7 +55,7 @@ Label = str
 @dataclass(frozen=True)
 class Volatility:
     mean: float
-    """Average monthly spending, positive milliunits."""
+    """Average monthly spending over the months measured, positive milliunits."""
     cv: float | None
     """Standard deviation over mean; None when nothing was spent."""
     label: Label | None
@@ -60,8 +63,12 @@ class Volatility:
     """Months it spent in."""
 
 
-def volatility(spent: Sequence[int]) -> Volatility:
-    """How `spent` (one positive amount per month, zero when nothing) moves around its mean."""
+def volatility(spent: Sequence[int], months: int | None = None) -> Volatility:
+    """How `spent` (one positive amount per month, zero when nothing) moves around its mean.
+
+    `months`: how many months the range holds, when `spent` is only part of it (a category's
+    life); it must reach `MIN_MONTHS` for a label, and `spent` three months.
+    """
     if not spent:
         return Volatility(0, None, None, 0)
     mean = statistics.fmean(spent)
@@ -70,7 +77,8 @@ def volatility(spent: Sequence[int]) -> Volatility:
         return Volatility(0, None, None, 0)
     cv = statistics.pstdev(spent) / mean
     label: Label | None = None
-    if len(spent) >= MIN_MONTHS and len(active) >= 2:
+    enough = (len(spent) if months is None else months) >= MIN_MONTHS
+    if enough and len(spent) >= MIN_LIFETIME and len(active) >= 2:
         alike = statistics.pstdev(active) / statistics.fmean(active)
         if len(active) <= len(spent) / 2 and alike < LUMPY_SAME_BELOW:
             label = "lumpy"
@@ -95,6 +103,11 @@ class CategoryTrend:
     @property
     def total(self) -> int:
         return sum(self.spent)
+
+    @property
+    def mean(self) -> float:
+        """Average per complete month of the range, quiet months included."""
+        return statistics.fmean(self.spent) if self.spent else 0
 
 
 @dataclass(frozen=True)
@@ -162,7 +175,7 @@ class CashFlow:
         """The average monthly spending of the steady and variable categories: the cost of
         living without one-offs."""
         return sum(
-            trend.volatility.mean
+            trend.mean
             for trend in self.categories
             if trend.volatility.label in ("steady", "variable")
         )
@@ -170,7 +183,7 @@ class CashFlow:
     def groups(self) -> list[GroupSpend]:
         totals: dict[str, float] = {}
         for trend in self.categories:
-            totals[trend.group] = totals.get(trend.group, 0) + trend.volatility.mean
+            totals[trend.group] = totals.get(trend.group, 0) + trend.mean
         whole = sum(totals.values())
         return sorted(
             (GroupSpend(name, mean, mean / whole if whole else 0) for name, mean in totals.items()),
@@ -184,6 +197,13 @@ class Categories:
 
     names: Mapping[str, str] = field(default_factory=dict[str, str])
     groups: Mapping[str, str] = field(default_factory=dict[str, str])
+
+
+def _lifetime(spent: Sequence[int]) -> Sequence[int]:
+    """The months from a category's first spending to its last: the months before it existed
+    or after it stopped are not quiet months, they would make it look swingy."""
+    active = [index for index, value in enumerate(spent) if value > 0]
+    return spent[active[0] : active[-1] + 1] if active else spent
 
 
 def _spent_by_category(
@@ -207,7 +227,7 @@ def _spent_by_category(
             name=categories.names.get(category_id or "", names[category_id]),
             group=categories.groups.get(category_id or "", "Other"),
             spent=tuple(values),
-            volatility=volatility(values),
+            volatility=volatility(_lifetime(values), months=len(months)),
         )
         for category_id, values in spent.items()
     ]
@@ -230,7 +250,8 @@ def _labels(
     complete = [m for m in months if m.complete]
     usual_income = statistics.median(m.income for m in complete) if complete else 0
     usual_spending = statistics.median(m.spending for m in complete) if complete else 0
-    means = {trend.category_id: trend.volatility.mean for trend in trends}
+    # What a category usually spends over the whole range, its quiet months included
+    means = {trend.category_id: trend.mean for trend in trends}
     names = {trend.category_id: trend.name for trend in trends}
     earned = {
         month.month: {

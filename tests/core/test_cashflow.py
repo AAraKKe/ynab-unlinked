@@ -143,3 +143,14 @@ def test_core_spending_leaves_out_one_offs(store: Store):
     assert [t.volatility.label for t in flow.categories] == ["steady", "spiky"]
     assert flow.core_spending() == pytest.approx(1_000_000)
     assert [(g.name, round(g.share, 2)) for g in flow.groups()] == [("Bills", 0.67), ("Fun", 0.33)]
+
+
+def test_months_before_a_category_existed_are_not_counted_as_quiet(store: Store):
+    # Rent starts in month 4 of a year and is the same every month from then on
+    rows = [(f"2026-{month:02d}-05", -1_000_000, "Landlord", "rent") for month in range(4, 13)]
+    seed(store, rows)
+
+    flow = cash_flow(store, BUDGET, RULES, dt.date(2026, 1, 1), dt.date(2026, 12, 31))
+
+    assert flow.categories[0].volatility.label == "steady"
+    assert flow.categories[0].spent[:3] == (0, 0, 0)

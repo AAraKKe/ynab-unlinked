@@ -175,7 +175,7 @@ def flow(
 
 
 def trend(mean: float, label: str | None) -> CategoryTrend:
-    return CategoryTrend("c", "C", "G", (), Volatility(mean, 0.1, label, 12))
+    return CategoryTrend("c", "C", "G", (int(mean),) * 3, Volatility(mean, 0.1, label, 3))
 
 
 def test_runway_is_cash_and_savings_over_core_spending():

@@ -689,11 +689,12 @@ UNUSUAL_ABOVE = 1.25        # a month this many times its median gets a label
 
 @dataclass(frozen=True)
 class Volatility: mean: float; cv: float | None; label: str | None; active: int
-def volatility(spent: Sequence[int]) -> Volatility
-    # cv = population stdev / mean over every month (zero when nothing was spent).
-    # lumpy: spent in at most half the months, those alike (their own cv < 0.25);
-    # else steady / variable / spiky by cv. No label under MIN_MONTHS months or with one
-    # month of spending.
+def volatility(spent: Sequence[int], months: int | None = None) -> Volatility
+    # cv = population stdev / mean over a category's life (its first to its last month of
+    # spending, quiet months in between counted as zero). lumpy: spent in at most half of
+    # them, those alike (their own cv < 0.25); else steady / variable / spiky by cv. No label
+    # when the range holds fewer than MIN_MONTHS months, the life fewer than MIN_LIFETIME,
+    # or it spent in one month only. CategoryTrend.mean is over the whole range.
 
 @dataclass(frozen=True)
 class FlowMonth: month; income; spending (positive); complete; label: str | None

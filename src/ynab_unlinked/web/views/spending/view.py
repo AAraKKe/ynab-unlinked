@@ -118,7 +118,7 @@ class SpendingView:
                     with ui.element("div").classes("yul-sp-row").mark(f"category-{key}"):
                         with ui.element("div").classes("yul-nwm-name"):
                             ui.label(trend.name)
-                        ui.label(money(round(trend.volatility.mean))).classes("yul-num yul-nwm-r")
+                        ui.label(money(round(trend.mean))).classes("yul-num yul-nwm-r")
                         ui.label(f"{data.share(trend, flow) * 100:.0f}%").classes(
                             "yul-num yul-nwm-r yul-muted"
                         )

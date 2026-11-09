@@ -237,8 +237,8 @@ def rate_options(
 def volatility_options(
     trends: Sequence[CategoryTrend], palette: Palette, currency_format: CurrencyFormat
 ) -> dict[str, Any]:
-    shown = [t for t in trends if t.volatility.cv is not None and t.volatility.mean >= 1000]
-    named = {t.category_id for t in sorted(shown, key=lambda t: -t.volatility.mean)[:LABELLED]}
+    shown = [t for t in trends if t.volatility.cv is not None and t.mean >= 1000]
+    named = {t.category_id for t in sorted(shown, key=lambda t: -t.mean)[:LABELLED]}
     named |= (
         {t.category_id for t in shown if t.volatility.label == "spiky"}
         if len(named) < LABELLED
@@ -286,7 +286,7 @@ def volatility_options(
                 "data": [
                     {
                         "value": [
-                            round(t.volatility.mean / 1000, 2),
+                            round(t.mean / 1000, 2),
                             round(t.volatility.cv or 0, 3),
                         ],
                         "label": {

@@ -64,5 +64,5 @@ def spark(values: Sequence[int]) -> str:
 
 
 def share(trend: CategoryTrend, flow: CashFlow) -> float:
-    whole = sum(t.volatility.mean for t in flow.categories)
-    return trend.volatility.mean / whole if whole else 0
+    whole = sum(t.mean for t in flow.categories)
+    return trend.mean / whole if whole else 0
