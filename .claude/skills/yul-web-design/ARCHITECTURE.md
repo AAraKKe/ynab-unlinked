@@ -796,7 +796,7 @@ web/
       drawer.py        account_drawer(...) -> its chart
     settings/          /settings    one module per tab, each with render(page: Settings):
       __init__.py      Settings (tab row, panel, rerender()), TABS, RENDERERS, tab_from_slug, the view
-      common.py        current_config(), kv(key), open_accounts() (open budget accounts, the
+      common.py        current_config(), kv(key), all_accounts() (closed ones too), open_accounts() (open budget accounts, the
                        configured ones when YNAB cannot be reached)
       connection.py    token (reveal, check and save), budget dialog and switch
       banks.py         bank cards, bank_summary(), shared_account_hint(), toggle_bank(),
@@ -1065,7 +1065,8 @@ Markers: `token-input`, `check-token`, `token-lost`, `wizard-message`, `wizard-n
 
 #### Settings
 
-Markers: `bank-shared-{key}`, `accounts-lede`, `account-card-{id}`, `bucket-section-{bucket}`,
+Markers: `bank-shared-{key}`, `accounts-lede`, `account-card-{id}` (class `closed` on a closed
+account, tagged `closed-{id}`), `bucket-section-{bucket}`,
 `account-{id}`, `bucket-{id}`, `bucket-{id}-{bucket}`, `by-hand-{id}`, `left-out` (the list
 of rows left out of imports), `left-out-{index}`, `include-again-{index}`, `left-out-empty`;
 Appearance: `tab-appearance`, `themes` (the card grid), `theme-{name}` (a palette's card,

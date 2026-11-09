@@ -23,11 +23,16 @@ def kv(key: str) -> None:
     ui.label(key).classes("k")
 
 
-async def open_accounts() -> list[StoredAccount]:
-    """The budget's open accounts, or the configured ones when YNAB cannot be reached."""
+async def all_accounts() -> list[StoredAccount]:
+    """Every account of the budget, closed ones included, or the configured ones when YNAB
+    cannot be reached."""
     try:
-        accounts = await state().budget_accounts()
+        return await state().budget_accounts()
     except Exception as error:
         shell.notify(ynab_error_message(error), "warn")
         return fallback_accounts(current_config())
-    return [account for account in accounts if not account.closed]
+
+
+async def open_accounts() -> list[StoredAccount]:
+    """The budget's open accounts, or the configured ones when YNAB cannot be reached."""
+    return [account for account in await all_accounts() if not account.closed]

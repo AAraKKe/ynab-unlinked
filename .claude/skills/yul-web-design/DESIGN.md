@@ -224,9 +224,11 @@ confirmation).
   When the account picked in the dialog already takes another bank's statements, an amber
   line under it says so ("Sabadell also sends statements here; a same day, same amount row
   from both can be taken for one"); Save still works.
-- **Accounts**: one card per open account of the budget, in a grid under one section per
-  bucket (Cash, Savings, Assets, Debt, with the bucket's swatch). The lede says every open
-  account counts in net worth and a switch leaves one out. Each card: the account name and
+- **Accounts**: one card per account of the budget, closed ones too, in a grid under one
+  section per bucket (Cash, Savings, Assets, Debt, with the bucket's swatch). The lede says
+  every account counts in net worth, closed ones for the months they held money, and a
+  switch leaves one out. Closed accounts come last in their section with a dashed border, a
+  muted name and the "closed" pill, and no "balance by hand" toggle. Each card: the account name and
   a "Counted in net worth" switch (on by default), the bucket as four small pills (picking
   one moves the card to that section, the default comes from the account type) and, in the
   footer, a pencil "balance by hand" toggle (accent when on; on by default for investment

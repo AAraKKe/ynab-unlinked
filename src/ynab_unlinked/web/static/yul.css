@@ -476,6 +476,8 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
 .yul-hand.on { color: var(--accent-2); }
 .yul-hand svg { width: 15px; height: 15px; }
 
+.yul-acc-card.closed { border-style: dashed; }
+.yul-acc-card.closed .yul-acc-name { color: var(--text-2); }
 /* ---- appearance: a card per palette with a preview in that palette (views/settings/appearance.py) ---- */
 .yul-pv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .yul-pv-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 14px 16px; cursor: pointer; outline: none; }
