@@ -153,6 +153,36 @@ def histogram(values: Sequence[int], bins: int = BINS) -> list[Bin]:
 
 
 @dataclass(frozen=True)
+class Life:
+    """A category's months from its first spending to its last in the range: what its detail
+    shows and its word is worked out on."""
+
+    months: tuple[dt.date, ...]
+    spent: tuple[int, ...]
+
+    @property
+    def title(self) -> str:
+        """`Jan – Nov 2026`, `Dec 2025 – Nov 2026`, or `Nov 2026` for one month."""
+        if not self.months:
+            return ""
+        first, last = self.months[0], self.months[-1]
+        if first == last:
+            return first.strftime("%b %Y")
+        if first.year == last.year:
+            return f"{first.strftime('%b')} – {last.strftime('%b %Y')}"
+        return f"{first.strftime('%b %Y')} – {last.strftime('%b %Y')}"
+
+
+def life(trend: CategoryTrend, flow: CashFlow) -> Life:
+    months = [month.month for month in flow.complete]
+    active = [index for index, value in enumerate(trend.spent) if value > 0]
+    if not active:
+        return Life(tuple(months), trend.spent)
+    first, last = active[0], active[-1] + 1
+    return Life(tuple(months[first:last]), trend.spent[first:last])
+
+
+@dataclass(frozen=True)
 class Stats:
     mean: float
     median: float
@@ -160,20 +190,14 @@ class Stats:
     highest: int
     spread: float
     """Standard deviation."""
-    active: int
-    months: int
 
 
-def stats(trend: CategoryTrend) -> Stats:
-    """The numbers behind a category's word, over the months of its life in the range."""
-    active = [index for index, value in enumerate(trend.spent) if value > 0]
-    life = trend.spent[active[0] : active[-1] + 1] if active else trend.spent
+def stats(spent: Sequence[int]) -> Stats:
+    """The numbers behind a category's word, over the months given (its life)."""
     return Stats(
-        mean=statistics.fmean(life) if life else 0,
-        median=statistics.median(life) if life else 0,
-        lowest=min(life, default=0),
-        highest=max(life, default=0),
-        spread=statistics.pstdev(life) if life else 0,
-        active=len(active),
-        months=len(life),
+        mean=statistics.fmean(spent) if spent else 0,
+        median=statistics.median(spent) if spent else 0,
+        lowest=min(spent, default=0),
+        highest=max(spent, default=0),
+        spread=statistics.pstdev(spent) if spent else 0,
     )

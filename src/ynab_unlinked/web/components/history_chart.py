@@ -53,12 +53,14 @@ def _symbol(currency_format: CurrencyFormat) -> tuple[str, bool]:
     return symbol, currency_format.symbol_first
 
 
-def money_js(currency_format: CurrencyFormat) -> str:
-    """A JavaScript `(units) => text` that writes an amount like `Formatter.format_amount`."""
+def money_js(currency_format: CurrencyFormat, digits: int | None = None) -> str:
+    """A JavaScript `(units) => text` that writes an amount like `Formatter.format_amount`,
+    with `digits` decimals instead of the budget's when given."""
     symbol, first = _symbol(currency_format)
+    decimals = currency_format.decimal_digits if digits is None else digits
     return (
         "(v) => {"
-        f"const n = Math.abs(v).toFixed({currency_format.decimal_digits}).split('.');"
+        f"const n = Math.abs(v).toFixed({decimals}).split('.');"
         f"const i = n[0].replace(/\\B(?=(\\d{{3}})+(?!\\d))/g, {json.dumps(currency_format.group_separator)});"
         f"const s = n.length > 1 ? i + {json.dumps(currency_format.decimal_separator)} + n[1] : i;"
         f"const body = {json.dumps(first)} ? {json.dumps(symbol)} + s : s + {json.dumps(symbol)};"

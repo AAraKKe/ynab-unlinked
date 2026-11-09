@@ -52,7 +52,8 @@ same change. Never update a document to describe something you did not build.
 11. **Colour carries meaning only.** Series colours from `theme.SERIES`, never status
     colours for series, never Quasar colour props. Accent gradient for the one primary
     action per screen.
-12. **Motion** is the existing set (page enter, stagger, count up, shimmer, check draw).
+12. **Motion** is the existing set (page enter, stagger, count up, shimmer, check draw, the
+    category detail's slide in).
     Do not add new animations; `prefers-reduced-motion` must stay instant.
 
 ## Building blocks (use these, do not restyle Quasar by hand)

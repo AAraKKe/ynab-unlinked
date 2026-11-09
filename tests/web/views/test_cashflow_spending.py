@@ -203,15 +203,33 @@ def test_a_sparkline_spans_its_box():
     assert points.split() == ["0.0,20.0", "36.0,11.0", "72.0,2.0"]
 
 
-async def test_a_group_filters_the_table_and_lists_all_of_it(synced: Store, no_sync, user: User):
+async def test_a_group_row_filters_and_a_second_click_shows_every_group(
+    synced: Store, no_sync, user: User
+):
     await user.open("/spending")
     await user.should_see(marker="sp-categories", retries=20)
 
-    user.find(marker="filter-group-Everyday").click()
+    user.find(marker="group-Everyday").click()
 
     await user.should_not_see(marker=f"category-{RENT}", retries=20)
     await user.should_see(marker=f"category-{GROCERIES}")
     await user.should_see(marker=f"category-{TRIP}")
+
+    user.find(marker="group-Everyday").click()
+
+    await user.should_see(marker=f"category-{RENT}", retries=20)
+
+
+async def test_the_group_dropdown_filters_the_table(synced: Store, no_sync, user: User):
+    await user.open("/spending")
+    await user.should_see(marker="sp-group-filter", retries=20)
+    dropdown = user.find(marker="sp-group-filter").elements.pop()
+
+    with user.client:
+        dropdown.value = "Bills"
+
+    await user.should_not_see(marker=f"category-{GROCERIES}", retries=20)
+    await user.should_see(marker=f"category-{RENT}")
 
 
 async def test_a_word_of_the_legend_filters_and_shows_again(synced: Store, no_sync, user: User):
@@ -226,16 +244,29 @@ async def test_a_word_of_the_legend_filters_and_shows_again(synced: Store, no_sy
     await user.should_see(marker=f"category-{TRIP}", retries=20)
 
 
-async def test_a_row_opens_the_months_of_its_category(synced: Store, no_sync, user: User):
+async def test_a_row_shows_its_category_in_the_charts_place_until_back(
+    synced: Store, no_sync, user: User
+):
     await user.open("/spending")
     await user.should_see(marker="sp-categories", retries=20)
 
     user.find(marker=f"category-{RENT}").click()
 
-    await user.should_see(marker="category-drawer", retries=20)
-    assert "Months it spent in 11 of 11" in texts(user, "drawer-stats")
-    months = user.find(marker="drawer-months").elements.pop()
+    await user.should_see(marker="category-detail", retries=20)
+    await user.should_not_see(marker="sp-scatter")
+    first = month_ago(11, 1).strftime("%b")
+    assert texts(user, "detail-months").startswith(f"Bills · {first}")
+    assert texts(user, "detail-stats").startswith("Average 1,000.00€ Median 1,000.00€")
+    months = user.find(marker="detail-chart").elements.pop()
     assert months.options["series"][0]["data"] == [1_000.0] * 11
+
+    # A new range keeps it open and updates it
+    user.find(marker="range-6M").click()
+    await user.should_see(marker="category-detail", retries=20)
+
+    user.find(marker="detail-back").click()
+
+    await user.should_see(marker="sp-scatter", retries=20)
 
 
 async def test_a_dot_of_the_chart_opens_its_category(synced: Store, no_sync, user: User):
@@ -247,8 +278,8 @@ async def test_a_dot_of_the_chart_opens_its_category(synced: Store, no_sync, use
 
     chart.trigger("componentClick", {"componentType": "series", "dataIndex": vacation})
 
-    await user.should_see(marker="category-drawer", retries=20)
-    assert texts(user, "category-drawer").startswith("🏝 Vacation Everyday")
+    await user.should_see(marker="category-detail", retries=20)
+    assert texts(user, "category-detail").startswith("🏝 Vacation Everyday")
 
 
 def test_a_histogram_counts_months_in_equal_slices():
@@ -270,3 +301,21 @@ def test_a_group_mix_splits_its_spending_by_how_it_moves():
         ("spiky", 0.25),
     ]
     assert [p.label for p in spending.group_mix(page, "Fun")] == ["unrated"]
+
+
+async def test_a_filter_redraws_only_the_table_and_the_chart(synced: Store, no_sync, user: User):
+    await user.open("/spending")
+    await user.should_see(marker="sp-legend", retries=20)
+    tiles = user.find(marker="sp-total").elements.pop().id
+    legend = user.find(marker="word-steady").elements.pop().id
+
+    user.find(marker="word-steady").click()
+    await user.should_not_see(marker=f"category-{TRIP}", retries=20)
+    user.find(marker="group-Bills").click()
+    await user.should_not_see(marker=f"category-{GROCERIES}", retries=20)
+
+    # The page above the table is not drawn again, so the browser keeps its scroll
+    assert user.find(marker="sp-total").elements.pop().id == tiles
+    assert user.find(marker="word-steady").elements.pop().id == legend
+    assert "on" in user.find(marker="word-steady").elements.pop().classes
+    assert user.find(marker="sp-group-filter").elements.pop().value == "Bills"

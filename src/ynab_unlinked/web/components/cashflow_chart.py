@@ -305,7 +305,11 @@ def volatility_options(
     }
 
 
-DRAWER_HEIGHT = 200
+DETAIL_HEIGHT = 200
+HISTOGRAM_HEIGHT = 240
+
+
+_DASHES = "path://M0,4h4v2h-4z M6,4h4v2h-4z M12,4h4v2h-4z"
 
 
 def category_months_options(
@@ -315,18 +319,31 @@ def category_months_options(
     currency_format: CurrencyFormat,
     mean: float,
 ) -> dict[str, Any]:
-    """One category's spending each month (`YYYY-MM` keys), its average dashed."""
+    """One category's spending each month (`YYYY-MM` keys) and its average as a dashed line."""
+    money = money_js(currency_format)
     return {
         "animationDuration": 400,
         "textStyle": {"fontFamily": "Inter, system-ui, sans-serif"},
-        "grid": {"left": 4, "right": 8, "top": 16, "bottom": 4, "containLabel": True},
+        "grid": {"left": 4, "right": 8, "top": 30, "bottom": 4, "containLabel": True},
+        "legend": {
+            **_legend(palette),
+            "itemWidth": 16,
+            "itemHeight": 10,
+            "data": [
+                {"name": "Spent"},
+                # Three filled dashes: the dashed average line
+                {"name": "Average", "icon": _DASHES, "itemStyle": {"color": palette.text_2}},
+            ],
+        },
         "tooltip": {
             **_tooltip(palette),
             "trigger": "axis",
             "axisPointer": {"type": "shadow", "shadowStyle": {"color": palette.hair}},
             ":formatter": (
-                "(params) => { const p = Array.isArray(params) ? params[0] : params;"
-                f" return ({MONTH_JS})(p.name, 1, true) + ': ' + ({money_js(currency_format)})(p.value); }}"
+                "(params) => { const ps = Array.isArray(params) ? params : [params];"
+                f" const money = {money};"
+                f" return ({MONTH_JS})(ps[0].name, 1, true) + '<br>' + ps.map((p) =>"
+                " p.seriesName + ' ' + money(p.value)).join('<br>'); }"
             ),
         },
         "xAxis": _month_axis(palette, months),
@@ -340,14 +357,16 @@ def category_months_options(
                 "itemStyle": {"borderRadius": [3, 3, 0, 0]},
                 "emphasis": {"disabled": True},
                 "data": [value / 1000 for value in spent],
-                "markLine": {
-                    "silent": True,
-                    "symbol": "none",
-                    "label": {"show": False},
-                    "lineStyle": {"color": palette.text_2, "type": "dashed", "width": 1},
-                    "data": [{"yAxis": round(mean / 1000, 2)}],
-                },
-            }
+            },
+            {
+                "type": "line",
+                "name": "Average",
+                "color": palette.text_2,
+                "symbol": "none",
+                "lineStyle": {"type": "dashed", "width": 1},
+                "emphasis": {"disabled": True},
+                "data": [round(mean / 1000, 2)] * len(spent),
+            },
         ],
     }
 
@@ -355,23 +374,28 @@ def category_months_options(
 def histogram_options(
     bins: Sequence[tuple[int, int, int]], palette: Palette, currency_format: CurrencyFormat
 ) -> dict[str, Any]:
-    """How many months fell in each slice (low, high, months) of a category's monthly amounts."""
+    """How many months fell in each slice (low, high, months) of a category's monthly amounts.
+
+    The slices are written in whole units and slanted, so close ones stay apart and readable.
+    """
     keys = [f"{low / 1000}|{high / 1000}" for low, high, _ in bins]
     slice_js = (
         f"(value) => {{ const [low, high] = String(value).split('|').map(Number);"
-        f" const c = {compact_js(currency_format)}; return c(low) + '–' + c(high); }}"
+        f" const m = {money_js(currency_format, 0)}; return m(low) + '–' + m(high); }}"
     )
     return {
         "animationDuration": 400,
         "textStyle": {"fontFamily": "Inter, system-ui, sans-serif"},
-        "grid": {"left": 4, "right": 8, "top": 16, "bottom": 4, "containLabel": True},
+        # Room on the left for the first slanted label
+        "grid": {"left": 36, "right": 16, "top": 16, "bottom": 4, "containLabel": True},
         "tooltip": {
             **_tooltip(palette),
             "trigger": "axis",
             "axisPointer": {"type": "shadow", "shadowStyle": {"color": palette.hair}},
             ":formatter": (
                 "(params) => { const p = Array.isArray(params) ? params[0] : params;"
-                f" return ({slice_js})(p.name) + ': ' + p.value + (p.value === 1 ? ' month' : ' months'); }}"
+                f" return ({slice_js})(p.name) + ': ' + p.value"
+                " + (p.value === 1 ? ' month' : ' months'); }"
             ),
         },
         "xAxis": {
@@ -379,7 +403,12 @@ def histogram_options(
             "data": keys,
             "axisLine": {"show": False},
             "axisTick": {"show": False},
-            "axisLabel": {**_axis_label(palette), "interval": 0, ":formatter": slice_js},
+            "axisLabel": {
+                **_axis_label(palette),
+                "interval": 0,
+                "rotate": 45,
+                ":formatter": slice_js,
+            },
         },
         "yAxis": {**_value_axis(palette, "(v) => v"), "minInterval": 1},
         "series": [

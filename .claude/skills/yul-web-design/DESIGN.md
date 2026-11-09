@@ -234,29 +234,32 @@ asks for a longer range.
   average dashed with "average 60.2%". "Came in from": the top six payees of the range as
   bars.
 - **Spending**: three tiles (Spending a month, Core, One-offs), then side by side "By group"
-  and "Steady or swingy?".
-  - **By group**: a key of the four words' colours, then one row per group: its bar (a
-    month · share) and under it a thin split of its spending by how its categories move
-    (steady in good, variable in text-2, spiky in warn, lumpy in accent-2, not enough months
-    in border-2; each part titled with its share). A click on a group filters by it, again
-    from the filter pills.
+  and "Steady or swingy?". A filter (a group, a word) redraws only the group highlight, the
+  chart, the legend's choice and the table: the page keeps its height and its scroll.
+  - **By group**: a key of the four words' colours, column titles (Group, A month, Share),
+    then one row per group: its bar, a month, share, and under it a thin split of its
+    spending by how its categories move (steady in good, variable in text-2, spiky in warn,
+    lumpy in accent-2, not enough months in border-2; each part titled with its share). A
+    click filters by the group, a second click shows every group again.
   - **Steady or swingy?**: one dot per category (of the filters): average a month across on
     a log scale, how much it moves up; the six largest named, overlapping names hidden; a
-    faint line: top right is big and swingy, bottom right the fixed costs. A click on a dot
-    opens the category drawer.
+    faint line: top right is big and swingy, bottom right the fixed costs. A click on a dot,
+    or on a row of the table, slides the category in from the right in the chart's place.
+  - **Category detail** (in the chart's card): a back arrow, the name, "Group · Jan – Nov
+    2026" (the months from its first spending to its last in the range; both years when they
+    differ), "288.94€ a month" over those months, the word with "moves 6%" and its sentence;
+    "Each month" (bars, series 1, a dashed "Average" line, both in the legend); the numbers
+    in a row (average, median, lowest month, highest month, spread); "How the months spread"
+    (a histogram in six slices, whole unit labels slanted 45°, series 5). A new range updates
+    it in place; the back arrow brings the chart back.
   - **How it moves**: a card with the four words as tiles, each its pill and a sentence with
     examples and its threshold ("Moves under 25%."); a click shows only that kind (the tile
     accent bordered), again shows every kind. A faint line says how the number is worked out.
-  - **Categories**: group filter pills (All groups, then each group), and "Only ▲ spiky · ×
-    Every kind" when a word filters. Most spent first, twenty then "Show all N" unless a
-    filter is on (then every match). Each row: name, a month, share, a sparkline (series 1)
-    and the word as a pill with its number, or "not enough months"; a click opens the drawer.
-  - **Category drawer** (the account drawer's dialog): the name, its group and the complete
-    months, "290.91€ a month", the word with "moves 122%" and its sentence; "Each month"
-    (bars, series 1, its average dashed); "How the months spread" (a histogram of its monthly
-    amounts in six slices from its first month of spending to its last, series 5); "The
-    numbers" (average first to last month, median, lowest, highest, spread, months it spent
-    in, as a key value grid).
+  - **Categories**: a group dropdown (All groups, then each group: there are too many for
+    pills), and "Only ▲ spiky · × Every kind" when a word filters. Most spent first, twenty
+    then "Show all N" unless a filter is on (then every match). Each row: name, a month,
+    share, a sparkline (series 1) and the word as a pill with its number, or "not enough
+    months"; a click shows the category in the chart's place, scrolled into view.
 
 ### Settings
 
@@ -402,6 +405,7 @@ and gradient text. `tabular-nums` in tables and axis ticks only.
 ### Motion
 
 - Page change: fade + 10px rise, 240ms, `cubic-bezier(.2,.7,.2,1)`.
+- A category detail slides in from the right over Spending's chart (28px, 300ms).
 - Lists: 40ms stagger on first paint.
 - Hero figures count up over 900ms (ease out cubic).
 - Progress bars have a slow moving gradient shimmer while active.
