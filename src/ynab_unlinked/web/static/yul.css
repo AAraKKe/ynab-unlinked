@@ -497,6 +497,25 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
   text-decoration: var(--link-decoration); text-underline-offset: 3px;
 }
 
+/* ---- categories: the rules, the category picker (views/settings/categories.py, components/category_picker.py) ---- */
+.yul-catrules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; }
+.yul-catrules-t { font-weight: 600; margin-bottom: 2px; }
+.yul-catpick {
+  min-width: 300px; max-width: 380px; padding: 8px; border-radius: 12px !important;
+  background: var(--surface-solid) !important; border: 1px solid var(--border-2); color: var(--text);
+}
+.yul-catpick-search { margin-bottom: 6px; }
+.yul-catpick-list { display: flex; flex-direction: column; }
+.yul-catpick-group {
+  font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase;
+  letter-spacing: .06em; padding: 8px 8px 3px;
+}
+.yul-catpick-item {
+  padding: 6px 8px 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; outline: none;
+}
+.yul-catpick-item:hover, .yul-catpick-item:focus-visible { background: var(--surface-2); }
+.yul-catpick-none { padding: 8px; }
+
 /* ---- data & privacy: the rows left out of imports (views/settings/left_out.py) ---- */
 .yul-left-out { margin-top: 22px; }
 .yul-left-out .yul-imp-table { margin-top: 8px; }
@@ -913,6 +932,46 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-nw-tx-amount { text-align: right; font-weight: 500; }
 .yul-nw-memo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---- net worth › months and movers, the period drawer (views/networth/periods.py, period_drawer.py) ---- */
+.yul-nwm-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 2px; }
+.yul-nwm-card { padding: 14px 16px; margin-top: 10px; }
+.yul-nwm-title { font-weight: 600; }
+.yul-nwm-click { cursor: pointer; outline: none; }
+.yul-nwm-click:hover, .yul-nwm-click:focus-visible { border-color: var(--border-2); }
+.yul-nwm-row {
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.7fr) 110px 110px 84px;
+  gap: 10px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--hair); font-size: 13px;
+}
+.yul-nwm-row:last-child { border-bottom: 0; }
+.yul-nwm-row.head { color: var(--text-3); font-size: 11.5px; padding-top: 0; }
+.yul-nwm-r { text-align: right; }
+.yul-nwm-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yul-nwm-change { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; align-items: center; }
+.yul-nwm-change > .yul-num { text-align: right; }
+.yul-nwm-dbar { position: relative; height: 10px; }
+.yul-nwm-dbar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--border-2); }
+.yul-nwm-dbar > i { position: absolute; top: 0; height: 10px; border-radius: 4px; animation: yul-fade .4s var(--ease) both; }
+.yul-nwm-dbar > i.up { background: var(--series-1); }
+.yul-nwm-dbar > i.down { background: var(--series-2); }
+.yul-nwp-move {
+  display: flex; gap: 10px; align-items: flex-start; padding: 7px 0;
+  border-bottom: 1px solid var(--hair); font-size: 13px;
+}
+.yul-nwp-move:last-child { border-bottom: 0; }
+.yul-nwp-bridge {
+  display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 8px 10px; align-items: center;
+  margin: 2px 0 6px;
+}
+.yul-nwp-step { font-size: 12.5px; color: var(--text-2); }
+.yul-nwp-step.net { color: var(--text); font-weight: 600; }
+.yul-nwp-track { position: relative; height: 14px; }
+.yul-nwp-bar { position: absolute; top: 0; height: 14px; border-radius: 4px; }
+.yul-nwp-bar.income { background: var(--series-1); }
+.yul-nwp-bar.spending { background: var(--series-2); }
+.yul-nwp-bar.valuation { background: var(--series-5); }
+.yul-nwp-bar.other { background: var(--text-3); }
+.yul-nwp-bar.net { border: 1.5px solid var(--text); }
+
 /* ---- motion ---- */
 @keyframes yul-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes yul-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -949,7 +1008,10 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   .yul-rec-row { grid-template-columns: 22px 48px minmax(0, 1fr) auto; gap: 8px; }
 }
 @media (max-width: 860px) {
+  .yul-catrules { grid-template-columns: minmax(0, 1fr); }
   .yul-nw-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .yul-nwm-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 76px; }
+  .yul-nwm-row > :nth-child(3), .yul-nwm-row > :nth-child(4) { display: none; }
   .yul-nw-arow { grid-template-columns: minmax(0, 1fr) 110px 34px; }
   /* The change goes under its field: a column of its own would squeeze the names */
   .yul-nw-accounts.bulk .yul-nw-arow { grid-template-columns: minmax(0, 1fr) 110px; row-gap: 2px; }

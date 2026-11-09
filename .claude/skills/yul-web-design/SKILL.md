@@ -67,8 +67,10 @@ same change. Never update a document to describe something you did not build.
   `card_switch(card, on=, marker=, title=, on_change=)` (rule 3; the marker stays on the
   `ui.switch`), `dialog_box(title, lede=)` + `run_dialog(dialog)` (rule 7's skeleton),
   `budget_tiles(budgets, selected, on_pick)`.
-- `components.dropzone`, `components.history_chart`, `components.controls` (`pill_group`,
-  `switch`) for the bigger pieces.
+- `components.dropzone`, `components.history_chart`, `components.flow_chart`,
+  `components.controls` (`pill_group`, `switch`) for the bigger pieces, and
+  `components.category_picker` whenever a category is picked: never a select or a list on the
+  page, a budget has hundreds.
 - CSS classes are prefixed `yul-` and live only in `web/static/yul.css`, in the section of
   their view (never `ui.add_css` or a CSS string in Python); a flow's sticky footer is
   `yul-foot` with `yul-foot-stat`. Use the tokens (`var(--accent-solid)`,

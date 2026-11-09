@@ -1,4 +1,8 @@
-"""The Net worth view: the hero with the history chart, the four buckets, the accounts table.
+"""The Net worth view, in three tabs.
+
+Overview: the hero with the history chart, the four buckets, the accounts table. Months: what
+moved net worth each month (`periods.months_tab`). Movers: how each account moved
+(`periods.movers_tab`). The range pill is shared by the three.
 
 Everything is read from the local store and the config (`data.load_snapshot`). Every open
 account counts unless Settings leaves it out (`web.accounts.effective_accounts`). The view
@@ -12,7 +16,7 @@ import asyncio
 import datetime as dt
 from functools import partial
 
-from nicegui import run, ui
+from nicegui import PageArguments, run, ui
 
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.core.history import TOTAL, Point, balance_series, net_worth_series
@@ -25,6 +29,7 @@ from ynab_unlinked.web.components import (
     empty_state,
     glass_card,
     segmented_bar,
+    set_class,
     stat_tile,
 )
 from ynab_unlinked.web.components.controls import pill_group
@@ -35,7 +40,7 @@ from ynab_unlinked.web.components.history_chart import (
     set_options,
 )
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.views.networth import data
+from ynab_unlinked.web.views.networth import data, flows
 from ynab_unlinked.web.views.networth.data import (
     DEFAULT_RANGE,
     DRAWER_TRANSACTIONS,
@@ -49,6 +54,7 @@ from ynab_unlinked.web.views.networth.data import (
     table_order,
 )
 from ynab_unlinked.web.views.networth.drawer import account_drawer
+from ynab_unlinked.web.views.networth.periods import PeriodTabs
 from ynab_unlinked.web.views.networth.table import AccountsTable
 from ynab_unlinked.web.wording import plural, short_date
 
@@ -57,7 +63,7 @@ TICK_SECONDS = 1.0
 
 
 class NetWorthView:
-    def __init__(self) -> None:
+    def __init__(self, tab: str = "overview") -> None:
         self.range = DEFAULT_RANGE
         self.grouping = "total"
         self.picked: list[str] | None = None
@@ -69,9 +75,12 @@ class NetWorthView:
         self.lock = asyncio.Lock()
         self.sync_key = self._sync_key()
 
+        self.tab = tab if tab in flows.TABS else "overview"
         with ui.element("div").classes("yul-nw") as self.root:
+            self.tabs = ui.element("div")
             self.body = ui.element("div")
         self.table = AccountsTable(self.root, self.refresh, self.open_drawer)
+        self.periods = PeriodTabs(self.root)
         self.chart: ui.echart | None = None
         self.delta: ui.element | None = None
         self.picker: ui.element | None = None
@@ -141,11 +150,19 @@ class NetWorthView:
             if snapshot is None or self.root.is_deleted:  # the app is shutting down
                 return
             self.snapshot = snapshot
-            if snapshot.stored and snapshot.tracked:
+            if self.tab == "overview" and snapshot.stored and snapshot.tracked:
                 history = await self._load_history(snapshot)
                 if history is None or self.root.is_deleted:
                     return
                 self.history = history
+            period = None
+            if self.tab != "overview" and snapshot.stored and snapshot.tracked:
+                start, end = flows.months_range(self.range, dt.date.today(), snapshot.earliest)
+                period = await run.io_bound(
+                    flows.load_period, state().store, config, snapshot, start, end
+                )
+                if period is None or self.root.is_deleted:
+                    return
             if self.picked is None and snapshot.tracked:
                 self.picked = default_picked(snapshot)
             if self.picked is not None:
@@ -154,6 +171,7 @@ class NetWorthView:
                 self.slots = assign_slots(self.slots, self.picked)
 
             self.table.reset(snapshot)
+            self._draw_tabs(bool(snapshot.stored) and bool(snapshot.tracked))
             self.body.clear()
             with self.body:
                 if not snapshot.stored:
@@ -165,10 +183,37 @@ class NetWorthView:
                         action_label="Open Settings",
                         on_action=lambda: ui.navigate.to(f"{shell.SETTINGS_PATH}?tab=accounts"),
                     ).mark("no-tracked")
+                elif period is not None:
+                    self.periods.draw(
+                        self.tab, snapshot, period, self.range, self.set_flow_range, self.palette
+                    )
                 else:
                     self._hero(snapshot)
                     self._buckets(snapshot)
                     self.table.draw(snapshot)
+
+    # ---- tabs ------------------------------------------------------------------------------
+
+    def _draw_tabs(self, shown: bool) -> None:
+        self.tabs.clear()
+        if not shown:
+            return
+        with self.tabs, ui.element("div").classes("yul-tabs").mark("nw-tabs"):
+            for key, label in flows.TABS.items():
+                item = ui.label(label).classes("yul-tab").mark(f"nw-tab-{key}")
+                set_class(item, "on", key == self.tab)
+                clickable(item, partial(self.select_tab, key), role="tab")
+
+    async def select_tab(self, key: str) -> None:
+        if key == self.tab:
+            return
+        self.tab = key
+        self.drawer = None
+        await self.refresh()
+
+    async def set_flow_range(self, key: str) -> None:
+        self.range = key
+        await self.refresh()
 
     def _first_sync(self) -> None:
         current = state()
@@ -282,6 +327,7 @@ class NetWorthView:
 
     def restyle(self) -> None:
         self._redraw()
+        self.periods.restyle(self.palette)
         if self.drawer is not None:
             chart, series = self.drawer
             if not chart.is_deleted:
@@ -449,5 +495,5 @@ class NetWorthView:
     icon="networth",
     order=40,
 )
-async def networth_view() -> None:
-    await NetWorthView().render()
+async def networth_view(args: PageArguments) -> None:
+    await NetWorthView(args.query_parameters.get("tab", "overview")).render()

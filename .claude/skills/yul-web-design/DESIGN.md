@@ -26,8 +26,9 @@ rules in section 5.
 Home        net worth at a glance, drop target and last imports, what needs you, recent activity
 Import      Files -> Review -> Done
 Reconcile   per account: cleared balance vs bank balance, reconcile transactions
-Net worth   history chart, buckets, accounts with inline balance updates
-Settings    tabs: Connection · Banks · Accounts · Net worth · Appearance · Data & privacy
+Net worth   tabs: Overview (history chart, buckets, accounts with inline balance updates)
+            · Months (what moved net worth each month) · Movers (how each account moved)
+Settings    tabs: Connection · Banks · Accounts · Net worth · Categories · Appearance · Data & privacy
 Onboarding  full screen, first run only
 ```
 
@@ -165,11 +166,40 @@ without the ceremony.
 - Clicking an account name opens a drawer with its own balance chart and last
   transactions.
 
+The tabs **Overview · Months · Movers** sit above the page (the Settings tab style); the
+range pill is shared by the three, and `?tab=months` opens a tab directly. Months and Movers
+work in whole calendar months: 1M is this month, 3M the last three with this one, YTD from
+January, All from the first transaction. Every line of a counted account is read the same way
+(Settings › Categories explains it to the user): money in to a budget account is income,
+whatever its category, refunds too; money out is spending, unless its category is marked "not
+spending" (set aside); what a tracking account does on its own is valuation; transfers between
+counted accounts move nothing. So the parts always add up to the change.
+
+- **Months**: a title with the range ("Jun 2026 – Nov 2026") and the pills, four stat tiles
+  (Change "+11,616.69€ · from 159,453.88€ · see why ›", which opens the drawer for the whole
+  range; From saving, income minus spending, with "80% of the change" only when it is a part
+  of it; From valuation; Months up "6 of 6 · best Nov +3,695.85€"), then a card "Monthly
+  change" with one stacked bar per month: Saved (series 1), Valuation (series 5), Other
+  (text-3) stacked up and down from zero, a dot for the net change, one tooltip per month.
+  Clicking a month opens its drawer.
+- **Movers**: one row per counted account, largest change first: name, a bar around a centre
+  line (series 1 up, series 2 down) with the change, "Your money" (what went in or out:
+  income, spending, transfers), "Valuation" (good or bad) and "Return", the money weighted
+  return of the valuation, per year over a range longer than one ("+6.1%", "−8.9%/yr", "—"
+  without valuation). A faint line under the card explains the three columns. Under 860px
+  the two middle columns hide.
+- **Period drawer** (the account drawer's dialog): the period, "start → end" worth, the
+  change in good or bad, one sentence ("You saved 1,200.00€, but valuation took 2,100.00€."),
+  the bridge (Income, Spending, Valuation, Other, then Net as an outlined bar, each bar
+  starting where the one before ended), "Accounts that moved most" (five, each with why:
+  "income +4,850.00€ · spending -3,650.00€ · transfers -1,520.00€"), "Spent most on" (five
+  categories).
+
 ### Settings
 
 Tabs: **Connection** (masked token with reveal and change, budget change, config version
 and path), **Banks**, **Accounts**, **Net worth** (debt -> accounts mapping with a visual
-picker), **Appearance** (the palette), **Data & privacy** (what is stored where, store size, last sync, the rows left
+picker, the goal), **Categories**, **Appearance** (the palette), **Data & privacy** (what is stored where, store size, last sync, the rows left
 out of imports with "Include again" on each, "Resync from scratch", "Reset all data" with
 confirmation).
 
@@ -190,6 +220,22 @@ confirmation).
   and other asset accounts). Counted cards are live, left out ones muted with their
   controls still usable. Every change saves at once with one quiet toast ("Accounts saved",
   "Left out of net worth", "Counted in net worth"); there is no save button.
+- **Net worth › Goal**: the target the plan follows, as an accent pill ("🏠 Down Payment ·
+  70,000.00€", "the largest target" beside it until one is picked), a "Change goal"
+  category picker listing only categories with a balance target, and "Use the largest
+  target" once one is picked. The lede says yul cannot see which goal YNAB's phone app
+  shows. Without a balance target in YNAB a faint line says to add one there.
+- **Categories**: three short rules side by side (Income, Spending, Tracking accounts: how
+  every line is read), then "Not spending": a lede, the marked categories as accent pills
+  with a ×, and an "Add category" picker. Each add or removal saves at once with a toast
+  ("📈 Broker is not spending now", "... counts as spending again"). Before the first sync
+  that brings categories, a faint line says they come with it.
+- **Category picker** (every place that picks a category): a small ghost button with a
+  chevron opening a menu, never a list on the page or a plain select (a budget has hundreds
+  of categories). The menu has a search field on top, focused, then every group as a small
+  caps header with its categories under it in YNAB's order. Typing keeps the categories
+  whose name has every typed word (no case, accents or emoji), or a whole group whose name
+  matches; "No category matches" otherwise. A click picks and closes.
 - **Appearance**: the four palettes as a grid of cards like Banks: a preview tile drawn in
   that palette whatever the page's is (its background with the two blobs, a primary
   "Import", a "by hand" pill and a link), the name and one line ("Royal blue to indigo on a
