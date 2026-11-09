@@ -238,7 +238,8 @@ class Store:
 
         The first sync of a budget fetches every transaction; later ones only what changed
         since the stored server knowledge. If YNAB rejects that knowledge, the budget is
-        forgotten and fetched again from scratch.
+        forgotten and fetched again from scratch. A full fetch flags deleted every row it did
+        not return, so a delete a delta missed does not stay in the copy.
         """
         knowledge = self._server_knowledge(budget_id)
         try:
@@ -409,6 +410,8 @@ class Store:
         progress.start("Saving to the local store")
         with self._connect() as conn:
             self._upsert_transactions(conn, budget_id, transactions)
+            if knowledge is None:
+                self._tombstone_missing(conn, budget_id, {t.id for t in transactions})
             self._replace_accounts(conn, budget_id, accounts)
             self._replace_categories(conn, budget_id, groups)
             self._replace_months(conn, budget_id, months)
@@ -496,6 +499,24 @@ class Store:
                 for sub in t.subtransactions
             ],
         )
+
+    @staticmethod
+    def _tombstone_missing(conn: sqlite3.Connection, budget_id: str, received: set[str]) -> None:
+        """Flag deleted every row of the budget a full fetch did not return.
+
+        A full fetch only sends the transactions that exist: one deleted in YNAB while a delta
+        missed it would otherwise stay in the copy for good. Flagged, not removed, like a
+        delete from YNAB, so the import ids of merged transactions are kept.
+        """
+        conn.execute("CREATE TEMP TABLE IF NOT EXISTS received (id TEXT PRIMARY KEY)")
+        conn.execute("DELETE FROM received")
+        conn.executemany("INSERT OR IGNORE INTO received (id) VALUES (?)", [(i,) for i in received])
+        conn.execute(
+            "UPDATE transactions SET deleted = 1 WHERE budget_id = ? AND deleted = 0 "
+            "AND id NOT IN (SELECT id FROM received)",
+            (budget_id,),
+        )
+        conn.execute("DELETE FROM received")
 
     @staticmethod
     def _replace_months(

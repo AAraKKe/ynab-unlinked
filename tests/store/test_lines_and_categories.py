@@ -321,3 +321,21 @@ def test_a_store_of_schema_7_syncs_everything_again_to_find_split_transfers(tmp_
         old.commit()
 
     assert Store(path).last_sync("budget") is None
+
+
+def test_a_full_sync_flags_deleted_what_ynab_no_longer_has(
+    store: Store, client: Client, ynab_api, tmp_path: Path
+):
+    kept = TransactionDetailFactory(id="kept", amount=-100)
+    gone = TransactionDetailFactory(id="gone", amount=-31_054_690)
+    serve(ynab_api, ([kept, gone], 10), ([kept], 20))
+    store.sync(client, BUDGET_ID)
+    # A delta missed the delete of "gone": only a full fetch can tell, as after a migration
+    with closing(sqlite3.connect(store.path)) as conn, conn:
+        conn.execute("DELETE FROM sync_state")
+
+    result = store.sync(client, BUDGET_ID)
+
+    assert result.full
+    assert [t.id for t in store.transactions(BUDGET_ID)] == ["kept"]
+    assert store.import_ids(BUDGET_ID, ["gone"]) == {}

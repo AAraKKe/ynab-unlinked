@@ -608,7 +608,9 @@ Migration 0007 adds `months` (month, note, income, budgeted, activity), replaced
 sync; `Store.month_notes(budget_id) -> dict[dt.date, str]` gives the months with a note.
 Migration 0008 adds `subtransactions.transfer_transaction_id`: YNAB sends the other side of a
 transfer made from a split line without a transfer account, so `Store.lines` gives it the
-split's account through this column (a full sync fills it in).
+split's account through this column (a full sync fills it in). A full sync flags deleted every row it did
+not receive (`_tombstone_missing`), so a delete a delta missed leaves the copy; migration 0009
+forces one more full sync for that.
 
 ```python
 # core/history.py
