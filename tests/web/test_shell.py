@@ -1,4 +1,5 @@
 import datetime as dt
+import gc
 import threading
 from pathlib import Path
 
@@ -224,3 +225,24 @@ async def test_a_config_save_runs_off_the_event_loop(user: User, mocker: MockerF
 
     assert threads
     assert threading.main_thread().name not in threads
+
+
+@pytest.mark.version("V4")
+async def test_a_toast_after_an_await_survives_its_element_being_redrawn(user: User):
+    # A click on a card starts a save; while it waits, another handler redraws the card and
+    # the clicked element is gone. Its toast must still reach the page, and the handler go on.
+    await user.open("/")
+    await user.should_see(marker="nav-home")
+    page = user.find(marker="nav-home").elements.pop().parent_slot
+    assert page is not None
+    with page:
+        box = ui.element("div")
+        with box:
+            handler_slot = ui.label("redrawn").default_slot
+    box.clear()  # the redraw: nothing holds the element the handler runs in any more
+    gc.collect()
+
+    with page, handler_slot:
+        shell.notify("Accounts saved")
+
+    await user.should_see("Accounts saved")

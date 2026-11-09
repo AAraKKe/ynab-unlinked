@@ -3,7 +3,7 @@ plan follows, and how balance adjustments are written."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -11,6 +11,7 @@ from nicegui import run, ui
 
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
+from ynab_unlinked.store import StoredCategory
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.categories import balance_goals, goal_category, grouped
@@ -31,7 +32,11 @@ CLEARED_LABELS = {
 
 async def render(page: Settings) -> None:
     config, _ = state().require()
+    # Read everything first: a tab drawn around an await shows half of itself for a while
     budget_accounts = await open_accounts()
+    categories = await run.io_bound(state().store.categories, config.budget.id)
+    if categories is None:  # the app is shutting down
+        return
     counted = tracking.effective_accounts(config, budget_accounts)
     on_budget = {account.id: account.on_budget for account in budget_accounts}
     ui.label(
@@ -60,8 +65,8 @@ async def render(page: Settings) -> None:
 
     draw()
 
-    await returns_section(page, config, counted, on_budget)
-    await goal_section(page, config)
+    returns_section(page, config, counted, on_budget)
+    goal_section(page, config, categories)
 
     ui.label("Balance adjustments").classes("yul-section").style("margin-top:18px")
     with ui.element("div").classes("yul-kv"):
@@ -111,7 +116,7 @@ async def render(page: Settings) -> None:
         )
 
 
-async def returns_section(
+def returns_section(
     page: Settings,
     config: LatestConfig,
     counted: list[TrackedAccount],
@@ -146,12 +151,11 @@ async def returns_section(
                 ui.label(account.name)
 
 
-async def goal_section(page: Settings, config: LatestConfig) -> None:
+def goal_section(
+    page: Settings, config: LatestConfig, categories: Sequence[StoredCategory]
+) -> None:
     """The category whose target the plan follows, picked among those with a balance target."""
     formatter = state().require_formatter()
-    categories = await run.io_bound(state().store.categories, config.budget.id)
-    if categories is None:  # the app is shutting down
-        return
     ui.label("Goal").classes("yul-section").style("margin-top:18px")
     ui.label(
         "The target the plan follows. yul cannot see which goal YNAB shows on your phone, so "

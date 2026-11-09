@@ -34,6 +34,8 @@ def token_wording() -> str:
 async def render(page: Settings) -> None:
     current = state()
     current.require()
+    # Read first: a tab drawn around an await shows half of itself for a while
+    rows, names = await left_out.load()
     path = current.store.path
     size = human_size(path.stat().st_size) if path.is_file() else "not created yet"
     with ui.element("div").classes("yul-kv"):
@@ -50,11 +52,14 @@ async def render(page: Settings) -> None:
         kv("What is kept")
         with ui.element("div").classes("yul-muted yul-small"):
             ui.label("The budget, banks, account settings and adjustment settings.")
-            ui.label("A copy of the budget's transactions and accounts, and a log of what yul did.")
+            ui.label(
+                "A copy of the budget's transactions, accounts, categories and month notes, and "
+                "a log of what yul did."
+            )
             ui.label("The rows of your statements you left out of imports.")
             ui.label("Nothing leaves this computer except calls to api.ynab.com.")
 
-    await left_out.render(page)
+    left_out.draw(page, rows, names)
 
     with ui.element("div").classes("yul-row").style("margin-top:14px;gap:8px"):
         resync = button("Resync from scratch", small=True).mark("resync")

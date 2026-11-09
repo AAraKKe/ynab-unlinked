@@ -24,10 +24,11 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from fastapi.responses import RedirectResponse
-from nicegui import PageArguments, run, ui
+from nicegui import PageArguments, context, run, ui
 from nicegui.client import Client
 from nicegui.elements.upload_files import FileUpload
 from nicegui.events import MultiUploadEventArguments
+from nicegui.slot import Slot
 
 from ynab_unlinked.__about__ import __version__
 from ynab_unlinked.config import LatestConfig
@@ -217,15 +218,38 @@ def refresh_view() -> None:
         shell.pages.refresh()
 
 
+def _live_slot() -> Slot | None:
+    """The innermost slot of the current task whose element still exists.
+
+    A handler runs in the slot of the element that fired it. When it awaits (a save, a read)
+    and the view redraws meanwhile, that element is gone, and NiceGUI can no longer tell which
+    browser tab the handler belongs to. An outer slot (the page, the view) still can.
+    """
+    for slot in reversed(context.slot_stack):
+        try:
+            slot.parent  # noqa: B018 (raises once the element is gone)
+        except RuntimeError:
+            continue
+        return slot
+    return None
+
+
 def notify(message: str, kind: ToastKind = "ok") -> None:
-    """A toast under the top bar, centered over the content, gone after 3s."""
-    ui.notify(
-        message,
-        position="top",
-        timeout=3000,
-        classes=f"yul-toast yul-toast--{kind}",
-        group=False,
-    )
+    """A toast under the top bar, centered over the content, gone after 3s.
+
+    Safe after an await in a handler whose element a redraw removed in the meantime.
+    """
+    slot = _live_slot()
+    if slot is None:  # nothing of this tab is left: it was closed
+        return
+    with slot:
+        ui.notify(
+            message,
+            position="top",
+            timeout=3000,
+            classes=f"yul-toast yul-toast--{kind}",
+            group=False,
+        )
 
 
 async def save_config(change: Callable[[LatestConfig], None], message: str | None = None) -> bool:
