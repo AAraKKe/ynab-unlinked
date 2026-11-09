@@ -1,1 +1,1 @@
-The README describes yul as it is now: a companion that keeps unlinked accounts up to date and shows what your budget data means.
+The README describes yul as it is now: it imports every statement at once into the right accounts and shows what your budget data means, with a table of the supported banks and screenshots of every page.

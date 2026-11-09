@@ -102,6 +102,7 @@ uv run poe check             # lint + format check + pyright (strict on src); ch
 uv run poe fix               # ruff format + autofix
 uv run poe tc-check          # verify a changelog fragment exists for the branch
 uv run yul app               # run the web app from the checkout
+uv run --with playwright python scripts/readme_screenshots.py  # README screenshots, made-up budget
 ```
 
 CI runs the same four things on every PR, after `uv sync --locked`. See `tests/AGENTS.md` for test conventions.

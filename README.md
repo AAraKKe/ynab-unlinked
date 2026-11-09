@@ -1,19 +1,31 @@
 # YNAB Unlinked
 
 `yul` is a companion for [YNAB](https://www.ynab.com) that runs on your computer. It does two
-things YNAB cannot:
+things:
 
-- **Keeps the accounts YNAB cannot link up to date.** Drop the statement your bank gives you
-  and the new transactions land in the right account, duplicates skipped. Reconcile against
-  what your bank says, and set by hand the balance of accounts that have no statement at all,
-  like investments, a pension or shares.
+- **Imports every statement at once.** YNAB imports one file into one account at a time, and
+  only in the formats it knows (CSV, OFX, QFX, QIF). yul understands the exports of specific
+  banks, PDFs and web pages included: drop every file you downloaded, yul works out which bank
+  each one is and sends its transactions to the right account, skipping what YNAB already has.
+  It also reconciles against what your bank says, and lets you set by hand the balance of
+  accounts that have no statement at all, like investments, a pension or shares.
 - **Shows you what your budget data means.** From a local copy of your budget: how your net
   worth moved each month and why, which accounts grow and which lose, what you earn, spend and
   save, which categories take most of your money and how steady or swingy each one is.
 
-Banks supported for imports today: **BBVA** (credit card PDF), **Sabadell** (TXT or XLS export)
-and **Cobee** (saved HTML page). Adding one is a small Python package; see the
-[wiki](https://github.com/AAraKKe/ynab-unlinked/wiki).
+![Net worth, month by month](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/networth-months.png)
+
+## Supported banks
+
+| Bank | What to download | Formats |
+|---|---|---|
+| BBVA | Credit card statement | PDF, XLSX |
+| Sabadell | Card movements | TXT, XLS |
+| Cobee | The transactions page, saved from the browser | HTML |
+
+Is your bank missing? [Open an issue](https://github.com/AAraKKe/ynab-unlinked/issues/new) with
+its name and the kind of file it lets you download, or add it yourself: a bank is a small Python
+package, see the [wiki](https://github.com/AAraKKe/ynab-unlinked/wiki).
 
 ## Install
 
@@ -42,28 +54,52 @@ budget locally, so every page after that is instant. It syncs again in the backg
 every change it makes.
 
 - **Home**: your net worth, a place to drop statements, and what needs you today.
+
+  ![Home](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/home.png)
+
 - **Import**: drop one or more statements anywhere; `yul` works out the bank, shows what is new
   and imports it after one confirmation.
+
+  ![Import](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/import.png)
+
 - **Reconcile**: type what your bank says, see the gap, reconcile the cleared transactions.
+
+  ![Reconcile](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/reconcile.png)
 
 **Finances**
 
 - **Net worth**
   - *Overview*: history by total, type or account, and the balances you update by hand.
+
+    ![Net worth overview](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/networth-overview.png)
+
   - *Months*: how much net worth moved each month, split into what you saved, what your assets
     did and the rest. Pick a month, or the whole range, to see where the change came from,
-    which accounts moved and why, what came in and what went out.
+    which accounts moved and why, what came in and what went out (the picture at the top).
   - *Movers*: every account's change, what you put in or took out, what it did on its own, and
     its return.
+
+    ![Movers](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/networth-movers.png)
+
 - **Cash flow**: income against spending month by month, your savings rate, how many months
   your cash would last, and where your income comes from.
+
+  ![Cash flow](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/cashflow.png)
+
 - **Spending**: by group and by category, and how each category moves: steady, variable,
   spiky, or lumpy (big charges every so often, like a yearly subscription). Click a category to
   see its months and how they spread.
 
+  ![Spending](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/spending.png)
+  ![A category's months](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/spending-category.png)
+
 **Settings**: the connection, the banks, which accounts count in your net worth and in which
 group, whose return to follow, the goal, the categories that are not spending, the look, and
 your local data.
+
+![Settings, accounts](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/settings.png)
+
+The screenshots show a made-up budget; `scripts/readme_screenshots.py` takes them again.
 
 ### How yul reads your money
 

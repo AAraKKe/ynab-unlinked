@@ -2,6 +2,10 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.sdist]
+# The README links the screenshots on GitHub; the package does not need 3 MB of them
+exclude = ["docs/screenshots"]
+
 [project]
 name = "ynab-unlinked"
 version = "1.0.0"
