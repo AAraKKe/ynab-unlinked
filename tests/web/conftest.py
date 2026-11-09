@@ -1,10 +1,11 @@
+import asyncio
 import gc
 import os
 from collections.abc import AsyncIterator
 
 import httpx
 import pytest
-from nicegui import core, ui
+from nicegui import core, run, ui
 from nicegui.testing.general import prepare_simulation
 
 from tests.helpers.web import BASE_URL, PORT, TOKEN, User, fresh_nicegui
@@ -13,6 +14,26 @@ from ynab_unlinked.web import app as web_app
 from ynab_unlinked.web import state as web_state
 from ynab_unlinked.web.security import cookie_name
 from ynab_unlinked.web.state import state
+
+SLOW_IO = float(os.environ.get("YUL_TEST_SLOW_IO", "0"))
+"""Seconds every `run.io_bound` call waits first (`YUL_TEST_SLOW_IO=0.3 uv run pytest tests/web`).
+
+A CI runner can take that long to run a handler off the loop. A test that only passes without it
+reads the page before the work it waits for has finished.
+"""
+
+
+@pytest.fixture(autouse=True)
+def slow_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    if not SLOW_IO:
+        return
+    io_bound = run.io_bound
+
+    async def slowly(callback, *args, **kwargs):  # type: ignore[no-untyped-def]
+        await asyncio.sleep(SLOW_IO)
+        return await io_bound(callback, *args, **kwargs)
+
+    monkeypatch.setattr(run, "io_bound", slowly)
 
 
 @pytest.fixture

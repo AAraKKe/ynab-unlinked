@@ -107,10 +107,17 @@ is almost always waiting for a fixed interval, not working. Measure before you a
 - `guest` builds the app through `web.app.build` exactly as `yul app` does, after the config
   fixtures, with the YNAB client stubbed by `ynab_api`; it is a browser without the session
   cookie (for the token guard). `user` is the same browser with the cookie: use it for views.
-  Both are `tests.helpers.web.User`, NiceGUI's `User` checking the page every 5 ms instead
-  of every 100 ms (the same wait before failing): `await user.open("/")`, `user.find(marker=...)`,
-  `await user.should_see(...)`. Mark elements in the views with `.mark("name")` and find them
-  by marker rather than by text.
+  Both are `tests.helpers.web.User`, NiceGUI's `User` checking the page every 5 ms for up to
+  `WAIT_SECONDS` (10 s) whatever `retries` says: `await user.open("/")`, `user.find(marker=...)`,
+  `await user.should_see(...)`. A passing check returns as soon as the page is right, so the
+  long ceiling costs nothing; a short one is a guess of how fast a runner is, and flakes. Mark
+  elements in the views with `.mark("name")` and find them by marker rather than by text.
+- Never `user.find(...)` an element you have not waited for: wait for that element, not for
+  another one drawn before it. Views read what they need first and draw a page in one go, so
+  a page is never half drawn around an `await`.
+- `YUL_TEST_SLOW_IO=0.3 uv run pytest tests/web` delays every `run.io_bound` call, as a busy
+  CI runner does. A test that passes only without it reads the page before the work it waits
+  for has finished: fix the wait, or the view if it draws around an await.
 - Request every fixture that changes the config or the store before `user`, which loads the
   app state from them. A test that changes the config afterwards calls `state().reload()`.
 - `tests/web/conftest.py` resets the `AppState` global for every test, so a sync a view

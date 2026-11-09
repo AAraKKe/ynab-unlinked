@@ -37,6 +37,15 @@ def fresh_nicegui() -> Iterator[None]:
         sys.modules.update(ours)
 
 
+WAIT_SECONDS = 10
+"""How long `User.should_see` / `should_not_see` and `eventually` wait before failing.
+
+Long on purpose: they return as soon as the page is right, so a passing test never pays it. A
+shorter wait is a guess at how long a handler run off the loop takes, and a busy CI runner
+makes that guess wrong.
+"""
+
+
 POLL_SECONDS = 0.005
 """How often the helpers below look again. Handlers run off the loop finish in a few ms."""
 
@@ -54,17 +63,16 @@ async def _poll(check: Callable[[], bool], seconds: float) -> None:
 
 async def eventually(check: Callable[[], bool]) -> None:
     """Wait for a background handler (a click that reads the store or saves) to finish."""
-    # Up to 10 s: a busy CI runner can take seconds to run a handler off the loop
-    await _poll(check, 10)
+    await _poll(check, WAIT_SECONDS)
     assert check()
 
 
 class User(NiceGUIUser):
-    """NiceGUI's simulated user, looking at the page every 5 ms instead of every 100 ms.
+    """NiceGUI's simulated user, looking at the page every 5 ms for up to `WAIT_SECONDS`.
 
-    NiceGUI checks `retries` times, 100 ms apart (50 ms for `should_not_see`), so whatever
-    shows up after a handler that ran off the loop cost a full 100 ms per check, most of the
-    web tests' time. The wait before failing stays the same.
+    NiceGUI checks `retries` times, 100 ms apart (50 ms for `should_not_see`): the wait before
+    failing is then a guess of how long the page takes, which flakes on a slow runner. Here
+    `retries` is accepted for NiceGUI's signature but every check waits the same, long time.
     """
 
     async def should_see(
@@ -76,7 +84,7 @@ class User(NiceGUIUser):
         content: str | list[str] | None = None,
         retries: int = 3,
     ) -> None:
-        await _poll(lambda: self._sees(target, kind, marker, content), retries * 0.1)
+        await _poll(lambda: self._sees(target, kind, marker, content), WAIT_SECONDS)
         # One last look that passes, or fails with NiceGUI's own message
         await super().should_see(target, kind=kind, marker=marker, content=content, retries=1)  # type: ignore[call-overload]
 
@@ -89,7 +97,7 @@ class User(NiceGUIUser):
         content: str | list[str] | None = None,
         retries: int = 3,
     ) -> None:
-        await _poll(lambda: not self._sees(target, kind, marker, content), retries * 0.05)
+        await _poll(lambda: not self._sees(target, kind, marker, content), WAIT_SECONDS)
         await super().should_not_see(  # type: ignore[call-overload]
             target, kind=kind, marker=marker, content=content, retries=1
         )
