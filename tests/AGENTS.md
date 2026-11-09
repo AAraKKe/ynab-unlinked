@@ -86,15 +86,29 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
   regenerates the binary fixtures under `tests/assets/{parsers,bbva,sabadell,cobee}`.
 - `isolated_migration_registry` (tests/config) gives a test its own `MigrationEngine` registry.
 - `tests/core` has a `client` fixture: a real `Client` whose SDK calls land on `ynab_api`.
-- Textual apps are driven with `asyncio.run()` around `app.run_test()`; see
-  `tests/cli/commands/apps/reconcile/harness.py` for the button and row helpers.
+- Textual apps are driven with `asyncio.run()` around `app.run_test()` through `run_app` in
+  `tests/cli/commands/apps/reconcile/harness.py` (button and row helpers there too). It turns
+  animations off and makes the pilot's idle wait poll every 5 ms instead of 20.
+
+## Keeping the suite fast
+
+The whole suite runs in seconds. A test that takes more than a few hundred milliseconds
+is almost always waiting for a fixed interval, not working. Measure before you accept it:
+
+- Never wait for a real timer. A view's interval is a module constant (`SYNC_POLL_SECONDS`
+  in the home view, `TICK_SECONDS` in net worth) that the test patches down.
+- Wait for a condition with `should_see` or `eventually`, never `asyncio.sleep(n)`.
+- A timeout under test gets the shortest value that still proves it.
+- Prefer `spec=` to `autospec=True` on big classes (a Textual app): autospec builds a mock
+  for every attribute, every test.
 
 ## Web app tests (`tests/web/`)
 
 - `guest` builds the app through `web.app.build` exactly as `yul app` does, after the config
   fixtures, with the YNAB client stubbed by `ynab_api`; it is a browser without the session
   cookie (for the token guard). `user` is the same browser with the cookie: use it for views.
-  Both are NiceGUI `User` objects: `await user.open("/")`, `user.find(marker=...)`,
+  Both are `tests.helpers.web.User`, NiceGUI's `User` checking the page every 5 ms instead
+  of every 100 ms (the same wait before failing): `await user.open("/")`, `user.find(marker=...)`,
   `await user.should_see(...)`. Mark elements in the views with `.mark("name")` and find them
   by marker rather than by text.
 - Request every fixture that changes the config or the store before `user`, which loads the

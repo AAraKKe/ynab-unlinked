@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
+from unittest import mock
 
+import textual._wait
 from textual.pilot import Pilot
 from textual.widgets import Button, DataTable, Switch
 from ynab import TransactionClearedStatus
@@ -64,13 +66,20 @@ def run_app(choices: list[Choice], scenario: Scenario) -> int | None:
     pytest-asyncio is not a dependency, so every scenario is driven from a sync test.
     """
     app = Reconcile(CONFIG, choices, formatter=FORMATTER)
+    # A switch slides for 300 ms and the pilot waits for the app to settle after each click
+    app.animation_level = "none"
 
     async def drive():
         async with app.run_test(size=TERMINAL_SIZE) as pilot:
             await scenario(pilot)
             await pilot.pause()
 
-    asyncio.run(drive())
+    # Every pilot step ends waiting for the app to go idle: it sleeps 20 ms at a time until
+    # one sleep used under 1 ms of CPU, so even an idle app costs 20 ms a step and a scenario
+    # has dozens. Same ratio in 5 ms steps: a third of the time. Before that wait the pilot
+    # makes every widget handle its pending messages, which is what the scenarios rely on.
+    with mock.patch.multiple(textual._wait, SLEEP_GRANULARITY=0.005, SLEEP_IDLE=0.00025):
+        asyncio.run(drive())
     return app.return_value
 
 

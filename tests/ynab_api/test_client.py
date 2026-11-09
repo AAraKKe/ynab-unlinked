@@ -329,7 +329,8 @@ def silent_ynab() -> Iterator[str]:
 def test_a_request_that_gets_no_answer_gives_up_with_one_line(
     silent_ynab: str, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setattr(client_module, "REQUEST_TIMEOUT", (0.2, 0.2))
+    # urllib3 tries four times; the server never answers, so a short read wait is enough
+    monkeypatch.setattr(client_module, "REQUEST_TIMEOUT", (0.2, 0.05))
     client = Client(api_key="an-api-key")
     client._Client__client.configuration.host = silent_ynab  # type: ignore[attr-defined]
 

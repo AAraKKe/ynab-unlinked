@@ -30,6 +30,7 @@ from ynab_unlinked.store import Store
 from ynab_unlinked.web import theme
 from ynab_unlinked.web.state import AppState, state
 from ynab_unlinked.web.views.networth import data as networth_data
+from ynab_unlinked.web.views.networth import view as networth_view
 from ynab_unlinked.web.views.networth.data import by_hand_pill, range_start
 from ynab_unlinked.ynab_api import Client
 
@@ -172,6 +173,12 @@ def seeded(tracked: LatestConfig, ynab_api: YnabClientStub, store_file: Path) ->
 @pytest.fixture
 def no_sync(mocker: MockerFixture) -> MagicMock:
     return mocker.patch.object(AppState, "sync_in_background")
+
+
+@pytest.fixture
+def fast_tick(mocker: MockerFixture) -> None:
+    """The view notices a sync or a palette change within 50 ms instead of a second."""
+    mocker.patch.object(networth_view, "TICK_SECONDS", 0.05)
 
 
 def texts(user: User, marker: str) -> str:
@@ -637,7 +644,7 @@ async def test_the_account_drawer_lists_its_transactions(seeded: Store, no_sync,
 
 
 async def test_the_first_sync_fills_the_view_when_it_lands(
-    tracked: LatestConfig, ynab_api: YnabClientStub, user: User
+    tracked: LatestConfig, ynab_api: YnabClientStub, fast_tick: None, user: User
 ):
     serve(ynab_api, HISTORY)
 
@@ -895,7 +902,7 @@ async def test_leaving_the_mode_drops_what_was_typed(
     assert bulk_field(user, INDEXA).value == "46,300.00"
 
 
-async def test_typed_balances_survive_a_sync(seeded: Store, no_sync, user: User):
+async def test_typed_balances_survive_a_sync(seeded: Store, no_sync, fast_tick: None, user: User):
     await update_balances(user)
     type_balance(user, INDEXA, "47,000")
     before = bulk_field(user, INDEXA)
@@ -932,7 +939,7 @@ async def test_a_ynab_error_keeps_the_mode_and_what_was_typed(
 
 
 async def test_the_net_worth_line_takes_the_palette_accent_and_follows_a_change(
-    seeded: Store, no_sync, user: User
+    seeded: Store, no_sync, fast_tick: None, user: User
 ):
     await open_networth(user)
     assert chart_series(user)[0]["color"] == theme.THEMES["midnight"].dark.accent[0]
