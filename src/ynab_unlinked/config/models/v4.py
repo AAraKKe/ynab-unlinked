@@ -54,6 +54,19 @@ class Adjustments(BaseModel):
     cleared: ClearedStatus = ClearedStatus.CLEARED
 
 
+class Finances(BaseModel):
+    """How the finance views read the budget's categories. Ids are YNAB category ids.
+
+    New after V4 shipped: both fields default to empty, so a V4 file without them is still
+    valid and no migration is needed.
+    """
+
+    not_spending: list[str] = Field(default_factory=list)
+    """Categories whose outflows are not spending: money set aside or moved to assets."""
+    goal_category_id: str | None = None
+    """The category whose target the plan tracks. None: the largest balance target."""
+
+
 class ConfigV4(BaseModel):
     api_key: str
     budget: Budget
@@ -63,6 +76,7 @@ class ConfigV4(BaseModel):
     accounts: list[TrackedAccount] = Field(default_factory=list[TrackedAccount])
     adjustments: Adjustments = Field(default_factory=Adjustments)
     debt_mappings: list[DebtMapping] = Field(default_factory=list[DebtMapping])
+    finances: Finances = Field(default_factory=Finances)
     version_number: str = Field(default="V4", alias="version")
 
     # A validation error must not print the token, which the input of the error would show

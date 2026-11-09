@@ -85,6 +85,16 @@ def net_worth_series(
     return series
 
 
+def balances_at(
+    store: Store, budget_id: str, account_ids: Sequence[str], dates: Sequence[dt.date]
+) -> dict[str, list[int]]:
+    """Each account's balance at the end of each of `dates`, which must be sorted."""
+    amounts = store.daily_amounts(budget_id, account_ids)
+    return {
+        account_id: _running_balance(amounts.get(account_id), dates) for account_id in account_ids
+    }
+
+
 def sample_dates(start: dt.date, end: dt.date) -> list[dt.date]:
     """Every day of the range, or every Monday plus `end` when it is longer than a year."""
     if end < start:

@@ -8,6 +8,7 @@ from .v4 import (
     ClearedStatus,
     ConfigV4,
     DebtMapping,
+    Finances,
     LoaderConfig,
     TrackedAccount,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "Checkpoint",
     "ClearedStatus",
     "DebtMapping",
+    "Finances",
     "EntityConfig",
     "EntityConfigV3",
     "LoaderConfig",
