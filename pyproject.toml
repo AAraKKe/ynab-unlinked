@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ynab-unlinked"
 version = "1.0.0"
-description = "Import bank statement exports into YNAB from the command line or a local web app"
+description = "Keep the accounts YNAB cannot link up to date and see what your budget data means, from the command line or a local web app"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"

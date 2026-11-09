@@ -16,6 +16,8 @@ When you run a command or use the web app, YNAB Unlinked may read the following 
 - Accounts
 - Transactions
 - Payees
+- Categories, with their groups, targets and notes
+- Months, with their notes and totals
 
 It also writes data back to YNAB on your behalf:
 
@@ -44,6 +46,7 @@ Besides the token, YNAB Unlinked stores a single JSON configuration file contain
 - The YNAB account and default options of each bank loader
 - The accounts you track for net worth, their bucket and whether you update them by hand
 - Debt mappings and balance adjustment settings (memo, payee, cleared status)
+- How the finance pages read your budget: the categories that are not spending, the accounts whose return to follow, and the category your goal is in
 - The date of your last reconciliation
 
 The file is **plaintext** and **not encrypted**. Where it lives depends on your operating system (resolved via [`platformdirs`](https://pypi.org/project/platformdirs/)):
@@ -58,7 +61,7 @@ If you have an old configuration created before version `0.7.0`, a legacy file m
 
 ### Local transaction store
 
-YNAB Unlinked also keeps a local copy of your budget's transactions and accounts, kept in sync with YNAB, plus an activity log of what it did (imports, reconciliations, balance adjustments). It is a SQLite file named `store.sqlite` in your user data directory (on macOS the same directory as the configuration, on Linux typically `~/.local/share/ynab-unlinked/`, on Windows `%LOCALAPPDATA%\committhatline\ynab-unlinked\`). It is not encrypted either, and `yul config reset` deletes it.
+YNAB Unlinked also keeps a local copy of your budget's transactions (split lines included), accounts, categories and month notes, kept in sync with YNAB, plus an activity log of what it did (imports, reconciliations, balance adjustments). It is a SQLite file named `store.sqlite` in your user data directory (on macOS the same directory as the configuration, on Linux typically `~/.local/share/ynab-unlinked/`, on Windows `%LOCALAPPDATA%\committhatline\ynab-unlinked\`). It is not encrypted either, and `yul config reset` deletes it.
 
 ### Local web app
 
