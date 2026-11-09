@@ -4,13 +4,15 @@ from pathlib import Path
 import pytest
 from nicegui.testing.user import User
 from ynab import (
+    AccountsResponse,
+    AccountsResponseData,
     CategoriesResponse,
     CategoriesResponseData,
     TransactionsResponse,
     TransactionsResponseData,
 )
 
-from tests.factories import CategoryFactory, CategoryGroupFactory
+from tests.factories import AccountFactory, CategoryFactory, CategoryGroupFactory
 from tests.helpers.web import eventually
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, get_config
@@ -135,3 +137,28 @@ async def test_without_a_balance_target_there_is_no_goal(config_v4: LatestConfig
     await open_tab(user, "networth", "save-networth")
 
     await user.should_see(marker="no-goal")
+
+
+async def test_return_chips_follow_asset_accounts_and_save_a_change(
+    config_v4: LatestConfig, ynab_api: YnabClientStub, user: User
+):
+    ynab_api.api("accounts").get_accounts.return_value = AccountsResponse(
+        data=AccountsResponseData(
+            accounts=[
+                AccountFactory(id=uuid.UUID(int=10), name="💰 Savings", type="savings"),
+                AccountFactory(
+                    id=uuid.UUID(int=20), name="📈 Fund", type="otherAsset", on_budget=False
+                ),
+            ],
+            server_knowledge=1,
+        )
+    )
+    savings, fund = str(uuid.UUID(int=10)), str(uuid.UUID(int=20))
+    await open_tab(user, "networth", "returns")
+
+    assert user.find(marker=f"return-{fund}").elements.pop().props["aria-pressed"] == "true"
+    assert user.find(marker=f"return-{savings}").elements.pop().props["aria-pressed"] == "false"
+
+    user.find(marker=f"return-{savings}").click()
+
+    await eventually(lambda: get_config().finances.returns == {savings: True})

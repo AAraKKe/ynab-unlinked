@@ -65,6 +65,9 @@ class Finances(BaseModel):
     """Categories whose outflows are not spending: money set aside or moved to assets."""
     goal_category_id: str | None = None
     """The category whose target the plan tracks. None: the largest balance target."""
+    returns: dict[str, bool] = Field(default_factory=dict)
+    """Account id -> whether its return is followed, where it differs from the default: asset
+    and tracking accounts are followed, the others are not."""
 
 
 class ConfigV4(BaseModel):

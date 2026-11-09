@@ -1,9 +1,10 @@
-"""Settings › Net worth: which accounts pay each debt, the goal the plan follows, and how balance
-adjustments are written."""
+"""Settings › Net worth: which accounts pay each debt, whose return Movers shows, the goal the
+plan follows, and how balance adjustments are written."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import partial
 from typing import TYPE_CHECKING
 
 from nicegui import run, ui
@@ -13,7 +14,7 @@ from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, Track
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.categories import balance_goals, goal_category, grouped
-from ynab_unlinked.web.components import button
+from ynab_unlinked.web.components import button, clickable
 from ynab_unlinked.web.components.category_picker import category_picker
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.settings.common import kv, open_accounts
@@ -30,7 +31,9 @@ CLEARED_LABELS = {
 
 async def render(page: Settings) -> None:
     config, _ = state().require()
-    counted = tracking.effective_accounts(config, await open_accounts())
+    budget_accounts = await open_accounts()
+    counted = tracking.effective_accounts(config, budget_accounts)
+    on_budget = {account.id: account.on_budget for account in budget_accounts}
     ui.label(
         "Each debt is subtracted from the accounts that pay it, so cash shows what is really yours."
     ).classes("yul-muted").style("margin-bottom:10px")
@@ -57,6 +60,7 @@ async def render(page: Settings) -> None:
 
     draw()
 
+    await returns_section(page, config, counted, on_budget)
     await goal_section(page, config)
 
     ui.label("Balance adjustments").classes("yul-section").style("margin-top:18px")
@@ -105,6 +109,41 @@ async def render(page: Settings) -> None:
         button("Save net worth settings", kind="primary", on_click=save_net_worth).mark(
             "save-networth"
         )
+
+
+async def returns_section(
+    page: Settings,
+    config: LatestConfig,
+    counted: list[TrackedAccount],
+    on_budget: dict[str, bool],
+) -> None:
+    """The accounts whose return Net worth › Movers shows, as chips that save at once."""
+    ui.label("Return").classes("yul-section").style("margin-top:18px")
+    ui.label(
+        "The accounts whose return Movers shows. On a budget account, such as a savings "
+        "account, its balance adjustments count as what the account earned, not as income."
+    ).classes("yul-muted").style("margin-bottom:10px")
+
+    async def toggle(account: TrackedAccount) -> None:
+        followed = not tracking.follows_return(config, account, on_budget.get(account.id, True))
+
+        def change(config: LatestConfig) -> None:
+            config.finances.returns[account.id] = followed
+
+        verb = "Showing" if followed else "Not showing"
+        if await shell.save_config(change, f"{verb} the return of {account.name}"):
+            await page.rerender()
+
+    with ui.element("div").classes("yul-chips").mark("returns"):
+        for account in counted:
+            on = tracking.follows_return(config, account, on_budget.get(account.id, True))
+            chip = ui.element("div").classes("yul-chipc").mark(f"return-{account.id}")
+            chip.props["aria-pressed"] = "true" if on else "false"
+            if on:
+                chip.classes("on")
+            clickable(chip, partial(toggle, account))
+            with chip:
+                ui.label(account.name)
 
 
 async def goal_section(page: Settings, config: LatestConfig) -> None:

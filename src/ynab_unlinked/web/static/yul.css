@@ -310,6 +310,7 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .yul-pill.warn { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 40%, transparent); background: color-mix(in oklab, var(--warn) 12%, transparent); }
 .yul-pill.acc { color: var(--pill-acc-text); border-color: var(--pill-acc-border); background: var(--pill-acc-bg); }
 .yul-pill.click { cursor: pointer; transition: all .15s; }
+.yul-pill.yul-pill-closed { font-size: 10.5px; padding: 1px 7px; color: var(--text-3); background: transparent; }
 .yul-pill.click:hover { border-color: var(--border-2); }
 
 /* ---- buttons (Quasar q-btn with color=None) ---- */
@@ -945,7 +946,13 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-nwm-row:last-child { border-bottom: 0; }
 .yul-nwm-row.head { color: var(--text-3); font-size: 11.5px; padding-top: 0; }
 .yul-nwm-r { text-align: right; }
-.yul-nwm-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yul-nwm-name { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.yul-nwm-name > .q-item__label, .yul-nwm-name > div:first-child { overflow: hidden; text-overflow: ellipsis; }
+.yul-nwm-months > .yul-nwm-card { cursor: default; }
+.yul-nwp-panel { padding: 16px 18px; margin-top: 10px; }
+.yul-nwp-head { align-items: flex-start; gap: 12px; }
+.yul-nwp-figure { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.yul-nwp-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 4px 28px; }
 .yul-nwm-change { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; align-items: center; }
 .yul-nwm-change > .yul-num { text-align: right; }
 .yul-nwm-dbar { position: relative; height: 10px; }
@@ -1009,6 +1016,7 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 }
 @media (max-width: 860px) {
   .yul-catrules { grid-template-columns: minmax(0, 1fr); }
+  .yul-nwp-cols { grid-template-columns: minmax(0, 1fr); }
   .yul-nw-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .yul-nwm-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 76px; }
   .yul-nwm-row > :nth-child(3), .yul-nwm-row > :nth-child(4) { display: none; }

@@ -25,6 +25,7 @@ from ynab_unlinked.web.buckets import NET_WORTH_ORDER, SERIES_BUCKETS, STYLES
 from ynab_unlinked.web.components import (
     Segment,
     clickable,
+    closed_pill,
     count_up,
     empty_state,
     glass_card,
@@ -80,7 +81,9 @@ class NetWorthView:
             self.tabs = ui.element("div")
             self.body = ui.element("div")
         self.table = AccountsTable(self.root, self.refresh, self.open_drawer)
-        self.periods = PeriodTabs(self.root)
+        self.periods = PeriodTabs()
+        self.drawn: tuple[object, ...] | None = None
+        """What the Months or Movers tab last drew, so a sync that changed nothing redraws nothing."""
         self.chart: ui.echart | None = None
         self.delta: ui.element | None = None
         self.picker: ui.element | None = None
@@ -137,7 +140,7 @@ class NetWorthView:
             net_worth_series,
             state().store,
             config.budget.id,
-            snapshot.tracked,
+            snapshot.history,
             snapshot.nettings,
             range_start(self.range, today, snapshot.earliest),
             today,
@@ -166,9 +169,15 @@ class NetWorthView:
             if self.picked is None and snapshot.tracked:
                 self.picked = default_picked(snapshot)
             if self.picked is not None:
-                ids = {a.id for a in snapshot.tracked}
+                ids = {a.id for a in snapshot.history}
                 self.picked = [account_id for account_id in self.picked if account_id in ids]
                 self.slots = assign_slots(self.slots, self.picked)
+
+            # The sync after opening the page often changes nothing: keep the tab as drawn
+            drawn = (self.tab, self.range, snapshot, period)
+            if period is not None and drawn == self.drawn:
+                return
+            self.drawn = drawn if period is not None else None
 
             self.table.reset(snapshot)
             self._draw_tabs(bool(snapshot.stored) and bool(snapshot.tracked))
@@ -301,7 +310,7 @@ class NetWorthView:
                 for bucket in SERIES_BUCKETS
             ]
         if self.grouping == "account":
-            names = {a.id: self.snapshot.name(a) for a in self.snapshot.tracked}
+            names = {a.id: self.snapshot.name(a) for a in self.snapshot.history}
             picked = sorted(
                 (account_id for account_id in self.picked or [] if account_id in names),
                 key=lambda account_id: self.slots[account_id],
@@ -385,7 +394,9 @@ class NetWorthView:
                 "yul-faint yul-small"
             ).mark("pick-count")
             with ui.element("div").classes("yul-chips"):
-                for account in table_order(snapshot):
+                open_ids = {a.id for a in snapshot.tracked}
+                closed = [a for a in snapshot.history if a.id not in open_ids]
+                for account in [*table_order(snapshot), *closed]:
                     chip = ui.element("div").classes("yul-chipc").mark(f"pick-{account.id}")
                     clickable(chip, partial(self.toggle_pick, account.id))
                     on = account.id in picked
@@ -403,6 +414,8 @@ class NetWorthView:
                                 f"background:var(--series-{slot})"
                             )
                         ui.label(snapshot.name(account))
+                        if snapshot.closed(account.id):
+                            closed_pill()
 
     # ---- buckets ---------------------------------------------------------------------------
 

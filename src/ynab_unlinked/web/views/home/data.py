@@ -98,12 +98,14 @@ def load_home(
         else today - dt.timedelta(days=DELTA_FALLBACK_DAYS)
     )
     spark_start = today - dt.timedelta(days=SPARK_DAYS - 1)
-    spark = net_worth_series(store, budget_id, tracked, nettings, spark_start, today)[TOTAL]
+    # Closed accounts held money before they were closed: the history counts them
+    history = tracking.history_accounts(config, accounts.values())
+    spark = net_worth_series(store, budget_id, history, nettings, spark_start, today)[TOTAL]
     if since >= spark_start:
         before = [point.value for point in spark if point.date <= since]
         then = before[-1] if before else worth.total
     else:
-        older = net_worth_series(store, budget_id, tracked, nettings, since, since)[TOTAL]
+        older = net_worth_series(store, budget_id, history, nettings, since, since)[TOTAL]
         then = older[0].value if older else worth.total
 
     open_ids = {account.id for account in accounts.values() if not account.closed}

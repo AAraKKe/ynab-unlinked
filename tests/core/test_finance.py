@@ -9,6 +9,7 @@ from ynab_unlinked.core.finance import (
     Flows,
     Rules,
     annualised,
+    income_by_payee,
     months_between,
     period,
     period_return,
@@ -21,6 +22,7 @@ CHECKING, CARD, FUND, OUTSIDE = "checking", "card", "fund", "not-counted"
 RULES = Rules(
     on_budget={CHECKING: True, CARD: True, FUND: False},
     not_spending=frozenset({"broker"}),
+    returns=frozenset({FUND}),
 )
 
 
@@ -55,7 +57,7 @@ def line(
         (line(12_000, account=CARD), "income"),
         (line(-500_000, category="broker"), "set_aside"),
         (line(500_000, category="broker"), "income"),
-        (line(-1_640_000, account=FUND, category=None), "valuation"),
+        (line(-1_640_000, account=FUND, category=None), "assets"),
         (line(1_000_000, account=FUND, category=None, transfer=CHECKING), "transfers"),
         (line(-1_000_000, transfer=FUND), "transfers"),
         (line(-300_000, transfer=OUTSIDE), "outside"),
@@ -180,7 +182,7 @@ def test_a_period_explains_the_whole_change_of_net_worth(store: Store):
     april = period(store, BUDGET, RULES, dt.date(2025, 4, 1), dt.date(2025, 4, 30))
 
     assert april.flows == Flows(
-        income=3_000_000, spending=-1_000_000, valuation=-400_000, outside=-200_000
+        income=3_000_000, spending=-1_000_000, assets=-400_000, outside=-200_000
     )
     assert (april.start_worth, april.end_worth) == (12_000_000, 13_400_000)
     assert april.end_worth - april.start_worth == april.flows.change
@@ -188,7 +190,7 @@ def test_a_period_explains_the_whole_change_of_net_worth(store: Store):
 
     moves = {move.account_id: move for move in april.accounts}
     assert [move.account_id for move in april.accounts] == [CHECKING, FUND, CARD]
-    assert (moves[FUND].change, moves[FUND].own_money, moves[FUND].flows.valuation) == (
+    assert (moves[FUND].change, moves[FUND].own_money, moves[FUND].flows.assets) == (
         600_000,
         1_000_000,
         -400_000,
@@ -196,3 +198,83 @@ def test_a_period_explains_the_whole_change_of_net_worth(store: Store):
     assert moves[FUND].rate == pytest.approx(-400_000 / (10_000_000 + 1_000_000 * 21 / 30))
     assert moves[CHECKING].rate is None
     assert [spend.category_id for spend in april.spending] == ["rent", "groceries"]
+
+
+SAVINGS = "savings"
+FOLLOWED = Rules(
+    on_budget={CHECKING: True, SAVINGS: True, FUND: False},
+    returns=frozenset({SAVINGS, FUND}),
+    adjustment_payees=frozenset({"Reconciliation Balance Adjustment", "Balance Adjustment"}),
+)
+
+
+@pytest.mark.parametrize(
+    ("given", "kind"),
+    [
+        (line(40_000, account=SAVINGS, payee="Reconciliation Balance Adjustment"), "assets"),
+        (line(7_982_000, account=SAVINGS, payee="Balance Adjustment"), "assets"),
+        (line(500_000, account=SAVINGS, payee="Employer"), "income"),
+        (line(-80_000, account=SAVINGS, payee="Amtrak"), "spending"),
+        (line(40_000, payee="Balance Adjustment"), "income"),
+    ],
+    ids=[
+        "interest of a followed savings account",
+        "a sale recorded as an adjustment in it",
+        "a payment into it is still income",
+        "spending from it is still spending",
+        "an adjustment of an account not followed is income",
+    ],
+)
+def test_adjustments_of_a_followed_budget_account_are_asset_changes(given: Line, kind: str):
+    assert FOLLOWED.kind(given) == kind
+
+
+def test_income_is_listed_by_payee_most_first():
+    lines = [
+        line(3_000_000, payee="Employer", category="ready-to-assign"),
+        line(1_000_000, payee="Employer", category="ready-to-assign"),
+        line(40_000, payee="Shop", category="groceries"),
+        line(-50_000, payee="Shop"),
+        line(1_000_000, transfer=CARD, payee="Transfer : Card"),
+    ]
+
+    assert [(i.name, i.amount) for i in income_by_payee(lines, RULES)] == [
+        ("Employer", 4_000_000),
+        ("Shop", 40_000),
+    ]
+
+
+def test_a_return_is_only_given_for_followed_accounts(store: Store):
+    upsert(
+        store,
+        BUDGET,
+        accounts=[
+            StoredAccountFactory(id=FUND, type="otherAsset", on_budget=False, balance=9_600_000)
+        ],
+        transactions=[
+            StoredTransactionFactory(
+                id="t1",
+                account_id=FUND,
+                date=dt.date(2025, 3, 1),
+                amount=10_000_000,
+                payee_name="Starting Balance",
+            ),
+            StoredTransactionFactory(
+                id="t2",
+                account_id=FUND,
+                date=dt.date(2025, 4, 30),
+                amount=-400_000,
+                payee_name="Reconciliation Balance Adjustment",
+            ),
+        ],
+    )
+    april = (dt.date(2025, 4, 1), dt.date(2025, 4, 30))
+
+    followed = period(
+        store, BUDGET, Rules(on_budget={FUND: False}, returns=frozenset({FUND})), *april
+    )
+    not_followed = period(store, BUDGET, Rules(on_budget={FUND: False}), *april)
+
+    assert followed.accounts[0].rate == pytest.approx(-0.04)
+    assert not_followed.accounts[0].rate is None
+    assert not_followed.flows.assets == -400_000

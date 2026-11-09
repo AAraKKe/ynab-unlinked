@@ -1,8 +1,8 @@
 """What the Months and Movers tabs of Net worth show, worked out without NiceGUI.
 
 The months a range pill covers, the rules that sort every line (`core.finance.Rules`) from the
-counted accounts and Settings › Categories, the period read from the store, and the words of
-the period drawer. Everything is plain Python, tested directly.
+counted accounts (closed ones too) and Settings, the period read from the store, and the words
+of the period panel. Everything is plain Python, tested directly.
 """
 
 from __future__ import annotations
@@ -12,10 +12,19 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.core.finance import AccountMove, Flows, Period, Rules, annualised, month_start
+from ynab_unlinked.core.finance import (
+    RECONCILIATION_PAYEE,
+    AccountMove,
+    Flows,
+    Period,
+    Rules,
+    annualised,
+    month_start,
+)
 from ynab_unlinked.core.finance import period as read_period
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store
+from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web.views.networth.data import Snapshot, signed
 
 TABS = {"overview": "Overview", "months": "Months", "movers": "Movers"}
@@ -46,16 +55,28 @@ def months_range(key: str, today: dt.date, earliest: dt.date) -> tuple[dt.date, 
 
 
 def rules(snapshot: Snapshot, config: LatestConfig) -> Rules:
-    """The counted accounts (on the budget or tracking) and the "not spending" categories."""
+    """The counted accounts (on the budget or tracking), the "not spending" categories, the
+    accounts whose return is followed and the payees of balance adjustments."""
+    accounts = snapshot.history
+    on_budget = {
+        account.id: snapshot.stored[account.id].on_budget if account.id in snapshot.stored else True
+        for account in accounts
+    }
     return Rules(
-        on_budget={
-            account.id: snapshot.stored[account.id].on_budget
-            if account.id in snapshot.stored
-            else True
-            for account in snapshot.tracked
-        },
+        on_budget=on_budget,
         not_spending=frozenset(config.finances.not_spending),
+        returns=frozenset(
+            account.id
+            for account in accounts
+            if tracking.follows_return(config, account, on_budget[account.id])
+        ),
+        adjustment_payees=frozenset({RECONCILIATION_PAYEE, config.adjustments.payee}),
     )
+
+
+def account_names(snapshot: Snapshot) -> dict[str, str]:
+    """The name of every account the period counts, closed ones included."""
+    return {account.id: snapshot.name(account) for account in snapshot.history}
 
 
 def load_period(
@@ -81,18 +102,18 @@ class Step:
     label: str
     amount: int
     kind: str
-    """`income`, `spending`, `valuation`, `other` or `net`: the bar's colour."""
+    """`income`, `spending`, `assets`, `other` or `net`: the bar's colour."""
 
 
 def bridge(flows: Flows) -> list[Step]:
-    """Income, spending, valuation and the rest, then the net change. Empty steps are left out.
+    """Income, spending, assets and the rest, then the net change. Empty steps are left out.
 
     Transfers between counted accounts add up to zero, so they are not a step.
     """
     steps = [
         Step("Income", flows.income, "income"),
         Step("Spending", flows.spending, "spending"),
-        Step("Valuation", flows.valuation, "valuation"),
+        Step("Assets", flows.assets, "assets"),
         Step("Other", flows.other + flows.transfers, "other"),
     ]
     return [step for step in steps if step.amount] + [Step("Net", flows.change, "net")]
@@ -107,11 +128,11 @@ def headline(flows: Flows, formatter: Formatter) -> str:
         if saved >= 0
         else f"You spent {money(-saved)} more than came in"
     )
-    if not flows.valuation:
+    if not flows.assets:
         return f"{first}."
-    joint = "and" if (saved >= 0) == (flows.valuation >= 0) else "but"
-    what = "added" if flows.valuation > 0 else "took"
-    return f"{first}, {joint} valuation {what} {money(abs(flows.valuation))}."
+    joint = "and" if (saved >= 0) == (flows.assets >= 0) else "but"
+    what = "gained" if flows.assets > 0 else "lost"
+    return f"{first}, {joint} your assets {what} {money(abs(flows.assets))}."
 
 
 def why(move: AccountMove, formatter: Formatter) -> str:
@@ -122,7 +143,7 @@ def why(move: AccountMove, formatter: Formatter) -> str:
         ("spending", flows.spending),
         ("set aside", flows.set_aside),
         ("transfers", flows.transfers),
-        ("valuation", flows.valuation),
+        ("assets", flows.assets),
         ("from outside", flows.outside),
     ]
     text = " · ".join(f"{label} {signed(formatter, amount)}" for label, amount in parts if amount)
@@ -141,6 +162,18 @@ def rate_text(move: AccountMove, days: int) -> str:
     rate = annualised(move.rate, days)
     suffix = "/yr" if days > 365 else ""
     return f"{rate * 100:+.1f}%{suffix}".replace("-", "−")
+
+
+def next_selection(current: int | None, clicked: int | None) -> int | None:
+    """The month selected after a click: another month, or none when it was the one selected
+    (or the click was outside the bars)."""
+    return None if clicked is None or clicked == current else clicked
+
+
+OTHER_NOTE = (
+    "Other is money set aside in a category marked not spending, starting balances, and "
+    "transfers with accounts left out of net worth."
+)
 
 
 def months_up(period: Period) -> tuple[int, int]:

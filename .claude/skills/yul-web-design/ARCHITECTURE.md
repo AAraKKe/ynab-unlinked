@@ -438,6 +438,7 @@ class Adjustments(BaseModel):
 class Finances(BaseModel):     # added after V4 shipped, defaults only: no migration
     not_spending: list[str] = []            # category ids whose outflows are set aside
     goal_category_id: str | None = None     # the plan's goal; None: the largest balance target
+    returns: dict[str, bool] = {}           # account id -> return followed, where not default
 
 class ConfigV4(BaseModel):
     api_key: str
@@ -635,27 +636,29 @@ of net worth exactly:
 | `income` | money in to an account on the budget, not a transfer, any category (refunds too) |
 | `spending` | money out of an account on the budget, not a transfer |
 | `set_aside` | money out in a category of `Finances.not_spending` |
-| `valuation` | any line of a tracking account that is not a transfer |
+| `assets` | any line of a tracking account that is not a transfer, and a balance adjustment (`adjustment_payees`) of a budget account in `returns` |
 | `transfers` | a transfer with another counted account (zero over all of them) |
 | `outside` | a starting balance, or a transfer with an account not counted |
 
 ```python
 @dataclass(frozen=True)
 class Flows:                 # milliunits signed as they move net worth
-    income, spending, set_aside, valuation, transfers, outside: int = 0
+    income, spending, set_aside, assets, transfers, outside: int = 0
     saved (income + spending), other (set_aside + outside), change; supports +
 
 @dataclass(frozen=True)
 class Rules:
     on_budget: Mapping[str, bool]          # every counted account -> on the budget
     not_spending: frozenset[str] = frozenset()
+    returns: frozenset[str] = frozenset()      # accounts whose return is followed
+    adjustment_payees: frozenset[str] = frozenset({RECONCILIATION_PAYEE})
     def kind(self, line: Line) -> str | None   # None: the account is not counted
 
 @dataclass(frozen=True)
 class AccountMove:
     account_id: str; start_balance: int; end_balance: int; flows: Flows
-    rate: float | None       # modified Dietz return over the period when valuation moved it
-    change, own_money (change minus valuation)
+    rate: float | None       # modified Dietz return over the period, for followed accounts
+    change, own_money (change minus assets)
 
 @dataclass(frozen=True)
 class Period:
@@ -663,10 +666,12 @@ class Period:
     months: tuple[tuple[dt.date, Flows], ...]   # every calendar month touched, oldest first
     accounts: tuple[AccountMove, ...] = ()      # largest change first
     spending: tuple[CategorySpend, ...] = ()    # most spent first; refunds do not lower it
+    income: tuple[PayeeIncome, ...] = ()        # by payee, most first
 
 def period(store, budget_id, rules, start, end, names=None) -> Period   # blocking
 def flows_by_account(lines, rules) -> dict[str, Flows]
 def spending_by_category(lines, rules, names=None) -> list[CategorySpend]
+def income_by_payee(lines, rules) -> list[PayeeIncome]
 def period_return(start_balance, flows, gain, start, end) -> float | None
 def annualised(rate, days) -> float          # unchanged for a year or less
 def months_between(start, end) -> list[dt.date]; month_start(day); month_end(day)
@@ -684,7 +689,9 @@ web/
   categories.py        pure: Group, grouped(categories) (the user's, by group, YNAB's order),
                        matching(groups, text) (every word, no case, accents or emoji),
                        balance_goals(), goal_category(categories, chosen), BALANCE_GOALS
-  accounts.py          effective_accounts() / by_hand_accounts() / effective_nettings():
+  accounts.py          effective_accounts() / history_accounts() (closed ones too, for the
+                       history and the Months and Movers tabs) / follows_return() /
+                       by_hand_accounts() / effective_nettings():
                        what Home, Net worth and Settings count (3.4.1); last_set_by_hand(), STALE_AFTER_DAYS
   buckets.py           STYLES (BucketStyle: title, group_title, series slot, colour per bucket),
                        NET_WORTH_ORDER, SETTINGS_ORDER, SERIES_BUCKETS
@@ -709,7 +716,7 @@ web/
                        per view, motion, then every media query), fonts/InterVariable.woff2.
                        No CSS lives in Python.
   components/          button, glass_card, pill, bank_logo, stat_tile, segmented_bar, share_bar,
-                       empty_state, spinner, check, icon (+ ICONS), count_up (the one count up
+                       empty_state, spinner, check, closed_pill, icon (+ ICONS), count_up (the one count up
                        animation: Home and Net worth heroes); the helpers every view reuses:
                        set_class(el, name, on), clickable(el, handler, role="button") (role,
                        tabindex, click and Enter), loading(text) / show_state(box, kind, text)
@@ -727,7 +734,8 @@ web/
     history_chart.py   ChartSeries, history_options() / history_chart() / set_options(),
                        money_js(): the ECharts history line chart
     flow_chart.py      months_options(months, palette, currency_format, selected=None),
-                       months_chart(..., on_pick(index)): Net worth › Months' stacked bars
+                       months_chart(..., on_pick(index), selected=None): Net worth › Months'
+                       stacked bars, net line, a transparent column per month for clicks
     category_picker.py category_picker(groups, on_pick, *, label, marker): a button opening
                        a menu of groups and categories with a search field on top
   views/
@@ -765,7 +773,8 @@ web/
       view.py          ReconcileView (with the reconcile: confirm, reconcile, log, checkpoint) and the view
       footer.py        selection / done / locking footers
     networth/          /networth    tabs Overview (history chart, buckets, accounts, balance
-                                    updates, drawer), Months and Movers (one core.finance.Period)
+                                    updates, drawer), Months (chart and period panel) and Movers,
+                                    from one core.finance.Period
       data.py          RANGES, MAX_PICKED, range_start, by_hand_pill, assign_slots,
                        Snapshot, load_snapshot, table_order, default_picked, parse_balance,
                        set_balance / set_balances (the one write: live balances, build and
@@ -776,9 +785,10 @@ web/
                        period_title, Step / bridge, headline, why, moved, rate_text, months_up,
                        best_month, month_bounds, share_of_change, spread
       view.py          NetWorthView (tabs, hero, ranges, chips, buckets, drawer loading) and the view
-      periods.py       PeriodTabs (draws Months or Movers, opens the period drawer, restyles),
-                       months_tab, movers_tab
-      period_drawer.py period_drawer(period, names, formatter): the bridge, accounts, categories
+      periods.py       PeriodTabs (draws Months or Movers, the selected month and its panel,
+                       restyles), months_tab, movers_tab
+      period_panel.py  period_panel(period, names, closed, formatter, *, selected, on_clear):
+                       the bridge, accounts, came in from, spent most on
       table.py         AccountsTable: the accounts card, its inline balance editor and the
                        "Update balances" mode
       drawer.py        account_drawer(...) -> its chart
@@ -1025,11 +1035,12 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
 
 #### Net worth
 
-Tabs: `nw-tabs`, `nw-tab-{overview|months|movers}`. Months: `tile-change` (opens the period
-drawer for the range), `tile-saved`, `tile-valuation`, `tile-months-up`, `months-chart` (a
-click on a month opens its drawer). Movers: `movers`, `mover-{account_id}`. Period drawer:
-`period-drawer`, `period-headline`, `bridge`, `step-{income|spending|valuation|other|net}`,
-`moved-{account_id}`.
+Tabs: `nw-tabs`, `nw-tab-{overview|months|movers}`. Months: `tile-change`, `tile-saved`,
+`tile-assets`, `tile-months-up`, `months-chart` (its `componentClick` picks a month: a series
+point by `dataIndex`, or the x axis by `value`, the month as `YYYY-MM`), `other-note`. Period
+panel: `period-panel`, `period-title`, `period-clear`, `period-headline`, `bridge`,
+`step-{income|spending|assets|other|net}`, `moved-{account_id}`, `came-in`, `spent-on`.
+Movers: `movers`, `mover-{account_id}`.
 
 Markers: `no-tracked`, `pick-{account_id}`, `pick-count`, `edit-{account_id}`,
 `balance-input-{account_id}`, `accept-{account_id}`, `cancel-{account_id}`,
@@ -1059,8 +1070,9 @@ Appearance: `tab-appearance`, `themes` (the card grid), `theme-{name}` (a palett
 `live` when chosen). Categories: `category-rules`, `no-categories`, `not-spending`,
 `not-spending-{id}`, `spending-again-{id}`, `add-not-spending` (a category picker). Net
 worth goal: `goal`, `goal-current`, `pick-goal` (a category picker), `goal-default`,
-`no-goal`. A category picker's search field is marked with the picker's marker and
--search after it, each category row with the marker, a dash and the category id.
+`no-goal`. Net worth return: `returns`, `return-{account_id}` (`aria-pressed` on or off).
+A category picker's search field is marked with the picker's marker and -search after it,
+each category row with the marker, a dash and the category id.
 
 #### Import
 

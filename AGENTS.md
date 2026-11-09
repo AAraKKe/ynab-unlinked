@@ -23,7 +23,7 @@ src/ynab_unlinked/
     choices.py       `Choice`, the selectable rows of `yul reconcile`.
   core/              UI independent services shared by the CLI and the web app: importing,
                      reconcile, loader detection, balances and net worth, history, finance
-                     (where a period's money came from: income, spending, valuation).
+                     (where a period's money came from: income, spending, assets).
                      Never imports typer, rich, textual or nicegui.
   entities/          One package per bank (bbva, cobee, sabadell). `registry.py` discovers
                      their `LoaderSpec`s; `_sniff.py` has helpers for `sniff()`.

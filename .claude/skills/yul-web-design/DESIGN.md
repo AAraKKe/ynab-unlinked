@@ -172,28 +172,39 @@ work in whole calendar months: 1M is this month, 3M the last three with this one
 January, All from the first transaction. Every line of a counted account is read the same way
 (Settings › Categories explains it to the user): money in to a budget account is income,
 whatever its category, refunds too; money out is spending, unless its category is marked "not
-spending" (set aside); what a tracking account does on its own is valuation; transfers between
-counted accounts move nothing. So the parts always add up to the change.
+spending" (set aside); **Assets** is what changed an asset outside transfers, whatever the
+reason (market moves, interest, a sale recorded as an adjustment): every line of a tracking
+account, and the balance adjustments of the budget accounts whose return is followed;
+transfers between counted accounts move nothing. So the parts always add up to the change.
+Closed accounts count for the past (they held money then), in the history of Overview and
+Home too, and show a faint "closed" pill wherever they are listed; the Accounts table, which
+is about today's balances, leaves them out.
 
 - **Months**: a title with the range ("Jun 2026 – Nov 2026") and the pills, four stat tiles
-  (Change "+11,616.69€ · from 159,453.88€ · see why ›", which opens the drawer for the whole
-  range; From saving, income minus spending, with "80% of the change" only when it is a part
-  of it; From valuation; Months up "6 of 6 · best Nov +3,695.85€"), then a card "Monthly
-  change" with one stacked bar per month: Saved (series 1), Valuation (series 5), Other
-  (text-3) stacked up and down from zero, a dot for the net change, one tooltip per month.
-  Clicking a month opens its drawer.
-- **Movers**: one row per counted account, largest change first: name, a bar around a centre
-  line (series 1 up, series 2 down) with the change, "Your money" (what went in or out:
-  income, spending, transfers), "Valuation" (good or bad) and "Return", the money weighted
-  return of the valuation, per year over a range longer than one ("+6.1%", "−8.9%/yr", "—"
-  without valuation). A faint line under the card explains the three columns. Under 860px
-  the two middle columns hide.
-- **Period drawer** (the account drawer's dialog): the period, "start → end" worth, the
-  change in good or bad, one sentence ("You saved 1,200.00€, but valuation took 2,100.00€."),
-  the bridge (Income, Spending, Valuation, Other, then Net as an outlined bar, each bar
-  starting where the one before ended), "Accounts that moved most" (five, each with why:
-  "income +4,850.00€ · spending -3,650.00€ · transfers -1,520.00€"), "Spent most on" (five
-  categories).
+  (Change "+11,616.69€ · from 159,453.88€"; From saving, income minus spending, with "80% of
+  the change" only when it is a part of it; From assets; Months up "6 of 6 · best Nov
+  +3,695.85€"), then a card "Monthly change" with one bar per month: Saved (series 1), Assets
+  (series 5) and, only when there is some, Other (text-3), stacked up and down from zero.
+  Segments meet square and only the two ends of a month's bar are rounded, so it reads as one
+  bar split into parts. A line with dots (text colour) joins the net changes, one tooltip per
+  month. When Other shows, a faint line under the chart says what it is.
+- **Period panel**, under the chart (no dialog): with no month selected it shows the whole
+  range; a click anywhere in a month's column, or on its name, shows that month (the other
+  months fade); clicking the same month again, a click outside the chart, or the ghost
+  "× Whole range" in the panel goes back. The panel: the period, "start → end" worth, the
+  change in good or bad, one sentence ("You saved 1,200.00€, but your assets lost
+  2,100.00€."), then two columns: the bridge (Income, Spending, Assets, Other, then Net as an
+  outlined bar, each bar starting where the one before ended) and "Accounts that moved most"
+  (five, each with why: "income +4,850.00€ · spending -3,650.00€ · transfers -1,520.00€");
+  "Came in from" (five payees: income is by payee) and "Spent most on" (five categories).
+  One column under 860px. A sync that changes nothing does not redraw the tab.
+- **Movers**: one row per counted account (closed ones that held money in the range too),
+  largest change first: name, a bar around a centre line (series 1 up, series 2 down) with
+  the change, "Your money" (what went in or out: income, spending, transfers), "Assets" (good
+  or bad) and "Return", the money weighted return of the asset changes, per year over a range
+  longer than one ("+6.1%", "−8.9%/yr", "—" for an account whose return is not followed). A
+  faint line under the card explains the three columns. Under 860px the two middle columns
+  hide.
 
 ### Settings
 
@@ -220,6 +231,10 @@ confirmation).
   and other asset accounts). Counted cards are live, left out ones muted with their
   controls still usable. Every change saves at once with one quiet toast ("Accounts saved",
   "Left out of net worth", "Counted in net worth"); there is no save button.
+- **Net worth › Return**: one chip per counted account; on (accent) means Movers shows its
+  return. Asset and tracking accounts are on by default. On a budget account, such as a
+  savings account, its balance adjustments then count as what it earned (Assets), not as
+  income. A click saves at once with a toast ("Showing the return of 💰 Wise Savings").
 - **Net worth › Goal**: the target the plan follows, as an accent pill ("🏠 Down Payment ·
   70,000.00€", "the largest target" beside it until one is picked), a "Change goal"
   category picker listing only categories with a balance target, and "Use the largest

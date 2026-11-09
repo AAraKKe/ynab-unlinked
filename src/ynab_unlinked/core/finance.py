@@ -7,9 +7,15 @@ Every line of a counted account (a transaction, or one line of a split) is one o
 - **spending**: money out, other than a transfer, of an account on the budget.
 - **set aside**: money out of an account on the budget in a category marked "not spending"
   (money put away or moved to assets YNAB does not track).
-- **valuation**: any line of a tracking account that is not a transfer: what its value did.
+- **assets**: what an asset changed by on its own, outside transfers: any line of a tracking
+  account that is not a transfer (market moves, interest, a sale recorded as an adjustment),
+  and the balance adjustments of the budget accounts whose return is followed
+  (`Rules.returns`), such as the interest of a savings account.
 - **transfers**: transfers with another counted account. They add up to zero over all of them.
 - **outside**: starting balances, and transfers with accounts that are not counted.
+
+Closed accounts count for the past, when they held money: a transfer from one is a transfer,
+not money from outside.
 
 So the change of net worth over a period is exactly the sum of the six, and each account's
 change splits the same way.
@@ -24,6 +30,9 @@ from dataclasses import dataclass, field, fields
 from ynab_unlinked.core.history import balances_at
 from ynab_unlinked.store import STARTING_BALANCE_PAYEE, Line, Store
 
+RECONCILIATION_PAYEE = "Reconciliation Balance Adjustment"
+"""The payee YNAB gives the adjustment a reconcile creates when the balance differs."""
+
 DAYS_IN_YEAR = 365
 
 
@@ -34,7 +43,7 @@ class Flows:
     income: int = 0
     spending: int = 0
     set_aside: int = 0
-    valuation: int = 0
+    assets: int = 0
     transfers: int = 0
     outside: int = 0
 
@@ -45,12 +54,12 @@ class Flows:
 
     @property
     def other(self) -> int:
-        """What moved net worth besides saving and valuation: set aside and outside."""
+        """What moved net worth besides saving and assets: set aside and outside."""
         return self.set_aside + self.outside
 
     @property
     def change(self) -> int:
-        return self.saved + self.other + self.valuation + self.transfers
+        return self.saved + self.other + self.assets + self.transfers
 
     def __add__(self, other: Flows) -> Flows:
         return Flows(
@@ -66,6 +75,11 @@ class Rules:
     """Every counted account, and whether it is on the budget (False: a tracking account)."""
     not_spending: frozenset[str] = frozenset()
     """Category ids whose outflows are set aside, not spent."""
+    returns: frozenset[str] = frozenset()
+    """Accounts whose return is followed. On a budget account, its balance adjustments are
+    asset changes (interest, gains), not income or spending."""
+    adjustment_payees: frozenset[str] = frozenset({RECONCILIATION_PAYEE})
+    """The payees of balance adjustments: YNAB's and the one yul writes."""
 
     def kind(self, line: Line) -> str | None:
         """The `Flows` field the line adds to, None when its account is not counted."""
@@ -76,8 +90,10 @@ class Rules:
             return "transfers" if line.transfer_account_id in self.on_budget else "outside"
         if line.payee_name == STARTING_BALANCE_PAYEE:
             return "outside"
-        if not on_budget:
-            return "valuation"
+        if not on_budget or (
+            line.account_id in self.returns and line.payee_name in self.adjustment_payees
+        ):
+            return "assets"
         if line.amount >= 0:
             return "income"
         return "set_aside" if line.category_id in self.not_spending else "spending"
@@ -92,6 +108,12 @@ class CategorySpend:
 
 
 @dataclass(frozen=True)
+class PayeeIncome:
+    name: str
+    amount: int
+
+
+@dataclass(frozen=True)
 class AccountMove:
     """How one counted account moved over the period."""
 
@@ -101,7 +123,8 @@ class AccountMove:
     end_balance: int
     flows: Flows
     rate: float | None
-    """Its return over the period (money weighted), when valuation moved it; not annualised."""
+    """Its return over the period (money weighted) when it is followed and its assets moved;
+    not annualised."""
 
     @property
     def change(self) -> int:
@@ -109,8 +132,8 @@ class AccountMove:
 
     @property
     def own_money(self) -> int:
-        """What moved it besides valuation: what you put in or took out."""
-        return self.change - self.flows.valuation
+        """What moved it besides its asset changes: what you put in or took out."""
+        return self.change - self.flows.assets
 
 
 @dataclass(frozen=True)
@@ -127,6 +150,8 @@ class Period:
     """Largest change first, either way."""
     spending: tuple[CategorySpend, ...] = field(default=())
     """By category, most spent first."""
+    income: tuple[PayeeIncome, ...] = field(default=())
+    """By payee, most first."""
 
     @property
     def days(self) -> int:
@@ -195,6 +220,19 @@ def spending_by_category(
     )
 
 
+def income_by_payee(lines: Iterable[Line], rules: Rules) -> list[PayeeIncome]:
+    """What came in from each payee, most first. Income is counted by payee, not category."""
+    amounts: dict[str, int] = {}
+    for line in lines:
+        if rules.kind(line) == "income":
+            name = line.payee_name or "No payee"
+            amounts[name] = amounts.get(name, 0) + line.amount
+    return sorted(
+        (PayeeIncome(name, amount) for name, amount in amounts.items()),
+        key=lambda income: (-income.amount, income.name),
+    )
+
+
 def period_return(
     start_balance: int,
     flows: Sequence[tuple[dt.date, int]],
@@ -205,7 +243,7 @@ def period_return(
     """The modified Dietz return of an account over `start`..`end`, both included.
 
     `flows` are the money put in (positive) or taken out (negative) on each date, `gain` what
-    valuation added. Money counts from the start of the day it came in, so money put in late
+    the asset changes added. Money counts from the start of the day it came in, so money put in late
     in the period counts for less of it. None when there
     was nothing invested to earn a return on.
     """
@@ -259,13 +297,13 @@ def period(
         flows = per_account.get(account_id, Flows())
         start_balance, end_balance = balances[account_id]
         rate = None
-        if flows.valuation:
+        if account_id in rules.returns and flows.assets:
             own = [
                 (line.date, line.amount)
                 for line in lines
-                if line.account_id == account_id and rules.kind(line) != "valuation"
+                if line.account_id == account_id and rules.kind(line) != "assets"
             ]
-            rate = period_return(start_balance, own, flows.valuation, start, end)
+            rate = period_return(start_balance, own, flows.assets, start, end)
         moves.append(AccountMove(account_id, start_balance, end_balance, flows, rate))
     moves.sort(key=lambda move: (-abs(move.change), move.account_id))
 
@@ -278,4 +316,5 @@ def period(
         months=months,
         accounts=tuple(moves),
         spending=tuple(spending_by_category(lines, rules, names)),
+        income=tuple(income_by_payee(lines, rules)),
     )

@@ -141,6 +141,13 @@ def pill(text: str, kind: PillKind = "default") -> ui.label:
     return element
 
 
+def closed_pill() -> ui.label:
+    """The faint "closed" tag next to the name of an account closed in YNAB."""
+    element = pill("closed").classes("yul-pill-closed")
+    element.props["title"] = "Closed in YNAB: counted for the time it held money"
+    return element
+
+
 def stat_tile(
     label: str, value: str, *, hint: str | None = None, swatch: str | None = None
 ) -> ui.element:
@@ -416,6 +423,7 @@ __all__ = [
     "icon",
     "loading",
     "pill",
+    "closed_pill",
     "run_dialog",
     "section_title",
     "segmented_bar",
