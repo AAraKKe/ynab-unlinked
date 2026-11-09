@@ -476,8 +476,8 @@ class Store:
         )
         conn.executemany(
             "INSERT OR REPLACE INTO subtransactions (budget_id, id, transaction_id, amount, "
-            "memo, payee_name, category_id, category_name, transfer_account_id, deleted) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "memo, payee_name, category_id, category_name, transfer_account_id, deleted, "
+            "transfer_transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     budget_id,
@@ -490,6 +490,7 @@ class Store:
                     sub.category_name,
                     _text(sub.transfer_account_id),
                     sub.deleted,
+                    sub.transfer_transaction_id,
                 )
                 for t in transactions
                 for sub in t.subtransactions
@@ -645,7 +646,8 @@ class Store:
         """The lines of every non deleted transaction, oldest first; `since`/`until` inclusive.
 
         A split transaction is replaced by its lines, which take its date and account (and its
-        payee when they name none). A transaction is one line.
+        payee when they name none). A transaction is one line. The other side of a transfer made
+        from a split line comes from YNAB without a transfer account; it takes the split's.
         """
         dates = ""
         params: list[str] = []
@@ -657,7 +659,12 @@ class Store:
             params.append(until.isoformat())
         query = (
             "SELECT t.id AS transaction_id, t.account_id, t.date, t.amount, t.payee_name, "
-            "t.category_id, t.category_name, t.transfer_account_id FROM transactions t "
+            "t.category_id, t.category_name, COALESCE(t.transfer_account_id, ("
+            "  SELECT p.account_id FROM subtransactions s JOIN transactions p"
+            "    ON p.budget_id = s.budget_id AND p.id = s.transaction_id"
+            "  WHERE s.budget_id = t.budget_id AND s.transfer_transaction_id = t.id"
+            "    AND s.deleted = 0 AND p.deleted = 0 LIMIT 1)) AS transfer_account_id "
+            "FROM transactions t "
             f"WHERE t.budget_id = ? AND t.deleted = 0{dates} AND NOT EXISTS ("
             "  SELECT 1 FROM subtransactions s WHERE s.budget_id = t.budget_id"
             "  AND s.transaction_id = t.id AND s.deleted = 0) "

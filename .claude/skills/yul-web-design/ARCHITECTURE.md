@@ -606,6 +606,9 @@ Migration 0006 adds `transactions.category_id` and the `subtransactions` and `ca
 tables, and empties `sync_state`, so the next sync is a full one that fills them in.
 Migration 0007 adds `months` (month, note, income, budgeted, activity), replaced on every
 sync; `Store.month_notes(budget_id) -> dict[dt.date, str]` gives the months with a note.
+Migration 0008 adds `subtransactions.transfer_transaction_id`: YNAB sends the other side of a
+transfer made from a split line without a transfer account, so `Store.lines` gives it the
+split's account through this column (a full sync fills it in).
 
 ```python
 # core/history.py

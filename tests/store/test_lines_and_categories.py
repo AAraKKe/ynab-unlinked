@@ -279,3 +279,45 @@ def test_a_store_of_schema_5_syncs_everything_again_to_fill_the_new_data(tmp_pat
 
     assert store.last_sync("budget") is None
     assert [t.id for t in store.transactions("budget")] == ["t1"]
+
+
+def test_the_other_side_of_a_transfer_from_a_split_line_is_a_transfer(
+    store: Store, client: Client, ynab_api
+):
+    # YNAB sends the RSU side of a transfer made from a split line without a transfer account
+    vest = paycheck(
+        SubTransactionFactory(id="s1", amount=9_899_040, category_id=INCOME, category_name="RSUs"),
+        SubTransactionFactory(
+            id="s2",
+            amount=-9_899_040,
+            transfer_account_id=CASH_CARD,
+            transfer_transaction_id="other-side",
+        ),
+    )
+    other_side = TransactionDetailFactory(
+        id="other-side",
+        account_id=CASH_CARD,
+        var_date=dt.date(2025, 5, 1),
+        amount=9_899_040,
+        payee_name="Transfer : Checking",
+        transfer_account_id=None,
+    )
+    serve(ynab_api, ([vest, other_side], 10))
+
+    store.sync(client, BUDGET_ID)
+
+    received = next(line for line in store.lines(BUDGET_ID) if line.transaction_id == "other-side")
+    assert received.transfer_account_id == str(CHECKING)
+
+
+def test_a_store_of_schema_7_syncs_everything_again_to_find_split_transfers(tmp_path: Path):
+    path = tmp_path / "store.sqlite"
+    with closing(sqlite3.connect(path)) as old:
+        apply(old, MIGRATIONS[:7])
+        old.execute(
+            "INSERT INTO sync_state (budget_id, server_knowledge, synced_at) "
+            "VALUES ('budget', 42, '2025-05-01T10:00:00.000000+00:00')"
+        )
+        old.commit()
+
+    assert Store(path).last_sync("budget") is None
