@@ -690,6 +690,7 @@ def months_between(start, end) -> list[dt.date]; month_start(day); month_end(day
 
 ```python
 STEADY_BELOW = 0.25; VARIABLE_BELOW = 0.75; LUMPY_SAME_BELOW = 0.25; MIN_MONTHS = 6
+HISTORY_MONTHS = 36         # how far back a category's label looks, whatever the range
 UNUSUAL_ABOVE = 1.25        # a month this many times its median gets a label
 
 @dataclass(frozen=True)
@@ -698,8 +699,10 @@ def volatility(spent: Sequence[int], months: int | None = None) -> Volatility
     # cv = population stdev / mean over a category's life (its first to its last month of
     # spending, quiet months in between counted as zero). lumpy: spent in at most half of
     # them, those alike (their own cv < 0.25); else steady / variable / spiky by cv. No label
-    # when the range holds fewer than MIN_MONTHS months, the life fewer than MIN_LIFETIME,
-    # or it spent in one month only. CategoryTrend.mean is over the whole range.
+    # when the history holds fewer than MIN_MONTHS months, the life fewer than MIN_LIFETIME,
+    # or it spent in one month only. cash_flow() measures it over the complete months of the
+    # last HISTORY_MONTHS (the range when that is longer), so a label does not change with
+    # the range pills. CategoryTrend.spent and .mean are the range's.
 
 @dataclass(frozen=True)
 class FlowMonth: month; income; spending (positive); complete; label: str | None

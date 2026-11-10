@@ -162,7 +162,7 @@ class Life:
 
 
 def life(trend: CategoryTrend, flow: CashFlow) -> Life:
-    months = [month.month for month in flow.complete]
+    months = [month.month for month in flow.measured]
     active = [index for index, value in enumerate(trend.spent) if value > 0]
     if not active:
         return Life(tuple(months), trend.spent)

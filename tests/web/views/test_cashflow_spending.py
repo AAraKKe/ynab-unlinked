@@ -363,3 +363,30 @@ async def test_a_link_to_a_category_the_range_does_not_have_opens_the_chart(
 
     await user.should_see(marker="sp-scatter", retries=20)
     await user.should_not_see(marker="category-detail")
+
+
+async def test_spending_shows_the_running_month_so_far(
+    synced: Store, ynab_api: YnabClientStub, no_sync, user: User
+):
+    transactions = ynab_api.api("transactions").get_transactions.return_value.data.transactions
+    transactions.append(
+        TransactionDetailFactory(
+            id="now",
+            account_id=CHECKING,
+            var_date=dt.date.today().replace(day=1),
+            amount=-1_000_000,
+            payee_name="Landlord",
+            category_id=RENT,
+        )
+    )
+    synced.clear(BUDGET_ID)
+    synced.sync(Client("api-key"), BUDGET_ID)
+    await user.open("/spending")
+    await user.should_see(marker="sp-scatter", retries=20)
+
+    user.find(marker="range-1M").click()
+
+    await user.should_see(marker="sp-so-far", retries=20)
+    assert texts(user, "sp-total") == "Spent so far 1,000.00€"
+    # Eleven months of the same rent behind it: steady, though the range is one month
+    assert "steady" in texts(user, f"category-{RENT}")

@@ -141,12 +141,15 @@ class SpendingView:
             with ui.element("div").classes("yul-nwm-head"):
                 ui.label(period_title(flow.start, flow.end)).classes("yul-h2 yul-grow")
                 pill_group({key: key for key in RANGES}, self.range, self.set_range, marker="range")
-            if not flow.complete or not flow.categories:
+            if not flow.categories:
                 empty_state(
-                    "Spending needs one complete month. Pick a longer range.",
-                    icon_name="spending",
+                    "Nothing was spent in this range. Pick a longer one.", icon_name="spending"
                 ).mark("sp-empty")
                 return
+            if flow.running_only:
+                ui.label(
+                    "This month so far. What each category is comes from its history."
+                ).classes("yul-muted yul-small yul-sp-so-far").mark("sp-so-far")
             self._tiles(flow)
             with ui.element("div").classes("yul-sp-split"):
                 self._groups(flow)
@@ -159,7 +162,8 @@ class SpendingView:
         money = state().require_formatter().format_amount_milli
         core = flow.core_spending()
         with ui.element("div").classes("yul-sp-tiles yul-stagger"):
-            stat_tile("Spending a month", money(round(flow.mean_spending))).mark("sp-total")
+            title = "Spent so far" if flow.running_only else "Spending a month"
+            stat_tile(title, money(round(flow.mean_spending))).mark("sp-total")
             stat_tile("Core", money(round(core)), hint="steady and variable categories").mark(
                 "sp-core"
             )
@@ -267,8 +271,10 @@ class SpendingView:
                         ui.label(word.hint).classes("yul-muted yul-small")
             ui.label(
                 "How much a category moves is its standard deviation over its average, from its "
-                "first month of spending to its last (quiet months in between count as zero). A "
-                "category needs six months in the range and three of its own for a word."
+                "first month of spending to its last (quiet months in between count as zero). "
+                "The word comes from up to three years of history, whatever range is shown, so a "
+                "yearly charge is lumpy even when you look at one month. A category needs six "
+                "months of history and three of its own for a word."
             ).classes("yul-faint yul-small")
 
     def _categories(self, flow: CashFlow) -> None:

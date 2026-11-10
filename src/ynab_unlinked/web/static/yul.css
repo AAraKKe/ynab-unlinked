@@ -1098,6 +1098,7 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-hbar-track { height: 10px; }
 .yul-hbar-track > i { display: block; height: 10px; border-radius: 4px; background: var(--series-1); animation: yul-grow .5s var(--ease) both; transform-origin: left; }
 .yul-hbar-v { text-align: right; white-space: nowrap; }
+.yul-sp-so-far { margin: -4px 0 10px; }
 .yul-sp-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0 10px; }
 .yul-sp-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .yul-sp-split > .yul-nwm-card { margin-top: 10px; }

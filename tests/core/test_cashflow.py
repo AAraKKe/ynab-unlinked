@@ -154,3 +154,91 @@ def test_months_before_a_category_existed_are_not_counted_as_quiet(store: Store)
 
     assert flow.categories[0].volatility.label == "steady"
     assert flow.categories[0].spent[:3] == (0, 0, 0)
+
+
+# ---- what a category is comes from its history, not from the range -----------------------------
+
+
+def history_rows(first_year: int, last: dt.date) -> list[tuple[str, int, str, str | None]]:
+    """Rent every month and an insurance every January, from `first_year` to `last`."""
+    rows: list[tuple[str, int, str, str | None]] = []
+    month = dt.date(first_year, 1, 1)
+    while month <= last:
+        rows.append((month.replace(day=3).isoformat(), -1_000_000, "Landlord", "rent"))
+        if month.month == 1:
+            rows.append((month.replace(day=9).isoformat(), -480_000, "Insurer", "insurance"))
+        month = dt.date(month.year + month.month // 12, month.month % 12 + 1, 1)
+    return rows
+
+
+def labels(store: Store, start: str, end: str) -> dict[str, str | None]:
+    flow = cash_flow(store, BUDGET, RULES, dt.date.fromisoformat(start), dt.date.fromisoformat(end))
+    return {trend.category_id or "": trend.volatility.label for trend in flow.categories}
+
+
+def test_a_yearly_charge_is_lumpy_in_a_range_that_holds_one_of_them(store: Store):
+    seed(store, history_rows(2023, dt.date(2026, 3, 31)))
+
+    # Three months, one insurance in them: three years of history say what it is
+    assert labels(store, "2026-01-01", "2026-03-31") == {"rent": "steady", "insurance": "lumpy"}
+
+
+def test_the_range_does_not_change_what_a_category_is(store: Store):
+    seed(store, history_rows(2023, dt.date(2026, 3, 31)))
+
+    short = labels(store, "2026-01-01", "2026-03-31")
+    year = labels(store, "2025-04-01", "2026-03-31")
+    everything = labels(store, "2023-01-01", "2026-03-31")
+
+    assert short == year == everything == {"rent": "steady", "insurance": "lumpy"}
+
+
+def test_a_range_longer_than_the_history_is_measured_whole(store: Store):
+    # A charge every other January: two of them in five years, none in the last three but one
+    rows = history_rows(2021, dt.date(2026, 3, 31))
+    rows = [row for row in rows if row[3] != "insurance"]
+    rows += [
+        ("2021-01-09", -480_000, "Insurer", "insurance"),
+        ("2023-01-09", -480_000, "Insurer", "insurance"),
+    ]
+    seed(store, rows)
+
+    assert labels(store, "2021-01-01", "2026-03-31")["insurance"] == "lumpy"
+
+
+def test_a_young_budget_has_too_little_history_for_a_label(store: Store):
+    seed(store, history_rows(2026, dt.date(2026, 4, 30)))
+
+    assert labels(store, "2026-01-01", "2026-04-30") == {"rent": None, "insurance": None}
+
+
+def test_the_months_before_the_budget_began_are_not_history(store: Store):
+    # Eight months of rent: steady, not a category that was quiet for two years before. One
+    # insurance is a single purchase so far
+    seed(store, [row for row in history_rows(2025, dt.date(2026, 3, 31)) if row[0] >= "2025-08"])
+
+    assert labels(store, "2026-01-01", "2026-03-31") == {"rent": "steady", "insurance": None}
+
+
+def test_a_range_that_is_only_the_running_month_shows_it_so_far(store: Store):
+    seed(store, history_rows(2023, dt.date(2026, 4, 10)))
+
+    flow = cash_flow(store, BUDGET, RULES, dt.date(2026, 4, 1), dt.date(2026, 4, 10))
+
+    assert flow.running_only
+    assert [(m.month, m.complete) for m in flow.measured] == [(dt.date(2026, 4, 1), False)]
+    assert flow.mean_spending == 1_000_000
+    [rent] = flow.categories
+    assert (rent.spent, rent.volatility.label) == ((1_000_000,), "steady")
+    # Averages of income and the savings rate still wait for a complete month
+    assert (flow.mean_income, flow.savings_rate) == (0, None)
+
+
+def test_with_a_complete_month_the_running_one_is_left_out_of_the_averages(store: Store):
+    seed(store, history_rows(2023, dt.date(2026, 4, 10)))
+
+    flow = cash_flow(store, BUDGET, RULES, dt.date(2026, 3, 1), dt.date(2026, 4, 10))
+
+    assert not flow.running_only
+    assert [m.month for m in flow.measured] == [dt.date(2026, 3, 1)]
+    assert flow.categories[0].spent == (1_000_000,)
