@@ -36,6 +36,16 @@ from ynab_unlinked.web.views.spending.detail import category_detail
 ALL_GROUPS = "__all__"
 
 
+def _word_key(marker: str) -> None:
+    """The colour of each word: the key of By group's mix bars and of the scatter's dots."""
+    with ui.element("div").classes("yul-sp-key").mark(marker):
+        for label in (*data.ORDER, data.UNRATED):
+            with ui.element("span"):
+                ui.element("i").classes(f"mix-{label}")
+                word = data.WORDS.get(label)
+                ui.label(word.text.split(" ", 1)[1] if word else "not enough months")
+
+
 class SpendingView:
     def __init__(self, category: str | None = None) -> None:
         self.range = saved_range(data.DEFAULT_RANGE)
@@ -177,12 +187,7 @@ class SpendingView:
         money = state().require_formatter().format_amount_milli
         with glass_card().classes("yul-nwm-card").mark("sp-groups"):
             ui.label("By group").classes("yul-nwm-title")
-            with ui.element("div").classes("yul-sp-key").mark("sp-mix-key"):
-                for label in (*data.ORDER, data.UNRATED):
-                    with ui.element("span"):
-                        ui.element("i").classes(f"mix-{label}")
-                        word = data.WORDS.get(label)
-                        ui.label(word.text.split(" ", 1)[1] if word else "not enough months")
+            _word_key("sp-mix-key")
             with ui.element("div").classes("yul-sp-gbar head"):
                 ui.label("Group")
                 ui.label("")
@@ -243,6 +248,8 @@ class SpendingView:
             with ui.element("div").classes("yul-row"):
                 ui.label("Steady or swingy?").classes("yul-nwm-title yul-grow")
                 ui.label("click a dot to see its months").classes("yul-faint yul-small")
+            # The dots are in the colours of the words, as the bars of By group are
+            _word_key("sp-dot-key")
             dots = chart(
                 volatility_options(self.plotted, theme.palette(), config.budget.currency_format),
                 SCATTER_HEIGHT,

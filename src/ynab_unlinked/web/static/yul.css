@@ -407,8 +407,7 @@ body[data-mac] .yul-kbd-palette::before { content: "⌘K"; }
 .q-btn.yul-btn {
   border-radius: var(--rc); padding: 8px 14px; min-height: 0; font-size: 14px; font-weight: 500;
   text-transform: none; letter-spacing: 0; line-height: 1.3; color: var(--text);
-  border: 1px solid var(--border); background: var(--surface);
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: all .15s;
+  border: 1px solid var(--border); background: var(--surface); transition: all .15s;
 }
 .q-btn.yul-btn::before { box-shadow: none; }
 .q-btn.yul-btn .q-focus-helper { display: none; }
@@ -419,7 +418,7 @@ body[data-mac] .yul-kbd-palette::before { content: "⌘K"; }
    1px border and paints the opposite end there (a cyan hairline on the left, indigo on the right). */
 .q-btn.yul-btn.primary { background: var(--accent) border-box; color: var(--on-accent); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 6px 16px -8px color-mix(in oklab, var(--accent-solid) 75%, transparent); }
 .q-btn.yul-btn.primary:hover { filter: brightness(1.08); }
-.q-btn.yul-btn.ghost { border-color: transparent; background: transparent; backdrop-filter: none; }
+.q-btn.yul-btn.ghost { border-color: transparent; background: transparent; }
 .q-btn.yul-btn.ghost:hover { background: var(--surface-2); }
 .q-btn.yul-btn.danger { color: var(--bad); }
 .q-btn.yul-btn.danger.primary { background: var(--bad); color: #fff; box-shadow: 0 10px 24px -10px color-mix(in oklab, var(--bad) 80%, transparent); }
@@ -461,7 +460,9 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
 .yul-card {
   background: linear-gradient(180deg, var(--surface-2), var(--surface) 140px) var(--surface);
   border: 1px solid var(--border); border-radius: var(--r);
-  padding: 18px 20px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  /* No backdrop blur: a card sits on the page's background, which has nothing to blur, and
+     a blurred card next to one that repaints (a hover, a tooltip) showed a band at its edge */
+  padding: 18px 20px;
   box-shadow: inset 0 1px 0 var(--highlight), var(--shadow);
   transition: border-color .2s, transform .2s;
 }
@@ -1149,10 +1150,12 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-sp-key > span { display: inline-flex; align-items: center; gap: 5px; }
 .yul-sp-key i { display: inline-block; width: 10px; height: 4px; border-radius: 2px; }
 .yul-sp-mix > i { display: block; height: 4px; border-radius: 2px; }
-.yul-sp-mix > i.mix-steady, .yul-sp-key i.mix-steady { background: var(--good); }
-.yul-sp-mix > i.mix-variable, .yul-sp-key i.mix-variable { background: var(--text-2); }
-.yul-sp-mix > i.mix-spiky, .yul-sp-key i.mix-spiky { background: var(--warn); }
-.yul-sp-mix > i.mix-lumpy, .yul-sp-key i.mix-lumpy { background: var(--accent-2); }
+/* The words' colours, quieter than the status colours they come from: they mark a kind of
+   category, not something to act on. The scatter's dots use the same (cashflow_chart.py). */
+.yul-sp-mix > i.mix-steady, .yul-sp-key i.mix-steady { background: color-mix(in oklab, var(--good) 72%, transparent); }
+.yul-sp-mix > i.mix-variable, .yul-sp-key i.mix-variable { background: color-mix(in oklab, var(--text-2) 72%, transparent); }
+.yul-sp-mix > i.mix-spiky, .yul-sp-key i.mix-spiky { background: color-mix(in oklab, var(--warn) 72%, transparent); }
+.yul-sp-mix > i.mix-lumpy, .yul-sp-key i.mix-lumpy { background: color-mix(in oklab, var(--accent-solid) 72%, transparent); }
 .yul-sp-mix > i.mix-unrated, .yul-sp-key i.mix-unrated { background: var(--border-2); }
 .yul-sp-words { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
 .yul-sp-word {

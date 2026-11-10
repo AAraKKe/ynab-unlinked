@@ -275,9 +275,12 @@ asks for a longer range.
   - **By group**: a key of the four words' colours, column titles (Group, A month, Share),
     then one row per group: its bar, a month, share, and under it a thin split of its
     spending by how its categories move (steady in good, variable in text-2, spiky in warn,
-    lumpy in accent-2, not enough months in border-2; each part titled with its share). A
+    lumpy in the accent, not enough months in border-2; each part titled with its share).
+    The words' colours are at 72%: they mark a kind of category, not something to act on. A
     click filters by the group, a second click shows every group again.
-  - **Steady or swingy?**: one dot per category (of the filters): average a month across on
+  - **Steady or swingy?**: the same key of colours, then one dot per category (of the
+    filters) in the colour of its word (`cashflow_chart.word_color`, at 72%, full on hover):
+    average a month across on
     a log scale, how much it moves up; the six largest named, overlapping names hidden; a
     faint line: top right is big and swingy, bottom right the fixed costs. A click on a dot,
     or on a row of the table, slides the category in from the right in the chart's place.
@@ -439,6 +442,11 @@ Inter (bundled variable font, `font-display: swap`), fallback `system-ui`. Body 
 secondary 12.5px, titles 18px semibold, hero 56px bold with `letter-spacing: -0.03em`
 and gradient text. `tabular-nums` in tables and axis ticks only. Figures (money, counts,
 percentages) use Inter's open digits (`ss01`): the 4, 6 and 9 read faster in a column.
+
+No card has a backdrop blur: a card sits on the page's background, which has nothing to
+blur, and a blurred card next to one that repaints showed a band at its edge. Only what
+content scrolls under is blurred: the sidebar, the top bar, a flow's footer, a dialog's
+backdrop.
 
 Depth and selection: a card is lit from the top (a faint gradient from `--surface-2` to
 `--surface`), and the two heroes (Home, Net worth) carry a glow of the accent in their top

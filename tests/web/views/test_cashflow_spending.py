@@ -30,6 +30,8 @@ from tests.web.views.test_networth import texts
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.core.cashflow import CashFlow, CategoryTrend, FlowMonth, Volatility
 from ynab_unlinked.store import Store
+from ynab_unlinked.web import theme
+from ynab_unlinked.web.components.cashflow_chart import WORD_OPACITY, word_color
 from ynab_unlinked.web.state import AppState
 from ynab_unlinked.web.views.cashflow import data as cashflow
 from ynab_unlinked.web.views.spending import data as spending
@@ -390,3 +392,31 @@ async def test_spending_shows_the_running_month_so_far(
     assert texts(user, "sp-total") == "Spent so far 1,000.00€"
     # Eleven months of the same rent behind it: steady, though the range is one month
     assert "steady" in texts(user, f"category-{RENT}")
+
+
+async def test_a_dot_of_the_scatter_is_in_the_colour_of_its_word(
+    synced: Store, no_sync, user: User
+):
+    await user.open("/spending")
+    await user.should_see(marker="sp-scatter", retries=20)
+
+    palette = theme.DARK_PALETTE
+    dots = user.find(marker="sp-scatter").elements.pop().options["series"][0]["data"]
+    colours = {dot["label"]["formatter"]: dot["itemStyle"]["color"] for dot in dots}
+    # Rent is the same every month; the one trip is a single purchase without a word
+    assert colours["🏠 Rent"] == palette.good
+    assert colours["🏝 Vacation"] == palette.text_3
+    assert {dot["itemStyle"]["opacity"] for dot in dots} == {WORD_OPACITY}
+    await user.should_see(marker="sp-dot-key")
+
+
+def test_every_word_has_its_colour():
+    palette = theme.LIGHT_PALETTE
+
+    assert [word_color(label, palette) for label in ("steady", "variable", "spiky", "lumpy")] == [
+        palette.good,
+        palette.text_2,
+        palette.warn,
+        palette.accent_solid,
+    ]
+    assert word_color(None, palette) == palette.text_3
