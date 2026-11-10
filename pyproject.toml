@@ -29,12 +29,12 @@ classifiers = [
   "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
-  "ynab==4.4.1",
-  "typer==0.27.3",
+  "ynab==5.0.0",
+  "typer==0.28.0",
   "html-text==0.7.1",
   "pdfplumber==0.11.10",
-  "pydantic==2.14.1",
-  "platformdirs==4.13.5",
+  "pydantic==2.14.3",
+  "platformdirs==4.14.5",
   "pyexcel==0.7.6",
   "pyexcel-xls==0.7.1",
   "pyexcel-xlsx==0.6.1",
@@ -43,7 +43,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-web = ["nicegui==3.19.0"]
+web = ["nicegui==4.0.0"]
 
 [project.scripts]
 yul = "ynab_unlinked.main:main"
@@ -61,15 +61,15 @@ Privacy = "https://github.com/AAraKKe/ynab-unlinked/blob/main/PRIVACY.md"
 dev = [
   "ynab-unlinked[web]",
   "poethepoet==0.49.0",
-  "ruff==0.15.12",
-  "pyright==1.1.409",
-  "pytest==9.0.3",
+  "ruff==0.17.4",
+  "pyright==1.1.414",
+  "pytest==9.2.0",
   "pytest-cov==7.1.0",
-  "pytest-mock==3.15.1",
-  "pytest-asyncio==1.4.1",
+  "pytest-mock==3.17.0",
+  "pytest-asyncio==1.4.1.post1",
   "factory_boy==3.3.3",
   "freezegun==1.5.5",
-  "towncrier==25.8.0",
+  "towncrier==26.9.0",
 ]
 
 [tool.poe.tasks]
