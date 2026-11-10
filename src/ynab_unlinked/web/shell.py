@@ -1,8 +1,8 @@
-"""The layout every page renders in, and the helpers views use from it.
+"""What views use from the layout every page renders in: registering, the header, toasts.
 
-The app is a single page: `root()` draws the sidebar, the top bar and the drop overlay once per
-browser tab, and `ui.sub_pages` swaps the content column when the path changes. Views register
-themselves with `@view(...)`; the shell lists them in the sidebar and routes to them.
+The app is a single page: `web.frame.root()` draws the sidebar, the top bar and the drop overlay
+once per browser tab, and `ui.sub_pages` swaps the content column when the path changes. Views
+register themselves with `@view(...)`; the frame lists them in the sidebar and routes to them.
 
     @shell.view("/reconcile", key="reconcile", title="Reconcile",
                 subtitle="Reconcile what the bank confirmed", icon="reconcile", order=30)
@@ -12,6 +12,9 @@ themselves with `@view(...)`; the shell lists them in the sidebar and routes to 
 Files dropped anywhere on the window are handed to the Import view: either straight to the
 handler it registered with `on_drop()` while it is on screen, or through `pending_uploads()`
 after the shell navigates to `/import`.
+
+When a sync changes the budget copy, the frame draws the page on screen again through
+`refresh_view`; a view that would lose what the user set registers a gentler `on_refresh`.
 """
 
 from __future__ import annotations
@@ -23,24 +26,21 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
-from fastapi.responses import RedirectResponse
-from nicegui import PageArguments, context, run, ui
+from nicegui import background_tasks, context, run, ui
 from nicegui.client import Client
 from nicegui.elements.upload_files import FileUpload
 from nicegui.events import MultiUploadEventArguments
 from nicegui.slot import Slot
 
-from ynab_unlinked.__about__ import __version__
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.web import theme
 from ynab_unlinked.web.components import (
     button,
-    clickable,
     dialog_box,
     icon,
     run_dialog,
     set_class,
 )
+from ynab_unlinked.web.palette import ACTIONS, GO_TO, Command
 
 # Every page's path, re-exported: views navigate with `shell.<NAME>_PATH`
 from ynab_unlinked.web.paths import CASHFLOW_PATH as CASHFLOW_PATH
@@ -52,10 +52,9 @@ from ynab_unlinked.web.paths import RECONCILE_PATH as RECONCILE_PATH
 from ynab_unlinked.web.paths import SETTINGS_PATH as SETTINGS_PATH
 from ynab_unlinked.web.paths import SPENDING_PATH as SPENDING_PATH
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.storage import tab_storage, user_storage
+from ynab_unlinked.web.storage import tab_storage
 
 # The words of a sync, re-exported: Settings shows them as `shell.sync_label` / `sync_message`
-from ynab_unlinked.web.sync_chip import sync_chip
 from ynab_unlinked.web.sync_chip import sync_label as sync_label
 from ynab_unlinked.web.sync_chip import sync_message as sync_message
 from ynab_unlinked.web.wording import SAVE_FAILED
@@ -68,12 +67,11 @@ UploadedFile = FileUpload
 ToastKind = Literal["ok", "info", "warn", "error"]
 
 
-_SIDEBAR_KEY = "yul.sidebar"
-_RAIL = "rail"
-_WIDE = "wide"
-_SHELL_KEY = "yul.shell"
+LAYOUT_KEY = "yul.shell"
 _PENDING_KEY = "yul.pending_uploads"
 _DROP_HANDLER_KEY = "yul.drop_handler"
+_REFRESH_KEY = "yul.refresh_handler"
+
 
 DropHandler = Callable[[list[UploadedFile]], Awaitable[None] | None]
 
@@ -112,6 +110,54 @@ class View:
 
 
 _VIEWS: dict[str, View] = {}
+_COMMANDS: dict[str, Command] = {}
+
+
+def command(
+    key: str, title: str, path: str, *, icon: str, hint: str = "", keywords: str = ""
+) -> None:
+    """Add a place to the command palette that is not a page of its own: a tab of a view.
+
+    Pages are in it already. A tab is found by typing, not listed before that. Registering a
+    key again replaces the earlier command.
+    """
+    _COMMANDS[key] = Command(
+        key=key,
+        title=title,
+        section=GO_TO,
+        icon=icon,
+        path=path,
+        hint=hint,
+        keywords=keywords,
+        quiet=True,
+    )
+
+
+def commands() -> list[Command]:
+    """What the palette knows without reading the budget: pages, their tabs, then actions."""
+    pages = [
+        Command(key=v.key, title=v.title, section=GO_TO, icon=v.icon, path=v.path) for v in views()
+    ]
+    actions = [
+        Command("sync", "Sync with YNAB now", ACTIONS, "refresh", action="sync"),
+        Command(
+            "theme",
+            "Switch between light and dark",
+            ACTIONS,
+            "moon",
+            action="theme",
+            keywords="theme appearance night day",
+        ),
+        Command(
+            "sidebar",
+            "Collapse or expand the sidebar",
+            ACTIONS,
+            "sidebar",
+            action="sidebar",
+            keywords="menu navigation rail",
+        ),
+    ]
+    return [*pages, *_COMMANDS.values(), *actions]
 
 
 def view(
@@ -160,24 +206,28 @@ def views() -> list[View]:
 
 
 @dataclass
-class _Shell:
+class Layout:
     """The elements of one tab's layout that views update."""
 
     title: ui.label
     subtitle: ui.label
     nav: dict[str, ui.element]
+    badges: dict[str, ui.label]
+    import_button: ui.element
     pages: ui.sub_pages | None = None
     active: str | None = None
+    version: int = -1
+    """The `state().data_version` the page and the badges on screen were drawn from."""
 
 
-def _shell() -> _Shell | None:
-    shell = tab_storage().get(_SHELL_KEY)
-    return shell if isinstance(shell, _Shell) else None
+def layout() -> Layout | None:
+    shell = tab_storage().get(LAYOUT_KEY)
+    return shell if isinstance(shell, Layout) else None
 
 
 def set_header(title: str | None = None, subtitle: str | None = None) -> None:
     """Change the top bar title or subtitle of the current tab."""
-    if (shell := _shell()) is None:
+    if (shell := layout()) is None:
         return
     if title is not None:
         shell.title.set_text(title)
@@ -185,12 +235,16 @@ def set_header(title: str | None = None, subtitle: str | None = None) -> None:
         shell.subtitle.set_text(subtitle)
 
 
-def _set_active(key: str | None) -> None:
-    if (shell := _shell()) is None:
+def set_active(key: str | None) -> None:
+    if (shell := layout()) is None:
         return
     shell.active = key
     for nav_key, element in shell.nav.items():
         set_class(element, "on", nav_key == key)
+        element.props["aria-current"] = "page" if nav_key == key else "false"
+        element.update()
+    # The way to Import is not offered on Import itself
+    set_class(shell.import_button, "yul-gone", key == "import")
 
 
 @contextmanager
@@ -203,19 +257,61 @@ def page(
     registered view.
     """
     set_header(title, subtitle)
-    if key is not None:
-        _set_active(key)
+    if title:
+        ui.page_title(f"{title} · yul")
+    set_active(key)
     with ui.element("div").classes("yul-page") as content:
         yield content
 
 
-def refresh_view() -> None:
-    """Render the current view again when it is `live` (after a sync brought changes)."""
-    if (shell := _shell()) is None or shell.pages is None or shell.pages.is_deleted:
+@dataclass(frozen=True)
+class _Refresher:
+    """How the view on screen wants to be drawn again, and the element whose lifetime it follows."""
+
+    owner: ui.element
+    handler: Callable[[], Awaitable[None] | None] | None
+    automatic: bool
+
+
+def on_refresh(
+    owner: ui.element,
+    handler: Callable[[], Awaitable[None] | None] | None = None,
+    *,
+    automatic: bool = True,
+) -> None:
+    """Say how the view is drawn again after a sync, while `owner` is on screen.
+
+    `handler` draws it in place of the rebuild, for a view that would lose what the user set
+    (a range, a filter, an open tab). `automatic=False` leaves the view alone after a sync
+    nobody asked for (the copy got old, something was written): for a view the user types in.
+    A sync from the chip always redraws it.
+    """
+    tab_storage()[_REFRESH_KEY] = _Refresher(owner, handler, automatic)
+
+
+def refresh_view(*, automatic: bool = False) -> None:
+    """Draw the current view again when it is `live` (a sync changed the budget copy).
+
+    With the view's own `on_refresh` handler when it registered one, else by rebuilding it.
+    `automatic` is a sync the user did not ask for.
+    """
+    if (shell := layout()) is None or shell.pages is None or shell.pages.is_deleted:
         return
+    shell.version = state().data_version
     current = next((v for v in _VIEWS.values() if v.key == shell.active), None)
-    if current is not None and current.live:
-        shell.pages.refresh()
+    if current is None or not current.live:
+        return
+    target = tab_storage().get(_REFRESH_KEY)
+    if isinstance(target, _Refresher) and not target.owner.is_deleted:
+        if automatic and not target.automatic:
+            return
+        if target.handler is not None:
+            result = target.handler()
+            if inspect.isawaitable(result):
+                # NiceGUI returns the task as a bare `asyncio.Task`
+                background_tasks.create(result, name="yul view refresh")  # pyright: ignore[reportUnknownMemberType]
+            return
+    shell.pages.refresh()
 
 
 def _live_slot() -> Slot | None:
@@ -337,7 +433,8 @@ async def _handle_drop(event: MultiUploadEventArguments) -> None:
     await hand_off_uploads(list(event.files), event.client)
 
 
-def _drop_overlay() -> None:
+def drop_overlay() -> None:
+    """The window wide drop target, drawn once per tab by the frame."""
     # `display: none` in yul.css until a drag is in progress (`body.yul-dragging`), so it never
     # takes clicks or shows up for assistive tech. Not `set_visibility(False)`: NiceGUI refuses
     # uploads to hidden elements.
@@ -348,121 +445,3 @@ def _drop_overlay() -> None:
         with ui.element("div").classes("yul-empty-disc"):
             icon("upload", 24)
         ui.label("Drop to import")
-
-
-# ---- top bar ------------------------------------------------------------------------------
-
-
-def _top_bar(dark: ui.dark_mode) -> tuple[ui.label, ui.label]:
-    config = state().config
-    with ui.element("header").classes("yul-top"):
-        title = ui.label("").classes("yul-title")
-        subtitle = ui.label("").classes("yul-subtitle")
-        ui.element("span").classes("yul-grow")
-        if config is not None:
-            with ui.element("div").classes("yul-chip").mark("budget-chip"):
-                ui.element("span").classes("yul-dot")
-                ui.label(config.budget.name)
-        sync_chip(notify, refresh_view)
-
-        def toggle_theme() -> None:
-            dark.value = not dark.value
-            theme.save_theme(bool(dark.value))
-            theme_button.clear()
-            with theme_button:
-                icon("sun" if dark.value else "moon", 16)
-
-        theme_button = button(
-            icon_name="sun" if dark.value else "moon", on_click=toggle_theme
-        ).mark("theme-toggle")
-        theme_button.props["title"] = "Theme"
-        button(
-            "Import", kind="primary", small=True, on_click=lambda: ui.navigate.to(IMPORT_PATH)
-        ).mark("top-import")
-    return title, subtitle
-
-
-# ---- sidebar and root ---------------------------------------------------------------------
-
-
-def _nav_item(v: View) -> ui.element:
-    with ui.element("div").classes("yul-nav").mark(f"nav-{v.key}") as item:
-        icon(v.icon)
-        ui.label(v.title).classes("yul-nav-label")
-    item.props["title"] = v.title
-    return clickable(item, lambda: ui.navigate.to(v.path), role="link")
-
-
-def _collapse_item(frame: ui.element) -> None:
-    """The sidebar's last entry: narrows it to a rail of icons, and widens it back."""
-    with ui.element("div").classes("yul-nav collapse").mark("sidebar-toggle") as item:
-        icon("sidebar")
-        ui.label("Collapse").classes("yul-nav-label")
-
-    def refresh() -> None:
-        item.props["title"] = (
-            "Expand the sidebar" if "rail" in frame.classes else "Collapse the sidebar"
-        )
-
-    def toggle() -> None:
-        rail = "rail" not in frame.classes
-        set_class(frame, "rail", rail)
-        user_storage()[_SIDEBAR_KEY] = _RAIL if rail else _WIDE
-        refresh()
-
-    clickable(item, toggle)
-    refresh()
-
-
-def _sidebar(frame: ui.element) -> dict[str, ui.element]:
-    nav: dict[str, ui.element] = {}
-    with ui.element("aside").classes("yul-side"):
-        with ui.element("div").classes("yul-brand"):
-            ui.label("yul").classes("yul-mark")
-            ui.label("yul").classes("yul-brand-name")
-        registered = views()
-        group: str | None = None
-        for v in (v for v in registered if not v.bottom):
-            if v.group is not None and v.group != group:
-                ui.label(v.group).classes("yul-nav-group").mark(f"nav-group-{v.group.lower()}")
-            group = v.group
-            nav[v.key] = _nav_item(v)
-        ui.element("div").classes("yul-side-spacer")
-        for v in (v for v in registered if v.bottom):
-            nav[v.key] = _nav_item(v)
-        _collapse_item(frame)
-        ui.label(f"yul {__version__}").classes("yul-side-foot")
-    return nav
-
-
-def _renderer(v: View) -> Callable[[PageArguments], Awaitable[None]]:
-    wants_arguments = bool(inspect.signature(v.builder).parameters)
-
-    async def render(args: PageArguments) -> None:
-        with page(v.title, v.resolved_subtitle(), key=v.key):
-            result = v.builder(args) if wants_arguments else v.builder()
-            if inspect.isawaitable(result):
-                await result
-
-    return render
-
-
-def root() -> RedirectResponse | None:
-    """Every path but `/onboarding`: the shell around the view registered for the path."""
-    if not state().configured:
-        return RedirectResponse(ONBOARDING_PATH)
-
-    dark = theme.page_setup()
-    rail = user_storage().get(_SIDEBAR_KEY) == _RAIL
-    with ui.element("div").classes("yul-frame") as frame:
-        if rail:
-            frame.classes(add="rail")
-        nav = _sidebar(frame)
-        with ui.element("main").classes("yul-main"):
-            title, subtitle = _top_bar(dark)
-            shell = _Shell(title=title, subtitle=subtitle, nav=nav)
-            tab_storage()[_SHELL_KEY] = shell
-            with ui.element("div").classes("yul-views"):
-                shell.pages = ui.sub_pages({v.path: _renderer(v) for v in views()})
-    _drop_overlay()
-    return None

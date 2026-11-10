@@ -949,3 +949,25 @@ async def test_the_net_worth_line_takes_the_palette_accent_and_follows_a_change(
 
     twilight = theme.THEMES["twilight"].dark.accent[0]
     await eventually(lambda: chart_series(user)[0]["color"] == twilight)
+
+
+async def test_a_link_to_an_account_opens_its_drawer(seeded: Store, no_sync, user: User):
+    await user.open(f"/networth?account={INDEXA}")
+
+    await user.should_see(marker="nw-drawer", retries=20)
+    assert len(user.find(marker="drawer-tx").elements) == 2
+
+
+async def test_a_tab_is_kept_in_the_address_so_a_reload_opens_it_again(
+    seeded: Store, no_sync, user: User, mocker: MockerFixture
+):
+    address = mocker.spy(ui.navigate.history, "replace")
+    await open_networth(user)
+
+    user.find(marker="nw-tab-months").click()
+    await eventually(lambda: address.call_count == 1)
+    address.assert_called_with("/networth?tab=months")
+
+    user.find(marker="nw-tab-overview").click()
+    await eventually(lambda: address.call_count == 2)
+    address.assert_called_with("/networth")

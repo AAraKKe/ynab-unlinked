@@ -185,6 +185,9 @@ def history_options(
         },
         "yAxis": {
             "type": "value",
+            # Fitted to the values, not from zero: a year of a six figure net worth would be
+            # a flat line otherwise, and the moves are what the chart is for
+            "scale": True,
             "axisLine": {"show": False},
             "axisTick": {"show": False},
             "splitNumber": 4,

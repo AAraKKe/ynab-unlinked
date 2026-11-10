@@ -24,6 +24,7 @@ from tests.factories import (
     CategoryGroupFactory,
     TransactionDetailFactory,
 )
+from tests.helpers.web import eventually
 from tests.helpers.ynab_api import YnabClientStub
 from tests.web.views.test_networth import texts
 from ynab_unlinked.config import LatestConfig
@@ -318,3 +319,47 @@ async def test_a_filter_redraws_only_the_table_and_the_chart(synced: Store, no_s
     assert user.find(marker="word-steady").elements.pop().id == legend
     assert "on" in user.find(marker="word-steady").elements.pop().classes
     assert user.find(marker="sp-group-filter").elements.pop().value == "Bills"
+
+
+# ---- the range and the links the pages share -------------------------------------------------
+
+
+def on(user: User, marker: str) -> bool:
+    return "on" in user.find(marker=marker).elements.pop().classes
+
+
+async def test_a_range_picked_on_one_finance_page_is_the_range_of_the_others(
+    synced: Store, no_sync, user: User
+):
+    await user.open("/cashflow")
+    await user.should_see(marker="cf-income", retries=20)
+    assert on(user, "range-1Y")
+
+    user.find(marker="range-6M").click()
+    await eventually(lambda: on(user, "range-6M"))
+
+    await user.open("/spending")
+    await user.should_see(marker="sp-scatter", retries=20)
+    assert on(user, "range-6M")
+    assert not on(user, "range-1Y")
+    await user.open("/networth?tab=months")
+    await user.should_see(marker="range-6M", retries=20)
+    assert on(user, "range-6M")
+
+
+async def test_a_link_to_a_category_opens_spending_on_its_months(
+    synced: Store, no_sync, user: User
+):
+    await user.open(f"/spending?category={GROCERIES}")
+
+    await user.should_see(marker="category-detail", retries=20)
+    assert texts(user, "detail-title") == "Everyday / 🛒 Groceries"
+
+
+async def test_a_link_to_a_category_the_range_does_not_have_opens_the_chart(
+    synced: Store, no_sync, user: User
+):
+    await user.open("/spending?category=not-a-category")
+
+    await user.should_see(marker="sp-scatter", retries=20)
+    await user.should_not_see(marker="category-detail")

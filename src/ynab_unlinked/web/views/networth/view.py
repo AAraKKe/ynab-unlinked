@@ -41,6 +41,7 @@ from ynab_unlinked.web.components.history_chart import (
     set_options,
 )
 from ynab_unlinked.web.finances import RANGES
+from ynab_unlinked.web.ranges import save_range, saved_range
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.networth import data, flows
 from ynab_unlinked.web.views.networth.data import (
@@ -64,8 +65,10 @@ TICK_SECONDS = 1.0
 
 
 class NetWorthView:
-    def __init__(self, tab: str = "overview") -> None:
-        self.range = DEFAULT_RANGE
+    def __init__(self, tab: str = "overview", account: str | None = None) -> None:
+        self.range = saved_range(DEFAULT_RANGE)
+        self.account = account
+        """The account a `?account=` link opens the page on, shown once in its drawer."""
         self.grouping = "total"
         self.picked: list[str] | None = None
         self.slots: dict[str, int] = {}
@@ -80,6 +83,8 @@ class NetWorthView:
         with ui.element("div").classes("yul-nw") as self.root:
             self.tabs = ui.element("div")
             self.body = ui.element("div")
+        # The view follows a sync by itself (`tick`), keeping its tab, range and selection
+        shell.on_refresh(self.root, lambda: None)
         self.table = AccountsTable(self.root, self.refresh, self.open_drawer)
         self.periods = PeriodTabs()
         self.drawn: tuple[object, ...] | None = None
@@ -116,6 +121,9 @@ class NetWorthView:
         with self.root:
             ui.timer(TICK_SECONDS, self.tick)
         await self.refresh()
+        if self.account is not None and self.tab == "overview":
+            account, self.account = self.account, None
+            await self.open_drawer(account)
 
     async def tick(self) -> None:
         """Re-render when a sync lands; restyle the charts when the theme changes."""
@@ -218,10 +226,14 @@ class NetWorthView:
             return
         self.tab = key
         self.drawer = None
+        # A reload, or a link copied from the address bar, opens the same tab
+        query = "" if key == "overview" else f"?tab={key}"
+        ui.navigate.history.replace(f"{shell.NETWORTH_PATH}{query}")
         await self.refresh()
 
     async def set_flow_range(self, key: str) -> None:
         self.range = key
+        save_range(key)
         await self.refresh()
 
     def _first_sync(self) -> None:
@@ -349,6 +361,7 @@ class NetWorthView:
         if self.snapshot is None or not self.snapshot.tracked:
             return
         self.range = key
+        save_range(key)
         async with self.lock:
             history = await self._load_history(self.snapshot)
             if history is None or self.root.is_deleted:
@@ -510,4 +523,21 @@ class NetWorthView:
     group="Finances",
 )
 async def networth_view(args: PageArguments) -> None:
-    await NetWorthView(args.query_parameters.get("tab", "overview")).render()
+    query = args.query_parameters
+    await NetWorthView(query.get("tab", "overview"), query.get("account")).render()
+
+
+shell.command(
+    "networth-months",
+    "Net worth › Months",
+    f"{shell.NETWORTH_PATH}?tab=months",
+    icon="networth",
+    keywords="monthly change saved assets waterfall",
+)
+shell.command(
+    "networth-movers",
+    "Net worth › Movers",
+    f"{shell.NETWORTH_PATH}?tab=movers",
+    icon="networth",
+    keywords="accounts growers losers return",
+)

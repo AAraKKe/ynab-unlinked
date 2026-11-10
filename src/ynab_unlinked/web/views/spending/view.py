@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime as dt
 from functools import partial
 
-from nicegui import events, run, ui
+from nicegui import PageArguments, events, run, ui
 
 from ynab_unlinked.core.cashflow import CashFlow, CategoryTrend
 from ynab_unlinked.web import shell, theme
@@ -28,6 +28,7 @@ from ynab_unlinked.web.components import (
 from ynab_unlinked.web.components.cashflow_chart import SCATTER_HEIGHT, chart, volatility_options
 from ynab_unlinked.web.components.controls import pill_group
 from ynab_unlinked.web.finances import RANGES, period_title
+from ynab_unlinked.web.ranges import save_range, saved_range
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.spending import data
 from ynab_unlinked.web.views.spending.detail import category_detail
@@ -36,15 +37,16 @@ ALL_GROUPS = "__all__"
 
 
 class SpendingView:
-    def __init__(self) -> None:
-        self.range = data.DEFAULT_RANGE
+    def __init__(self, category: str | None = None) -> None:
+        self.range = saved_range(data.DEFAULT_RANGE)
         self.all = False
         self.group: str | None = None
         self.label: str | None = None
         self.flow: CashFlow | None = None
         self.plotted: list[CategoryTrend] = []
-        self.detail: str | None = None
-        """The category shown in the chart's place, by id ("none" for uncategorized)."""
+        self.detail: str | None = category
+        """The category shown in the chart's place, by id ("none" for uncategorized). A
+        `?category=` link opens the page on one."""
         self.side: ui.element | None = None
         # What a filter changes, redrawn alone so the page keeps its height and its scroll
         self.group_rows: dict[str, ui.element] = {}
@@ -53,6 +55,7 @@ class SpendingView:
         self.table: ui.element | None = None
         with ui.element("div").classes("yul-sp") as self.root:
             self.body = ui.element("div")
+        shell.on_refresh(self.root, self.render)
 
     async def render(self) -> None:
         config, _ = state().require()
@@ -67,6 +70,7 @@ class SpendingView:
 
     async def set_range(self, key: str) -> None:
         self.range = key
+        save_range(key)
         await self.render()
 
     def show_all(self) -> None:
@@ -356,5 +360,5 @@ class SpendingView:
     order=42,
     group="Finances",
 )
-async def spending_view() -> None:
-    await SpendingView().render()
+async def spending_view(args: PageArguments) -> None:
+    await SpendingView(args.query_parameters.get("category")).render()

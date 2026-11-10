@@ -116,6 +116,18 @@ def liquid(config: LatestConfig, stored: Iterable[StoredAccount]) -> int:
     return by_bucket[Bucket.CASH] + by_bucket[Bucket.SAVINGS]
 
 
+def runway_months(flow: CashFlow, liquid_now: int) -> float | None:
+    """How many months of core spending `liquid_now` (cash and savings) covers.
+
+    Core is the steady and variable categories; all of the average spending when no category
+    has a word yet. None without spending or without cash.
+    """
+    core = flow.core_spending() or flow.mean_spending
+    if core <= 0 or liquid_now <= 0:
+        return None
+    return liquid_now / core
+
+
 def previous_range(start: dt.date, end: dt.date) -> tuple[dt.date, dt.date]:
     """The same number of whole months right before `start`, for a comparison."""
     months = len(months_between(start, end))

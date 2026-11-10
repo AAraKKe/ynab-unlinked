@@ -35,6 +35,9 @@ logger = logging.getLogger(__name__)
 
 TOKEN_LOST = "Your YNAB token is no longer in the keychain."
 
+AUTO_SYNC_AFTER = dt.timedelta(minutes=10)
+"""How old the budget copy may get while the app is open before it syncs on its own."""
+
 _NO_PROGRESS = NullProgress()
 
 
@@ -55,6 +58,11 @@ class AppState:
         self.token_lost: LatestConfig | None = None
         """A config whose token left the keychain: onboarding asks for the token, keeps the rest."""
         self.sync_error: str | None = None
+        self.data_version = 0
+        """Goes up each time a sync changes the budget copy: pages drawn from an older one are
+        behind (the shell draws them again)."""
+        self._sync_attempt: dt.datetime | None = None
+        """When the last sync started, so a failing one is not retried at every look."""
         self._store: Store | None = None
         self._sync_task: asyncio.Task[SyncResult | None] | None = None
         self._written = False
@@ -229,8 +237,25 @@ class AppState:
         self._written = True
         self.sync_in_background()
 
+    def sync_if_stale(self, now: dt.datetime | None = None) -> bool:
+        """Start a background sync when the copy is older than `AUTO_SYNC_AFTER`.
+
+        Only once a first sync brought the budget (the pages run that one themselves), and at
+        most once per `AUTO_SYNC_AFTER`, also when the last one failed. Returns whether it
+        started one.
+        """
+        if not self.configured or self.syncing or self.last_sync is None:
+            return False
+        now = now or dt.datetime.now(dt.UTC)
+        latest = max(self.last_sync, self._sync_attempt or self.last_sync)
+        if now - latest < AUTO_SYNC_AFTER:
+            return False
+        self.sync_in_background()
+        return True
+
     async def _sync(self, progress: Progress) -> SyncResult | None:
         config, client = self.require()
+        self._sync_attempt = dt.datetime.now(dt.UTC)
         try:
             # In the worker: the first use opens the store, which must not block the loop
             result = await run.io_bound(lambda: self.store.sync(client, config.budget.id, progress))
@@ -252,6 +277,7 @@ class AppState:
                 message += f" · {ghosts} stale removed"
                 details["ghosts"] = ghosts
             await run.io_bound(self.store.log, config.budget.id, "sync", message, details)
+            self.data_version += 1
         return result
 
     def sync_in_background(self) -> None:

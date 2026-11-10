@@ -21,14 +21,16 @@ from ynab_unlinked.web.components.cashflow_chart import (
 )
 from ynab_unlinked.web.components.controls import pill_group
 from ynab_unlinked.web.finances import RANGES, period_title
+from ynab_unlinked.web.ranges import save_range, saved_range
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.cashflow import data
 
 
 class CashFlowView:
     def __init__(self) -> None:
-        self.range = data.DEFAULT_RANGE
+        self.range = saved_range(data.DEFAULT_RANGE)
         self.body = ui.element("div").classes("yul-cf")
+        shell.on_refresh(self.body, self.render)
 
     async def render(self) -> None:
         config, _ = state().require()
@@ -41,6 +43,7 @@ class CashFlowView:
 
     async def set_range(self, key: str) -> None:
         self.range = key
+        save_range(key)
         await self.render()
 
     def _draw(self, page: data.CashFlowPage) -> None:

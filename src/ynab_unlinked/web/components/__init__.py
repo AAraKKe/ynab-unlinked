@@ -60,6 +60,17 @@ ICONS: dict[str, str] = {
     "chevron-down": '<path d="M6 9l6 6 6-6"/>',
     "arrow-left": '<path d="M19 12H5m0 0 6-6m-6 6 6 6"/>',
     "pencil": '<path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/><path d="M14.5 5.5l3 3"/>',
+    "search": '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+    "arrow-right": '<path d="M5 12h14m0 0-6-6m6 6-6 6"/>',
+    "compass": '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+    "alert": '<path d="M12 9v4m0 4h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 '
+    '1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+    "link": '<path d="M10 13a5 5 0 0 0 7.1 0l2.8-2.8a5 5 0 0 0-7.1-7.1l-1.3 1.3"/>'
+    '<path d="M14 11a5 5 0 0 0-7.1 0l-2.8 2.8a5 5 0 0 0 7.1 7.1l1.3-1.3"/>',
+    "bank": '<path d="M3 10l9-6 9 6"/><path d="M5 10v8m4.7-8v8m4.6-8v8M19 10v8M3 21h18"/>',
+    "wallet": '<path d="M4 7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1"/>'
+    '<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M16 13.5h2"/>',
+    "calendar": '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4m8-4v4"/>',
 }
 
 

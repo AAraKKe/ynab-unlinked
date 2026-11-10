@@ -20,8 +20,10 @@ from ynab_unlinked.core.history import TOTAL, Point, net_worth_series
 from ynab_unlinked.entities.registry import LoaderSpec
 from ynab_unlinked.store import Activity, Store
 from ynab_unlinked.web import accounts as tracking
+from ynab_unlinked.web import attention
 from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
 from ynab_unlinked.web.paths import NETWORTH_PATH, RECONCILE_PATH
+from ynab_unlinked.web.views.home.pulse import MonthPulse, load_pulse
 from ynab_unlinked.web.wording import plural, short_date
 
 if TYPE_CHECKING:
@@ -60,6 +62,8 @@ class HomeData:
     last_imports: list[LoaderDue]
     """The banks turned on in Settings, in the order of the loader registry."""
     activity: list[Activity]
+    pulse: MonthPulse | None = None
+    """The month so far against a usual one; None before the budget has a transaction."""
 
 
 def _local_day(moment: dt.datetime) -> dt.date:
@@ -108,22 +112,7 @@ def load_home(
         older = net_worth_series(store, budget_id, history, nettings, since, since)[TOTAL]
         then = older[0].value if older else worth.total
 
-    open_ids = {account.id for account in accounts.values() if not account.closed}
-    unreconciled = [t for t in store.unreconciled(budget_id) if t.account_id in open_ids]
-
-    stale: list[str] = []
-    logged = tracking.logged_adjustments(store, budget_id)
-    for account in tracking.by_hand_accounts(config, accounts.values()):
-        stored = accounts.get(account.id)
-        if stored is not None and stored.closed:
-            continue
-        latest = tracking.last_set_by_hand(
-            store.transactions(budget_id, account_id=account.id),
-            config.adjustments,
-            logged.get(account.id),
-        )
-        if latest is None or (today - latest).days > STALE_AFTER_DAYS:
-            stale.append(account.name)
+    pending = attention.waiting(store, config, today)
 
     last_import = {
         loader: _local_day(at) for loader, at in store.last_import_per_loader(budget_id).items()
@@ -139,11 +128,12 @@ def load_home(
         delta=worth.total - then,
         since=since,
         spark=spark,
-        unreconciled=len(unreconciled),
-        unreconciled_accounts=len({t.account_id for t in unreconciled}),
-        stale=stale,
+        unreconciled=pending.unreconciled,
+        unreconciled_accounts=pending.unreconciled_accounts,
+        stale=pending.stale,
         last_imports=last_imports,
         activity=store.activity(budget_id, limit=ACTIVITY_LIMIT),
+        pulse=load_pulse(store, config, today) if accounts else None,
     )
 
 

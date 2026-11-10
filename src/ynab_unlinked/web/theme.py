@@ -207,7 +207,7 @@ def install() -> None:
         f'<link rel="stylesheet" href="{STATIC_ROUTE}/yul.css">',
         shared=True,
     )
-    ui.add_body_html(f"<script>{DRAG_JS}</script>", shared=True)
+    ui.add_body_html(f"<script>{DRAG_JS}{KEYS_JS}</script>", shared=True)
 
 
 # Counts dragenter/dragleave on the document so the overlay shows while files are over the
@@ -228,5 +228,23 @@ DRAG_JS = """
     depth = 0; set(false);
     if (!document.querySelector(".yul-drop-upload")) e.preventDefault();
   }, true);
+})();
+"""
+
+# ⌘K on a Mac, Ctrl+K elsewhere, or "/" outside a field: ask the shell for the command palette.
+# `data-mac` on <body> lets the stylesheet print the right key on the search button.
+KEYS_JS = """
+(() => {
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const mark = () => { if (mac) document.body.dataset.mac = ""; };
+  if (document.body) mark(); else document.addEventListener("DOMContentLoaded", mark);
+  const typing = (el) => !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+  document.addEventListener("keydown", (e) => {
+    const combo = (mac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k";
+    const slash = e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !typing(document.activeElement);
+    if (!combo && !slash) return;
+    e.preventDefault();
+    if (window.emitEvent) emitEvent("yul-palette");
+  });
 })();
 """

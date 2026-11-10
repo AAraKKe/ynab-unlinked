@@ -111,6 +111,8 @@ class ReconcileView:
 
     async def render(self) -> None:
         self.root = ui.element("div").mark("reconcile")
+        # Balances are typed here: only a sync the user asked for draws the page again
+        shell.on_refresh(self.root, automatic=False)
         with self.root, ui.element("div").classes("yul-row"):
             loading("Getting the latest from YNAB…")
 

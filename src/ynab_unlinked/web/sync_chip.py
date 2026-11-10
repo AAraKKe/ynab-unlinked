@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from nicegui import ui
@@ -39,15 +39,18 @@ def sync_message(result: SyncResult) -> str:
     return f"{plural(count, 'change')} pulled from YNAB"
 
 
-def sync_chip(notify: Callable[[str, ToastKind], None], refresh_view: Callable[[], None]) -> None:
+def sync_chip(
+    notify: Callable[[str, ToastKind], None], refresh_view: Callable[[], None]
+) -> Callable[[], Awaitable[None]]:
     """The top bar chip: when the budget copy last synced, and a click syncs it now.
 
     `notify` and `refresh_view` are the shell's, passed in so this module does not import it.
+    Returns the sync it runs on a click, for the command palette.
     """
     with ui.element("div").classes("yul-chip click").mark("sync-chip") as chip:
         busy = spinner()
         dot = ui.element("span").classes("yul-dot")
-        text = ui.label()
+        text = ui.label().classes("yul-sync-text")
 
     def refresh() -> None:
         current = state()
@@ -85,3 +88,4 @@ def sync_chip(notify: Callable[[str, ToastKind], None], refresh_view: Callable[[
     chip.on("click", sync_now)
     refresh()
     ui.timer(5.0, refresh)
+    return sync_now
