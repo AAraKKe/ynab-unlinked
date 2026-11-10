@@ -725,7 +725,17 @@ web/
                        storage_dir() (user data dir / "web": browser prefs and their secret)
   app.py               build(token, port) -> root page (guard, static files, CSS, views, /onboarding);
                        run(port: int | None, open_browser: bool, announce=None)
-  state.py             AppState / state(): config, client, store, formatter, loaders, last_sync
+  state.py             AppState / state(): config, client, store, formatter, loaders, last_sync,
+                       data_version (goes up when a sync changed the copy), sync_if_stale()
+                       (a copy older than AUTO_SYNC_AFTER, 10 min, syncs on its own)
+  attention.py         pure: waiting(store, config, today) -> Waiting(unreconciled,
+                       unreconciled_accounts, stale): Home's "Needs you" and the sidebar's badges
+  palette.py           pure: Command, search(commands, query, limit=LIMIT) (every word, no case
+                       or accents, best first), budget_commands(store, config) (a command per
+                       category and per counted account)
+  palette_dialog.py    PaletteDialog(static, actions): the command palette, one per tab
+  ranges.py            saved_range(default) / save_range(key): the range of the finance pages,
+                       one for all of them, in app.storage.user (`yul.range`)
   categories.py        pure: Group, grouped(categories) (the user's, by group, YNAB's order),
                        matching(groups, text) (every word, no case, accents or emoji),
                        balance_goals(), goal_category(categories, chosen), BALANCE_GOALS
@@ -747,12 +757,16 @@ web/
                        NiceGUI-free for the data modules
   finances.py          pure: RANGES, RANGE_MONTHS, months_range (whole months), period_title,
                        rules(config, stored) (closed accounts too), category_names, earliest,
-                       load_cash_flow, liquid (cash and savings after debt), previous_range
-  shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay,
-                       save_config(); re-exports the paths (views use shell.<NAME>_PATH)
-                       and sync_label / sync_message
-  sync_chip.py         sync_chip(notify, refresh_view): the top bar's sync chip, sync_label,
-                       sync_message
+                       load_cash_flow, liquid (cash and savings after debt), runway_months,
+                       previous_range
+  shell.py             what views use from the layout: view and command registries, page(),
+                       set_header, refresh_view / on_refresh, toasts, confirm dialog, drop
+                       handoff, save_config(); re-exports the paths (views use
+                       shell.<NAME>_PATH) and sync_label / sync_message
+  frame.py             root(): the sidebar (entries, badges), the top bar (search, budget and
+                       sync chips, theme, Import), the content column, the tab's tick
+  sync_chip.py         sync_chip(notify, refresh_view) -> the sync it runs on a click: the top
+                       bar's sync chip, sync_label, sync_message
   theme.py             THEMES (the palettes), the palette choice and dark/light per browser,
                        chart palettes, page_setup(), install() of static/yul.css
   security.py          per run token, TokenGuard middleware, free_port(), entry_url()
@@ -797,7 +811,9 @@ web/
     Every view with data to shape is a package: data.py is pure (no NiceGUI, not even
     through its imports: web.accounts, web.buckets, web.paths, web.wording are NiceGUI-free)
     and unit testable; the other modules draw; __init__ holds the docstring only.
-    home/              /            hero, import (drop zone, last imports), needs you, activity (3.4.2)
+    home/              /            hero, needs you, import (drop zone, last imports); aside the
+                                    month so far, where it went, activity (3.4.2). pulse.py is
+                                    pure (MonthPulse, load_pulse), month.py draws its two cards
       data.py          LoaderDue, HomeData, load_home, relative_time, last_imports_line,
                        message_markup, Attention, attention_items
       view.py          the page (hero with count_up, spark_options, activity, banner)
@@ -900,11 +916,20 @@ web/
 
 ### 3.2 Shell contract for views
 
-The app is a single page: `shell.root()` renders the sidebar (232px, collapsible to a 64px
+The app is a single page: `frame.root()` renders the sidebar (232px, collapsible to a 64px
 rail from its last entry, state in `app.storage.user`), the top bar and the drop overlay
 once per tab, and `ui.sub_pages` swaps the content in a column centered in the main area
 (`.yul-views`, max 1360px). Every path but `/onboarding` redirects to `/onboarding`
-until `state().configured`; `/onboarding` redirects to `/` once it is.
+until `state().configured`; `/onboarding` redirects to `/` once it is. A path without a
+view draws `not-found` (a way home), and a view whose builder raises draws `page-error`
+("Try again" rebuilds it): the sidebar and the top bar stay. The browser tab is named
+`<title> · yul`.
+
+Each tab ticks every `frame.TICK_SECONDS` (2s, and once on load): `state().sync_if_stale()`
+starts a sync when the copy is older than ten minutes, and when `state().data_version`
+moved (a sync changed the copy) it counts the sidebar's badges again
+(`nav-badge-reconcile`: transactions to reconcile, `nav-badge-networth`: balances set by
+hand gone stale; hidden at zero) and calls `shell.refresh_view(automatic=True)`.
 
 ```python
 from nicegui import PageArguments, ui
@@ -926,10 +951,26 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
 - `shell.page(title, subtitle, key=None)`: context manager that sets the top bar and yields
   the content column; `@view` builders already run inside it.
 - `shell.set_header(title=None, subtitle=None)`: change the top bar later.
-- `shell.refresh_view()`: render the current view again when it is `live` (the default).
-  The sync chip calls it after a sync that brought changes, so Home, Reconcile and Net
-  worth show the new data without a reload; Import and Settings (`live=False`) keep what
-  the user is editing.
+- `shell.refresh_view(automatic=False)`: draw the current view again when it is `live`
+  (the default). The sync chip calls it after a sync that brought changes, the tab's tick
+  with `automatic=True` after any other sync that did; Import and Settings (`live=False`)
+  keep what the user is editing.
+- `shell.on_refresh(owner, handler=None, *, automatic=True)`: how the view on screen is
+  drawn again while `owner` exists. `handler` replaces the rebuild, so the view keeps what
+  the user set: Cash flow and Spending pass their `render` (range, filters, the open
+  category), Net worth a no-op (its own tick follows the sync and keeps tab, range and
+  selection). `automatic=False` leaves the view alone after a sync nobody asked for:
+  Reconcile, where balances are typed.
+- `shell.command(key, title, path, *, icon, hint="", keywords="")`: a place in the command
+  palette that is not a page: Net worth's Months and Movers, every Settings tab. Pages are
+  in it already (`shell.commands()` adds the actions `sync`, `theme`, `sidebar`). Tabs,
+  categories and accounts are `quiet`: found by typing, not listed before.
+- Command palette (`palette_dialog.PaletteDialog`): opened by `open-palette` (the top
+  bar's search button), ⌘K / Ctrl+K or "/" outside a field (`theme.KEYS_JS` emits
+  `yul-palette`). Markers: `palette`, `palette-input`, `palette-results`,
+  `palette-<command key>` (class `on` on the one Enter runs), `palette-none`. A category is
+  `category-<id>` (-> `/spending?category=<id>`), an account `account-<id>`
+  (-> `/networth?account=<id>`).
 - `shell.notify(message, kind="ok" | "info" | "warn" | "error")`: toast at the top, centered, 3s.
 - `await shell.confirm(title, lines, action_label, danger=False) -> bool`: the one
   confirmation before a write, listing what will change.
@@ -952,7 +993,13 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
   `net-worth`, `categories`, `appearance`, `data`, `privacy` or `data-privacy`, case
   insensitive) opens that tab;
   anything else opens Connection (`settings.tab_from_slug`). `/networth?tab=months` (or
-  `movers`, `overview`) opens that Net worth tab.
+  `movers`, `overview`) opens that Net worth tab, `/networth?account=<id>` the Overview
+  with that account's drawer, `/spending?category=<id>` Spending on that category's months
+  (the chart when the range does not have it). A click on a tab of Net worth or Settings
+  puts it in the address (`ui.navigate.history.replace`), so a reload opens it again.
+- The finance pages share one range: `ranges.saved_range(default)` on build,
+  `ranges.save_range(key)` on a pill, so a range picked on Cash flow is Spending's and
+  Net worth's, and the one the next visit opens with.
 - `shell.sync_label(last, now)` / `shell.sync_message(result)` for sync wording.
 - Navigation: `ui.navigate.to(path)` with the paths on `shell` (`HOME_PATH`, `IMPORT_PATH`,
   `RECONCILE_PATH`, `NETWORTH_PATH`, `SETTINGS_PATH`, `ONBOARDING_PATH`); views never import
@@ -1081,8 +1128,16 @@ class HomeData:
     stale: list[str]        # accounts set by hand older than 30 days
     last_imports: list[LoaderDue]  # banks turned on in Settings, registry order
     activity: list[Activity]       # newest 10
+    pulse: MonthPulse | None       # the month so far (home/pulse.py); None without accounts
     every_account: bool = False    # nothing tracked: hero says "every open account"
 ```
+
+`pulse.load_pulse(store, config, today) -> MonthPulse`: the running month (`income`,
+`spending`, `saved`, `day` of `days`) against the complete months of the last year
+(`usual_income`, `usual_spending`, `months`, `savings_rate`, `runway` as Cash flow counts
+them) and `top`, the five categories that spent most this month, each with its `usual`
+month. `pace_line(pulse)` is "64% of a usual month's spending, 33% of the month gone".
+The unreconciled count and the stale balances are `attention.waiting`'s.
 
 `attention_items(data) -> list[Attention]` gives the "Needs you" cards in display order:
 `unreconciled` (-> `/reconcile`) and `stale` (-> `/networth`); nothing else. The
@@ -1093,7 +1148,9 @@ sync problem before the first sync stays the banner above the grid (`first-sync`
 Markers: `home` (grid), `first-sync`, `hero`, `net-worth`, `net-worth-delta`, `sparkline`,
 `home-import`, `dropzone`, `last-imports`, `needs-you`, `attention` (the card grid, only
 when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-waiting`,
-`activity`, `activity-item`, `activity-message`, `activity-empty`.
+`activity`, `activity-item`, `activity-message`, `activity-empty`, `month-pulse` (the month
+card), `month-pace`, `month-rate`, `month-runway`, `month-top` (where it went),
+`month-top-{category_id}` (a row, -> that category in Spending).
 
 ### 3.5 Markers of the other views
 
@@ -1141,7 +1198,8 @@ Markers: `token-input`, `check-token`, `token-lost`, `wizard-message`, `wizard-n
 
 #### Settings
 
-Markers: `bank-shared-{key}`, `accounts-lede`, `account-card-{id}` (class `closed` on a closed
+Markers: `tab-{slug}` (the tabs, a list down the side), `settings-panel`, `settings-title`
+(the open tab's name), `bank-shared-{key}`, `accounts-lede`, `account-card-{id}` (class `closed` on a closed
 account, tagged `closed-{id}`), `bucket-section-{bucket}`,
 `account-{id}`, `bucket-{id}`, `bucket-{id}-{bucket}`, `by-hand-{id}`, `left-out` (the list
 of rows left out of imports), `left-out-{index}`, `include-again-{index}`, `left-out-empty`;

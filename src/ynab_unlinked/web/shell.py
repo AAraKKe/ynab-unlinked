@@ -217,7 +217,9 @@ class Layout:
     pages: ui.sub_pages | None = None
     active: str | None = None
     version: int = -1
-    """The `state().data_version` the page and the badges on screen were drawn from."""
+    """The `state().data_version` the page on screen was drawn from, at the latest."""
+    badges_version: int = -1
+    """The one the sidebar's badges were counted from; -1 before they were."""
 
 
 def layout() -> Layout | None:

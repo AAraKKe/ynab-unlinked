@@ -1,0 +1,1 @@
+The app is easier to move around and keeps itself current: a command palette (⌘K, Ctrl+K or /) reaches every page, tab, category and account; Home shows the month so far against a usual one; the sidebar counts what is waiting; the finance pages share one remembered range; the budget copy syncs on its own; and the layout works on a phone.

@@ -26,6 +26,7 @@ from ynab_unlinked.web.components import (
     set_class,
     show_state,
     spinner,
+    token_hint,
 )
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.onboarding.data import (
@@ -335,7 +336,7 @@ class Wizard:
             button("Check", kind="primary", on_click=self.check_token).mark("check-token")
         self.render_message()
         with ui.element("div").classes("yul-faint yul-small").style("margin-top:10px"):
-            ui.label("Create one in YNAB under Account Settings → Developer Settings.")
+            token_hint()
             if (name := keychain.backend_name()) is not None:
                 ui.label(f"Kept in your {name}, not in a file.").style("margin-top:4px")
             else:

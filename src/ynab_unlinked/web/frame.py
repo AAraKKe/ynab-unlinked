@@ -244,13 +244,15 @@ async def _tick(layout: Layout) -> None:
     """Keep the tab up to date: sync an old copy, follow a sync that changed it."""
     current = state()
     current.sync_if_stale()
-    if current.syncing or current.data_version == layout.version:
+    if current.syncing:
         return
-    first = layout.version < 0
-    await _refresh_badges(layout)
-    if first:
-        layout.version = current.data_version
-    else:
+    # Read before the copy is: a sync landing meanwhile is then seen by the next tick,
+    # instead of being marked as drawn with what was read before it
+    version = current.data_version
+    if version != layout.badges_version:
+        await _refresh_badges(layout)
+        layout.badges_version = version
+    if version != layout.version:
         shell.refresh_view(automatic=True)
 
 
@@ -275,6 +277,8 @@ def root() -> RedirectResponse | None:
                 nav=nav,
                 badges=badges,
                 import_button=bar.import_button,
+                # Before the page reads the copy: a sync landing while it draws redraws it
+                version=state().data_version,
             )
             tab_storage()[shell.LAYOUT_KEY] = layout
             with ui.element("div").classes("yul-views"):

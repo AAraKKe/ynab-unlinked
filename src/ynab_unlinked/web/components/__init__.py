@@ -17,6 +17,7 @@ from nicegui import ui
 from ynab import PlanSummary
 
 from ynab_unlinked.config.models.v2 import CurrencyFormat
+from ynab_unlinked.text import YNAB_TOKEN_URL
 from ynab_unlinked.web.components.history_chart import money_js
 from ynab_unlinked.web.theme import STATIC_ROUTE
 from ynab_unlinked.web.wording import budget_caption
@@ -217,6 +218,14 @@ def empty_state(
         if action_label:
             button(action_label, on_click=on_action, kind="primary")
     return element
+
+
+def token_hint() -> ui.element:
+    """Where a Personal Access Token is created, with a link that opens YNAB on that page."""
+    with ui.element("div").classes("yul-token-hint").mark("token-hint") as hint:
+        ui.link("Create one in YNAB", YNAB_TOKEN_URL, new_tab=True).classes("yul-link")
+        ui.label("under Account Settings → Developer Settings.")
+    return hint
 
 
 def share_bar(fraction: float, color: str) -> ui.element:

@@ -58,8 +58,6 @@ ICONS = {
 }
 LEDES = {
     "Connection": "The YNAB account and the budget yul works with.",
-    "Banks": "The banks you import from, and the account each one's statements go to.",
-    "Appearance": "The colours of the app. Light and dark are a click away in the top bar.",
     "Data & privacy": "What yul keeps on this computer, and how to remove it.",
 }
 """One line under the title of the tabs that do not open with an explanation of their own."""
@@ -112,6 +110,11 @@ class Settings:
             set_class(item, "on", name == tab)
             item.props["aria-selected"] = "true" if name == tab else "false"
             item.update()
+        # On a narrow window the tabs are a row that scrolls: keep the open one in sight
+        ui.run_javascript(
+            f"getHtmlElement({self.tab_buttons[tab].id})"
+            "?.scrollIntoView({block: 'nearest', inline: 'nearest'})"
+        )
         assert self.panel is not None
         self.panel.clear()
         with self.panel:
