@@ -1,1 +1,0 @@
-Confirmations no longer drop over the page as toasts: what worked is said in one quiet line in the top bar, and only warnings and errors are toasts. An info button next to income and spending explains why they can differ from YNAB's reports, and every kind of category (steady, variable, lumpy, spiky, bought once) is described in its own words with what to set aside for it.

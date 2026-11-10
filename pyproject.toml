@@ -8,7 +8,7 @@ exclude = ["docs/screenshots"]
 
 [project]
 name = "ynab-unlinked"
-version = "1.0.0"
+version = "1.1.0"
 description = "Keep the accounts YNAB cannot link up to date and see what your budget data means, from the command line or a local web app"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -82,7 +82,9 @@ format = { cmd = "ruff format", help = "Format with ruff" }
 lint-fix = { cmd = "ruff check --fix --unsafe-fixes", help = "Apply ruff autofixes" }
 fix = { sequence = ["format", "lint-fix"], help = "Format and autofix" }
 cov = { cmd = "pytest --cov=src --cov-report term-missing:skip-covered tests", help = "Tests with coverage, extra args go to pytest" }
-tc-check = { cmd = "towncrier check", help = "Check the branch has a changelog fragment" }
+tc-exists = { cmd = "towncrier check", help = "Check the branch has a changelog fragment" }
+tc-names = { cmd = "python scripts/fragments.py", help = "Check every changelog fragment is named after its PR" }
+tc-check = { sequence = ["tc-exists", "tc-names"], help = "Check the branch has a changelog fragment, named after its PR" }
 tc-show = { cmd = "towncrier build --draft", help = "Preview the next changelog" }
 tc-build = { cmd = "towncrier build --yes", help = "Build CHANGELOG.md from the fragments" }
 release = { cmd = "python scripts/release.py", help = "Open the release PR: uv run poe release X.Y.Z [-m MESSAGE]" }

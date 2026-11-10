@@ -145,6 +145,7 @@ budget and takes a picture of every page.
 - [ ] Wording passes rule 1; figures use the budget's `Formatter`.
 - [ ] New element → marker; new behaviour → test; changed behaviour → test updated.
 - [ ] `ARCHITECTURE.md` and `DESIGN.md` in this folder describe what you built.
-- [ ] A changelog fragment exists for the branch (`uv run poe tc-check`).
+- [ ] A changelog fragment exists for the branch, named `<pr-number>.<type>.md`: open the PR,
+      then rename the `+<slug>` fragment to its number (`uv run poe tc-check` fails until then).
 - [ ] `uv run poe check` clean, `uv run pytest -q` green.
 - [ ] Commit message plain, no trailers.
