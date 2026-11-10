@@ -1,5 +1,8 @@
 """Small wording helpers the CLI and the web app share. No UI library."""
 
+YNAB_TOKEN_URL = "https://app.ynab.com/settings/developer"
+"""Where a Personal Access Token is created: YNAB's Account Settings, Developer Settings."""
+
 
 def plural(count: int, word: str) -> str:
     """ "1 file", "3 files"."""

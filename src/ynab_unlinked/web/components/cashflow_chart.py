@@ -234,6 +234,22 @@ def rate_options(
     }
 
 
+WORD_OPACITY = 0.72
+"""How strong a dot of the scatter is: the words' colours are status colours, quieter here
+because they mark a kind of category, not something to act on (the mix bars match in CSS)."""
+
+
+def word_color(label: str | None, palette: Palette) -> str:
+    """The colour of a category's word: steady green, variable grey, spiky amber, lumpy the
+    accent, and a fainter grey without a word yet."""
+    return {
+        "steady": palette.good,
+        "variable": palette.text_2,
+        "spiky": palette.warn,
+        "lumpy": palette.accent_solid,
+    }.get(label or "", palette.text_3)
+
+
 def volatility_options(
     trends: Sequence[CategoryTrend], palette: Palette, currency_format: CurrencyFormat
 ) -> dict[str, Any]:
@@ -279,9 +295,8 @@ def volatility_options(
             {
                 "type": "scatter",
                 "symbolSize": 10,
-                "color": palette.series[INCOME_SLOT],
                 "itemStyle": {"borderColor": palette.hair, "borderWidth": 2},
-                "emphasis": {"scale": 1.3},
+                "emphasis": {"scale": 1.3, "itemStyle": {"opacity": 1}},
                 "labelLayout": {"hideOverlap": True},
                 "data": [
                     {
@@ -289,6 +304,11 @@ def volatility_options(
                             round(t.mean / 1000, 2),
                             round(t.volatility.cv or 0, 3),
                         ],
+                        # Each dot in the colour of its word
+                        "itemStyle": {
+                            "color": word_color(t.volatility.label, palette),
+                            "opacity": WORD_OPACITY,
+                        },
                         "label": {
                             "show": t.category_id in named,
                             "position": "top",
@@ -318,8 +338,12 @@ def category_months_options(
     palette: Palette,
     currency_format: CurrencyFormat,
     mean: float,
+    line: str = "Average",
 ) -> dict[str, Any]:
-    """One category's spending each month (`YYYY-MM` keys) and its average as a dashed line."""
+    """One category's spending each month (`YYYY-MM` keys) and its average as a dashed line.
+
+    `line` names the dashed line in the legend: a lumpy category's is what to set aside.
+    """
     money = money_js(currency_format)
     return {
         "animationDuration": 400,
@@ -332,7 +356,7 @@ def category_months_options(
             "data": [
                 {"name": "Spent"},
                 # Three filled dashes: the dashed average line
-                {"name": "Average", "icon": _DASHES, "itemStyle": {"color": palette.text_2}},
+                {"name": line, "icon": _DASHES, "itemStyle": {"color": palette.text_2}},
             ],
         },
         "tooltip": {
@@ -360,7 +384,7 @@ def category_months_options(
             },
             {
                 "type": "line",
-                "name": "Average",
+                "name": line,
                 "color": palette.text_2,
                 "symbol": "none",
                 "lineStyle": {"type": "dashed", "width": 1},

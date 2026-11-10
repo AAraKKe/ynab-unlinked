@@ -60,10 +60,7 @@ def rate_change(page: CashFlowPage) -> str | None:
 
 def runway(page: CashFlowPage) -> float | None:
     """How many months of core spending cash and savings cover."""
-    core = page.flow.core_spending() or page.flow.mean_spending
-    if core <= 0 or page.liquid <= 0:
-        return None
-    return page.liquid / core
+    return finances.runway_months(page.flow, page.liquid)
 
 
 def runway_text(page: CashFlowPage) -> str:

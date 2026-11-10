@@ -238,15 +238,14 @@ def _text(user: User, marker: str) -> str:
     return element.text
 
 
-async def test_home_shows_net_worth_then_import_then_what_needs_you_and_activity_aside(
+async def test_home_shows_net_worth_what_needs_you_and_import_with_the_month_and_activity_aside(
     store: Store, user: User
 ):
     await _home(user)
 
-    order = [
-        m for m in _markers(user, "home") if m in {"hero", "home-import", "needs-you", "activity"}
-    ]
-    assert order == ["hero", "home-import", "needs-you", "activity"]
+    blocks = {"hero", "needs-you", "home-import", "month-pulse", "activity"}
+    order = [m for m in _markers(user, "home") if m in blocks]
+    assert order == ["hero", "needs-you", "home-import", "month-pulse", "activity"]
     import_section = _markers(user, "home-import")
     assert "dropzone" in import_section
     assert "last-imports" in import_section

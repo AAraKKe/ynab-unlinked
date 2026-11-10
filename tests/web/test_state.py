@@ -16,7 +16,7 @@ from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.config.core import ConfigError
 from ynab_unlinked.local_data import delete_local_data
 from ynab_unlinked.store import Store
-from ynab_unlinked.web.state import AppState, NotConfiguredError
+from ynab_unlinked.web.state import AUTO_SYNC_AFTER, AppState, NotConfiguredError
 from ynab_unlinked.web.wording import YNAB_TIMED_OUT
 from ynab_unlinked.ynab_api import Client
 
@@ -276,3 +276,72 @@ def test_update_config_without_any_config_is_an_error(config: str, config_files:
     with pytest.raises(NotConfiguredError):
         app.update_config(lambda config: None)
     assert not config_files.path("V4").exists()
+
+
+# ---- following and starting syncs on its own -------------------------------------------------
+
+
+async def test_a_sync_that_changes_the_copy_raises_the_data_version(
+    app_state: AppState, ynab_api: YnabClientStub
+):
+    ynab = Ynab(ynab_api, full=[], delta=["t3"])
+    ynab.release.set()
+    before = app_state.data_version
+
+    await app_state.sync()
+
+    assert app_state.data_version == before + 1
+
+
+async def test_a_sync_that_brings_nothing_leaves_the_data_version(
+    app_state: AppState, ynab_api: YnabClientStub
+):
+    ynab = Ynab(ynab_api, full=[], delta=[])
+    ynab.release.set()
+    before = app_state.data_version
+
+    await app_state.sync()
+
+    assert app_state.data_version == before
+
+
+def test_a_copy_gone_old_syncs_on_its_own(app_state: AppState, mocker: MockerFixture):
+    background = mocker.patch.object(AppState, "sync_in_background")
+    assert app_state.last_sync is not None
+    fresh = app_state.last_sync + AUTO_SYNC_AFTER - dt.timedelta(seconds=1)
+    old = app_state.last_sync + AUTO_SYNC_AFTER
+
+    assert not app_state.sync_if_stale(fresh)
+    background.assert_not_called()
+
+    assert app_state.sync_if_stale(old)
+    background.assert_called_once()
+
+
+def test_a_budget_never_synced_is_left_to_the_pages(
+    config_v4: LatestConfig, store_file: Path, mocker: MockerFixture
+):
+    background = mocker.patch.object(AppState, "sync_in_background")
+    current = AppState()
+    current.load()
+
+    assert current.last_sync is None
+    assert not current.sync_if_stale(dt.datetime.now(dt.UTC) + dt.timedelta(days=1))
+    background.assert_not_called()
+
+
+async def test_a_sync_that_failed_is_not_tried_again_right_away(
+    app_state: AppState, ynab_api: YnabClientStub, mocker: MockerFixture
+):
+    ynab_api.api("transactions").get_transactions.side_effect = OSError("offline")
+    assert app_state.last_sync is not None
+    with pytest.raises(OSError, match="offline"):
+        await app_state.sync()
+    background = mocker.patch.object(AppState, "sync_in_background")
+    # The copy is old, but the attempt is from just now
+    now = dt.datetime.now(dt.UTC)
+
+    assert not app_state.sync_if_stale(now + dt.timedelta(minutes=1))
+    background.assert_not_called()
+    assert app_state.sync_if_stale(now + AUTO_SYNC_AFTER)
+    background.assert_called_once()

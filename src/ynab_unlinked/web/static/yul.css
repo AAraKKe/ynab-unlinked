@@ -190,7 +190,16 @@ body {
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "calt", "ss03";
   min-height: 100vh;
+}
+/* Thin scrollbars in the theme's own greys, wherever something scrolls */
+* { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+/* One focus ring for everything reached with the keyboard that has no field of its own */
+[role="link"]:focus-visible, [role="button"]:focus-visible, [role="tab"]:focus-visible,
+[role="option"]:focus-visible, [role="switch"]:focus-visible, .yul-pills > *:focus-visible {
+  outline: none; box-shadow: 0 0 0 3px var(--ring);
 }
 body::before, body::after {
   content: "";
@@ -215,14 +224,21 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .yul-small { font-size: 12.5px; }
 .yul-mono { font-family: var(--mono); font-size: 12px; }
 .yul-num { font-variant-numeric: tabular-nums; }
+/* Figures: Inter's open digits, the 4, 6 and 9 read faster in a column of money */
+.yul-num, .yul-hero, .yul-tile-v, .yul-nw-figure, .yul-month-k, .yul-month-s, .yul-attn-k, .yul-nav-badge {
+  font-feature-settings: "calt", "ss01", "ss03";
+}
 .yul-good { color: var(--good); }
 .yul-warn { color: var(--warn); }
 .yul-bad { color: var(--bad); }
 .yul-h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; line-height: 1.3; }
 .yul-lede { margin: 0 0 16px; color: var(--text-2); }
 .yul-grad { background: var(--accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.yul-hero { font-size: 56px; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
+.yul-hero { font-size: 56px; font-weight: 700; letter-spacing: -.03em; line-height: 1; }
 .yul-label { font-size: 11.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+.yul-link { color: var(--accent-2); text-decoration: underline; text-underline-offset: 3px; }
+.yul-link:hover { color: var(--text); }
+.yul-token-hint { display: flex; flex-wrap: wrap; gap: 0 5px; }
 .yul-row { display: flex; align-items: center; gap: 10px; }
 .yul-grow { flex: 1; min-width: 0; }
 
@@ -264,7 +280,8 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .yul-nav svg { width: 20px; height: 20px; flex: none; }
 .yul-nav-label { font-weight: 500; }
 .yul-nav:hover, .yul-nav:focus-visible { background: var(--surface-2); color: var(--text); transform: translateX(1px); }
-.yul-nav.on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+.yul-nav.on { background: color-mix(in oklab, var(--accent-solid) 14%, var(--surface)); color: var(--text); }
+.yul-nav.on svg { color: var(--accent-2); }
 .yul-nav.on::before {
   content: ""; position: absolute; left: -10px; top: 10px; bottom: 10px; width: 3px;
   border-radius: 3px; background: var(--accent);
@@ -292,6 +309,100 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .yul-views { flex: 1; padding: 24px 28px 40px; width: 100%; max-width: 1360px; margin: 0 auto; }
 /* sub_pages is a flex column aligned to the start: without the stretch a page is as wide as its content */
 .yul-page { animation: yul-enter .24s var(--ease) both; align-self: stretch; min-width: 0; }
+/* A page still reading its data: soft blocks where the content will be, never a blank column */
+.yul-page:empty::before, .yul-page > div:only-child:empty::before,
+.yul-nw > div:empty + div:empty::before, .yul-sp > div:only-child:empty::before {
+  content: ""; display: block; height: 420px; border-radius: var(--r);
+  background:
+    linear-gradient(var(--surface-2), var(--surface-2)) 0 0 / 100% 150px no-repeat,
+    linear-gradient(var(--surface), var(--surface)) 0 170px / calc(50% - 8px) 250px no-repeat,
+    linear-gradient(var(--surface), var(--surface)) 100% 170px / calc(50% - 8px) 250px no-repeat;
+  animation: yul-wait 1.4s ease-in-out .3s infinite both;
+}
+.yul-gone { display: none !important; }
+
+/* ---- top bar: titles, search, keys ---- */
+.yul-top-titles { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.yul-kbd {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px;
+  padding: 0 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text-3); font: 500 11px/1 var(--font); white-space: nowrap;
+}
+.yul-kbd-palette::before { content: "Ctrl K"; }
+body[data-mac] .yul-kbd-palette::before { content: "⌘K"; }
+/* The "i" next to a figure and the note it opens (components.info_button) */
+.yul-info {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--text-3); cursor: pointer; transition: color .15s, background .15s;
+}
+.yul-info:hover, .yul-info:focus-visible { color: var(--text); background: var(--surface-2); outline: none; }
+.yul-info-row { gap: 6px; align-items: center; }
+.yul-info-row > .yul-h2 { margin: 0; }
+.q-menu.yul-info-note {
+  max-width: min(380px, 92vw); padding: 14px 16px; border-radius: 14px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--surface-solid); color: var(--text-2); border: 1px solid var(--border-2);
+  box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .6); font-size: 13px; line-height: 1.5;
+}
+.q-menu.yul-info-note .yul-card-title { color: var(--text); }
+/* The status line: what just worked, said quietly where the eye already is for the sync */
+.yul-status {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 380px; padding: 5px 11px;
+  border-radius: 999px; font-size: 12.5px; color: var(--text); white-space: nowrap;
+  background: color-mix(in oklab, var(--good) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--good) 32%, transparent);
+  animation: yul-enter .24s var(--ease) both;
+}
+.yul-status > svg, .yul-status > div:first-child { color: var(--good); flex: none; }
+.yul-status > .q-label, .yul-status > div:last-child { overflow: hidden; text-overflow: ellipsis; }
+.yul-status.info { background: var(--surface); border-color: var(--border); color: var(--text-2); }
+.yul-status.info > div:first-child { display: none; }
+.yul-search {
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; width: 220px; padding: 0 8px 0 11px;
+  border-radius: var(--rc); border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-3); font: inherit; font-size: 13px; cursor: pointer; transition: all .15s;
+}
+.yul-search:hover, .yul-search:focus-visible { border-color: var(--border-2); color: var(--text-2); outline: none; }
+.yul-search:focus-visible { box-shadow: 0 0 0 3px var(--ring); }
+.yul-search-label { flex: 1; text-align: left; }
+.yul-search svg { flex: none; }
+
+/* ---- sidebar badges: what is waiting behind an entry ---- */
+.yul-nav { text-decoration: none; }
+.yul-nav-badge {
+  margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums;
+  color: var(--pill-acc-text); background: var(--pill-acc-bg); border: 1px solid var(--pill-acc-border);
+}
+.rail .yul-nav-badge {
+  position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px;
+  background: var(--accent-solid); color: var(--on-accent); border-color: transparent;
+}
+
+/* ---- command palette (palette_dialog.py) ---- */
+.yul-palette {
+  width: min(620px, 94vw); margin-top: 11vh; border-radius: 18px; overflow: hidden;
+  background: var(--surface-solid); border: 1px solid var(--border-2);
+  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, .7);
+}
+.yul-palette-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); color: var(--text-3); }
+.yul-palette-input { flex: 1; }
+.yul-palette-input .q-field__native { font-size: 16px; color: var(--text); padding: 0; }
+.yul-palette-input .q-field__control, .yul-palette-input .q-field__control::before, .yul-palette-input .q-field__control::after { border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.yul-palette-list { padding: 6px 8px; max-height: min(56vh, 460px); overflow-y: auto; }
+.yul-palette-section { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; padding: 10px 10px 4px; }
+.yul-palette-row {
+  display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 10px;
+  color: var(--text-2); cursor: pointer; outline: none;
+}
+.yul-palette-row svg { flex: none; }
+.yul-palette-row.on, .yul-palette-row:hover { background: var(--surface-2); color: var(--text); }
+.yul-palette-row.on { box-shadow: inset 0 0 0 1px var(--border); }
+.yul-palette-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.yul-palette-hint { color: var(--text-3); font-size: 12.5px; white-space: nowrap; }
+.yul-palette-none { padding: 22px 12px; color: var(--text-3); text-align: center; }
+.yul-palette-foot { display: flex; align-items: center; gap: 6px; padding: 9px 16px; border-top: 1px solid var(--border); color: var(--text-3); font-size: 12px; }
+.yul-palette-foot .yul-kbd + div { margin-right: 10px; }
 
 /* ---- chips, pills, dots ---- */
 .yul-chip {
@@ -322,8 +433,7 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .q-btn.yul-btn {
   border-radius: var(--rc); padding: 8px 14px; min-height: 0; font-size: 14px; font-weight: 500;
   text-transform: none; letter-spacing: 0; line-height: 1.3; color: var(--text);
-  border: 1px solid var(--border); background: var(--surface);
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: all .15s;
+  border: 1px solid var(--border); background: var(--surface); transition: all .15s;
 }
 .q-btn.yul-btn::before { box-shadow: none; }
 .q-btn.yul-btn .q-focus-helper { display: none; }
@@ -332,9 +442,9 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .q-btn.yul-btn:active { transform: scale(.98); }
 /* The gradient starts at the border box: from the padding box it tiles into the transparent
    1px border and paints the opposite end there (a cyan hairline on the left, indigo on the right). */
-.q-btn.yul-btn.primary { background: var(--accent) border-box; color: var(--on-accent); border-color: transparent; box-shadow: 0 10px 24px -10px color-mix(in oklab, var(--accent-solid) 80%, transparent); }
+.q-btn.yul-btn.primary { background: var(--accent) border-box; color: var(--on-accent); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 6px 16px -8px color-mix(in oklab, var(--accent-solid) 75%, transparent); }
 .q-btn.yul-btn.primary:hover { filter: brightness(1.08); }
-.q-btn.yul-btn.ghost { border-color: transparent; background: transparent; backdrop-filter: none; }
+.q-btn.yul-btn.ghost { border-color: transparent; background: transparent; }
 .q-btn.yul-btn.ghost:hover { background: var(--surface-2); }
 .q-btn.yul-btn.danger { color: var(--bad); }
 .q-btn.yul-btn.danger.primary { background: var(--bad); color: #fff; box-shadow: 0 10px 24px -10px color-mix(in oklab, var(--bad) 80%, transparent); }
@@ -374,12 +484,18 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
 
 /* ---- glass card ---- */
 .yul-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
-  padding: 18px 20px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface) 140px) var(--surface);
+  border: 1px solid var(--border); border-radius: var(--r);
+  /* No backdrop blur: a card sits on the page's background, which has nothing to blur, and
+     a blurred card next to one that repaints (a hover, a tooltip) showed a band at its edge */
+  padding: 18px 20px;
   box-shadow: inset 0 1px 0 var(--highlight), var(--shadow);
   transition: border-color .2s, transform .2s;
 }
-.yul-card.hov:hover { border-color: var(--border-2); transform: translateY(-1px); }
+.yul-card.hov:hover {
+  border-color: color-mix(in oklab, var(--accent-solid) 45%, var(--border-2)); transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 var(--highlight), 0 24px 44px -30px color-mix(in oklab, var(--accent-solid) 60%, transparent), var(--shadow);
+}
 .yul-card.flush { padding: 0; overflow: hidden; }
 /* Cards with a switch (Settings Banks and Accounts): the whole card is the state, never a pill.
    live = switched on, off = muted; an off card keeps its controls usable. */
@@ -397,7 +513,7 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
 /* ---- stat tile, segmented bar, empty state ---- */
 .yul-tile { padding: 14px 16px; }
 .yul-tile-l { color: var(--text-2); font-size: 12px; display: flex; align-items: center; gap: 7px; }
-.yul-tile-v { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.yul-tile-v { font-size: 23px; font-weight: 680; letter-spacing: -.025em; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .yul-tile-w { font-size: 11.5px; color: var(--text-3); }
 .yul-swatch { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: none; }
 .yul-seg { display: flex; height: 10px; gap: 2px; border-radius: 6px; overflow: hidden; margin: 4px 0 2px; }
@@ -435,8 +551,18 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
   padding: 8px 12px; color: var(--text-2); border-bottom: 2px solid transparent; margin-bottom: -1px;
   font-weight: 500; cursor: pointer; user-select: none; transition: color .15s;
 }
-.yul-tab:hover { color: var(--text); }
+.yul-tab:hover, .yul-tab:focus-visible { color: var(--text); outline: none; }
 .yul-tab.on { color: var(--text); border-image: var(--accent) 1; }
+/* Settings: the tabs are a list down the side, each with its icon (a row again on a narrow window) */
+.yul-settings { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 20px; align-items: start; }
+.yul-tabs.side { flex-direction: column; flex-wrap: nowrap; gap: 2px; border-bottom: 0; margin: 0; position: sticky; top: 84px; }
+.yul-tabs.side .yul-tab {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px;
+  border-bottom: 0; margin: 0; white-space: nowrap;
+}
+.yul-tabs.side .yul-tab svg { flex: none; }
+.yul-tabs.side .yul-tab:hover, .yul-tabs.side .yul-tab:focus-visible { background: var(--surface-2); }
+.yul-tabs.side .yul-tab.on { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
 .yul-kv { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 12px 14px; align-items: center; }
 .yul-kv > .k { color: var(--text-3); font-size: 12.5px; }
 .yul-map { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; }
@@ -635,10 +761,47 @@ body.yul-dragging .yul-dropover { display: grid; animation: yul-fade .15s ease b
 .yul-home { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 16px; align-items: stretch; }
 .yul-home > .yul-banner { grid-column: 1 / -1; }
 .yul-home-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.yul-home-side { display: flex; flex-direction: column; min-width: 0; }
-.yul-home-side > .yul-card { flex: 1; }
+.yul-home-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.yul-home-side > .yul-home-activity { flex: 1; }
+/* A card's title row, with a quiet link to the page that has the rest */
+.yul-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.yul-card-title { font-weight: 650; letter-spacing: -.005em; }
+.yul-card-link {
+  display: inline-flex; align-items: center; gap: 4px; color: var(--accent-2); font-size: 12.5px; font-weight: 500;
+  cursor: pointer; text-decoration: var(--link-decoration); text-underline-offset: 3px; white-space: nowrap; outline: none;
+}
+.yul-card-link svg { transition: transform .15s; }
+.yul-card-link:hover svg, .yul-card-link:focus-visible svg, .yul-month-foot:hover .yul-card-link svg { transform: translateX(2px); }
+/* The month so far: three figures, the pace bar against a usual month, the year's two numbers */
+.yul-month-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.yul-month-k { font-size: 19px; font-weight: 700; letter-spacing: -.02em; white-space: nowrap; }
+.yul-pace { position: relative; height: 8px; border-radius: 999px; background: color-mix(in oklab, var(--text) 9%, transparent); margin: 14px 0 8px; }
+.yul-pace > i { display: block; height: 100%; border-radius: 999px; background: var(--series-1); animation: yul-grow .5s var(--ease) both; transform-origin: left; }
+.yul-pace > i.over { background: var(--warn); }
+.yul-pace > b, .yul-hbar-track > b { position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 2px; background: var(--text-2); }
+.yul-month-foot {
+  display: flex; align-items: flex-end; gap: 22px; margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--hair); cursor: pointer; outline: none;
+}
+.yul-month-foot > .yul-card-link { margin-left: auto; }
+.yul-month-s { font-weight: 650; font-size: 15px; }
+.yul-top-row { grid-template-columns: minmax(80px, 130px) minmax(0, 1fr) 92px; padding: 5px 6px; margin: 0 -6px; border-radius: 8px; cursor: pointer; outline: none; }
+.yul-top-row:hover, .yul-top-row:focus-visible { background: var(--surface-2); }
+.yul-top-row .yul-hbar-track { position: relative; height: 8px; }
+.yul-top-row .yul-hbar-track > i { height: 8px; }
+.yul-top-note { margin-top: 8px; }
+/* Needs you with nothing in it */
+.yul-clear {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px;
+  border: 1px dashed var(--border); color: var(--text-2); font-size: 13px;
+}
 .yul-hero-card { cursor: pointer; }
-.yul-hero-card .yul-hero { font-size: 60px; font-weight: 750; letter-spacing: -.025em; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
+.yul-hero-card, .yul-nw-hero {
+  background:
+    radial-gradient(90% 120% at 0% 0%, color-mix(in oklab, var(--accent-solid) 13%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--surface-2), var(--surface) 140px) var(--surface);
+}
+.yul-hero-card .yul-hero { font-size: clamp(34px, 6.2vw, 60px); white-space: nowrap; font-weight: 750; letter-spacing: -.025em; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
 .yul-delta { font-weight: 600; }
 .yul-spark { height: 120px; margin-top: 12px; }
 /* Import and Needs you: a section title over its content, one muted line under it */
@@ -701,7 +864,7 @@ body.yul-dragging .yul-dropover { display: grid; animation: yul-fade .15s ease b
   white-space: nowrap;
 }
 .yul-pills > *:hover, .yul-pills > *:focus-visible { color: var(--text); }
-.yul-pills > .on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-2); }
+.yul-pills > .on { background: var(--pill-acc-bg); color: var(--pill-acc-text); box-shadow: inset 0 0 0 1px var(--pill-acc-border); font-weight: 600; }
 .yul-rec-switch {
   display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;
   color: var(--text-2); user-select: none; outline: none; flex: none;
@@ -930,6 +1093,8 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   border-radius: var(--r) 0 0 var(--r) !important; background: var(--surface-solid) !important;
   display: flex; flex-direction: column; gap: 4px; overflow-y: auto; padding: 22px 22px 18px;
 }
+/* The drawer scrolls as a whole: the chart keeps its height above a long list */
+.yul-nw-drawer > * { flex: none; }
 .yul-nw-drawer-figure { font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin-top: 8px; }
 .yul-nw-tx-list { display: flex; flex-direction: column; }
 .yul-nw-tx {
@@ -978,11 +1143,17 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-nwp-step.net { color: var(--text); font-weight: 600; }
 
 /* ---- cash flow and spending (views/cashflow, views/spending) ---- */
-.yul-hbar { display: grid; grid-template-columns: minmax(90px, 180px) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 4px 0; font-size: 13px; }
+.yul-hbar { display: grid; grid-template-columns: minmax(90px, 180px) minmax(0, 1fr) 100px; gap: 10px; align-items: center; padding: 4px 0; font-size: 13px; }
 .yul-hbar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .yul-hbar-track { height: 10px; }
 .yul-hbar-track > i { display: block; height: 10px; border-radius: 4px; background: var(--series-1); animation: yul-grow .5s var(--ease) both; transform-origin: left; }
 .yul-hbar-v { text-align: right; white-space: nowrap; }
+.yul-sp-aside {
+  display: flex; flex-wrap: wrap; gap: 0 5px; margin-top: 10px; padding: 9px 12px; border-radius: 10px;
+  background: var(--pill-acc-bg); border: 1px solid var(--pill-acc-border); font-size: 13px;
+}
+.yul-sp-aside > .yul-num { font-weight: 650; color: var(--pill-acc-text); }
+.yul-sp-so-far { margin: -4px 0 10px; }
 .yul-sp-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0 10px; }
 .yul-sp-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .yul-sp-split > .yul-nwm-card { margin-top: 10px; }
@@ -1010,10 +1181,12 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-sp-key > span { display: inline-flex; align-items: center; gap: 5px; }
 .yul-sp-key i { display: inline-block; width: 10px; height: 4px; border-radius: 2px; }
 .yul-sp-mix > i { display: block; height: 4px; border-radius: 2px; }
-.yul-sp-mix > i.mix-steady, .yul-sp-key i.mix-steady { background: var(--good); }
-.yul-sp-mix > i.mix-variable, .yul-sp-key i.mix-variable { background: var(--text-2); }
-.yul-sp-mix > i.mix-spiky, .yul-sp-key i.mix-spiky { background: var(--warn); }
-.yul-sp-mix > i.mix-lumpy, .yul-sp-key i.mix-lumpy { background: var(--accent-2); }
+/* The words' colours, quieter than the status colours they come from: they mark a kind of
+   category, not something to act on. The scatter's dots use the same (cashflow_chart.py). */
+.yul-sp-mix > i.mix-steady, .yul-sp-key i.mix-steady { background: color-mix(in oklab, var(--good) 72%, transparent); }
+.yul-sp-mix > i.mix-variable, .yul-sp-key i.mix-variable { background: color-mix(in oklab, var(--text-2) 72%, transparent); }
+.yul-sp-mix > i.mix-spiky, .yul-sp-key i.mix-spiky { background: color-mix(in oklab, var(--warn) 72%, transparent); }
+.yul-sp-mix > i.mix-lumpy, .yul-sp-key i.mix-lumpy { background: color-mix(in oklab, var(--accent-solid) 72%, transparent); }
 .yul-sp-mix > i.mix-unrated, .yul-sp-key i.mix-unrated { background: var(--border-2); }
 .yul-sp-words { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
 .yul-sp-word {
@@ -1051,6 +1224,8 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   }
 }
 
+@keyframes yul-wait { 0%, 100% { opacity: .35; } 50% { opacity: .8; } }
+
 /* ---- responsive: every breakpoint, widest first ---- */
 @media (hover: none) {
   .yul-nw-edit { opacity: 1; }
@@ -1084,9 +1259,56 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   }
   .yul-nw-share { display: none; }
 }
-@media (max-width: 720px) {
-  .yul-frame { grid-template-columns: 64px minmax(0, 1fr); }
+@media (max-width: 1100px) {
+  .yul-status { max-width: 240px; }
+  .yul-search { width: 34px; padding: 0; justify-content: center; }
+  .yul-search-label, .yul-search .yul-kbd { display: none; }
+  .yul-budget-chip { display: none; }
+}
+/* A tablet: the sidebar is the rail of icons */
+@media (max-width: 960px) {
+  .yul-settings { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .yul-tabs.side {
+    flex-direction: row; overflow-x: auto; scrollbar-width: none; position: static;
+    border-bottom: 1px solid var(--border); margin-bottom: 16px; padding-bottom: 6px;
+  }
+  .yul-frame, .yul-frame.rail { grid-template-columns: 64px minmax(0, 1fr); }
   .yul-frame .yul-brand-name, .yul-frame .yul-nav-label, .yul-frame .yul-side-foot { display: none; }
+  .yul-frame .yul-nav-group { visibility: hidden; height: 10px; padding: 0; overflow: hidden; }
+  .yul-frame .yul-nav.collapse { display: none; }
+  .yul-frame .yul-nav-badge {
+    position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px;
+    background: var(--accent-solid); color: var(--on-accent); border-color: transparent;
+  }
+  .yul-subtitle { display: none; }
+}
+/* A phone: the sidebar becomes a bar of icons along the bottom, the top bar keeps the essentials */
+@media (max-width: 640px) {
+  .yul-frame, .yul-frame.rail { display: block; }
+  .yul-side {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0; height: auto; z-index: 6;
+    flex-direction: row; justify-content: space-around; gap: 0;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--border);
+    background: color-mix(in oklab, var(--bg) 82%, transparent);
+  }
+  .yul-side .yul-brand, .yul-side .yul-nav-group, .yul-side .yul-side-spacer { display: none; }
+  .yul-side .yul-nav { padding: 9px 10px; }
+  .yul-side .yul-nav.on::before { left: 10px; right: 10px; top: -7px; bottom: auto; width: auto; height: 3px; }
+  .yul-side .yul-nav:hover { transform: none; }
+  .yul-views { padding: 16px 14px calc(84px + env(safe-area-inset-bottom)); }
+  .yul-top { padding: 10px 14px; gap: 8px; }
+  .yul-top-import, .yul-sync-text { display: none; }
+  /* The status line drops under the top bar, where a toast would be */
+  .yul-status { position: fixed; top: 60px; left: 14px; right: 14px; max-width: none; justify-content: center; background: var(--surface-solid); }
+  .yul-hero-card .yul-hero { font-size: clamp(30px, 10.5vw, 48px); }
+  /* A row of tabs or of range pills scrolls sideways instead of wrapping or squeezing its title */
+  .yul-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .yul-tab { white-space: nowrap; }
+  .yul-nwm-head > .yul-grow, .yul-nw-head > .yul-grow, .yul-rec-head > .yul-grow { flex-basis: 100%; }
+  .yul-nwm-card > .yul-row { flex-wrap: wrap; gap: 2px 10px; }
+  .yul-pills { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .yul-foot { bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .q-notifications__list--top { top: 58px; }
   .yul-wiz { grid-template-columns: 1fr; }
   .yul-rail { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--border); }
   .yul-optgrid, .yul-kv { grid-template-columns: 1fr; }

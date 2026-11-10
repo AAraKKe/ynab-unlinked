@@ -3,7 +3,10 @@ the numbers behind its word.
 
 It slides in over the chart from the right; the back arrow brings the chart back. Everything
 is over the category's life in the range (its first month of spending to its last); the range
-itself is the page's, so changing it updates the detail in place.
+itself is the page's, so changing it updates the detail in place. What it says depends on
+what the category is (`data.story`): a month for one spent every month, a charge for a lumpy
+one, the biggest month for a spiky one, each with what to set aside for it; the last two over
+their history, since the quiet months are part of how they spend.
 """
 
 from __future__ import annotations
@@ -37,10 +40,8 @@ def category_detail(
     formatter: Formatter,
     on_back: Callable[[], Any],
 ) -> None:
-    """Draw the detail in the current context (the chart's card)."""
-    money = formatter.format_amount_milli
-    life = data.life(trend, flow)
-    numbers = data.stats(life.spent)
+    """Draw the detail in the current context (the chart's card), as `data.story` tells it."""
+    told = data.story(trend, flow, formatter.format_amount_milli)
     word = data.word(trend)
     with ui.element("div").classes("yul-sp-detail").mark("category-detail"):
         with ui.element("div").classes("yul-row").style("gap:8px;align-items:flex-start"):
@@ -50,7 +51,7 @@ def category_detail(
             ui.label(f"{trend.group} / {trend.name}").classes("yul-nwm-title yul-grow").mark(
                 "detail-title"
             )
-            ui.label(f"{money(round(numbers.mean))} a month").classes("yul-nwp-figure yul-num")
+            ui.label(told.figure).classes("yul-nwp-figure yul-num").mark("detail-figure")
         with ui.element("div").classes("yul-row").style("gap:8px;margin-top:6px"):
             if word is not None:
                 pill(word.text, word.kind).mark("detail-word")
@@ -61,28 +62,33 @@ def category_detail(
                 ui.label("Not enough months to say how it moves.").classes("yul-faint yul-small")
         if word is not None:
             ui.label(word.hint).classes("yul-muted yul-small").style("margin-top:4px")
+        if told.guide is not None:
+            how, aside, what_for = told.guide
+            with ui.element("div").classes("yul-sp-aside").mark("detail-set-aside"):
+                ui.label(how)
+                if aside:
+                    ui.label(aside).classes("yul-num")
+                ui.label(what_for)
 
-        ui.label("Each month").classes("yul-section")
-        keys = [month.strftime("%Y-%m") for month in life.months]
+        ui.label(told.section).classes("yul-section")
+        keys = [month.strftime("%Y-%m") for month in told.life.months]
         chart(
-            category_months_options(keys, life.spent, palette, currency_format, numbers.mean),
+            category_months_options(
+                keys, told.life.spent, palette, currency_format, told.line_value, line=told.line
+            ),
             DETAIL_HEIGHT,
         ).mark("detail-chart")
 
         with ui.element("div").classes("yul-sp-numbers").mark("detail-stats"):
-            for key, value in (
-                ("Average", money(round(numbers.mean))),
-                ("Median", money(round(numbers.median))),
-                ("Lowest month", money(numbers.lowest)),
-                ("Highest month", money(numbers.highest)),
-                ("Spread", money(round(numbers.spread))),
-            ):
+            for key, value in told.rows:
                 with ui.element("div"):
                     ui.label(key).classes("yul-faint yul-small")
                     ui.label(value).classes("yul-num")
 
+        if not told.histogram:  # a few charges among quiet months: there is no spread to show
+            return
         ui.label("How the months spread").classes("yul-section")
-        bins = [(b.low, b.high, b.months) for b in data.histogram(life.spent)]
+        bins = [(b.low, b.high, b.months) for b in data.histogram(told.life.spent)]
         chart(histogram_options(bins, palette, currency_format), HISTOGRAM_HEIGHT).mark(
             "detail-histogram"
         )

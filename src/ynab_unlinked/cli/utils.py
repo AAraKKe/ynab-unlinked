@@ -7,13 +7,14 @@ from rich.style import Style
 from rich.table import Column, Table
 from rich.text import Text
 
-from ynab_unlinked.cli.display import CliProgress, console, process, question
+from ynab_unlinked.cli.display import CliProgress, console, info, process, question
 from ynab_unlinked.config import get_config
 from ynab_unlinked.config.budget import budget_from_plan
 from ynab_unlinked.config.models.v2 import Budget
 from ynab_unlinked.core.importing import ImportRow, RowStatus
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import Transaction
+from ynab_unlinked.text import YNAB_TOKEN_URL
 from ynab_unlinked.ynab_api.client import Client
 
 IMPORT_HELP_MESSAGE = (
@@ -37,6 +38,7 @@ _STATUS: dict[RowStatus, tuple[str, Style]] = {
 
 
 def prompt_for_api_key() -> str:
+    info(f"Create a Personal Access Token in YNAB: {YNAB_TOKEN_URL}")
     return question("What is the API Key to connect to YNAB?", password=True)
 
 

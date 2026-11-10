@@ -11,7 +11,7 @@ import datetime as dt
 from nicegui import run, ui
 
 from ynab_unlinked.web import shell, theme
-from ynab_unlinked.web.components import empty_state, glass_card, stat_tile
+from ynab_unlinked.web.components import empty_state, glass_card, info_button, stat_tile
 from ynab_unlinked.web.components.cashflow_chart import (
     FLOW_HEIGHT,
     RATE_HEIGHT,
@@ -21,14 +21,17 @@ from ynab_unlinked.web.components.cashflow_chart import (
 )
 from ynab_unlinked.web.components.controls import pill_group
 from ynab_unlinked.web.finances import RANGES, period_title
+from ynab_unlinked.web.ranges import save_range, saved_range
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.cashflow import data
+from ynab_unlinked.web.wording import VERSUS_YNAB, VERSUS_YNAB_TITLE
 
 
 class CashFlowView:
     def __init__(self) -> None:
-        self.range = data.DEFAULT_RANGE
+        self.range = saved_range(data.DEFAULT_RANGE)
         self.body = ui.element("div").classes("yul-cf")
+        shell.on_refresh(self.body, self.render)
 
     async def render(self) -> None:
         config, _ = state().require()
@@ -41,6 +44,7 @@ class CashFlowView:
 
     async def set_range(self, key: str) -> None:
         self.range = key
+        save_range(key)
         await self.render()
 
     def _draw(self, page: data.CashFlowPage) -> None:
@@ -50,7 +54,9 @@ class CashFlowView:
         flow = page.flow
         money = formatter.format_amount_milli
         with ui.element("div").classes("yul-nwm-head"):
-            ui.label(period_title(flow.start, flow.end)).classes("yul-h2 yul-grow")
+            with ui.element("div").classes("yul-row yul-info-row yul-grow"):
+                ui.label(period_title(flow.start, flow.end)).classes("yul-h2")
+                info_button(VERSUS_YNAB_TITLE, VERSUS_YNAB, marker="cf-info")
             pill_group({key: key for key in RANGES}, self.range, self.set_range, marker="range")
         if not flow.complete:
             empty_state(

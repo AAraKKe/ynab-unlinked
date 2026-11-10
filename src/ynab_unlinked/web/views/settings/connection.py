@@ -10,7 +10,14 @@ from ynab_unlinked import keychain
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.config import switch_budget as switch_budget_in
 from ynab_unlinked.web import shell
-from ynab_unlinked.web.components import budget_tiles, button, dialog_box, loading, show_state
+from ynab_unlinked.web.components import (
+    budget_tiles,
+    button,
+    dialog_box,
+    loading,
+    show_state,
+    token_hint,
+)
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.settings.common import current_config, kv
 from ynab_unlinked.web.wording import ynab_error_message
@@ -71,6 +78,8 @@ def _token_change(page: Settings, area: ui.element) -> None:
         save_button = button("Check and save", kind="primary", small=True)
         save_button.mark("save-token")
         button("Cancel", kind="ghost", small=True, on_click=lambda: area.set_visibility(False))
+    with ui.element("div").classes("yul-faint yul-small"):
+        token_hint()
     status = ui.element("div").classes("yul-row yul-inline-state")
 
     async def check_and_save() -> None:

@@ -14,7 +14,15 @@ from nicegui import run, ui
 from ynab_unlinked.core.history import Point
 from ynab_unlinked.store import Activity
 from ynab_unlinked.web import shell, theme
-from ynab_unlinked.web.components import clickable, count_up, glass_card, icon, pill, spinner
+from ynab_unlinked.web.components import (
+    check,
+    clickable,
+    count_up,
+    glass_card,
+    icon,
+    pill,
+    spinner,
+)
 from ynab_unlinked.web.components.dropzone import dropzone
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.home.data import (
@@ -27,6 +35,7 @@ from ynab_unlinked.web.views.home.data import (
     message_markup,
     relative_time,
 )
+from ynab_unlinked.web.views.home.month import card_head, month_card, top_card
 from ynab_unlinked.web.wording import short_date
 
 SYNC_POLL_SECONDS = 2.0
@@ -113,8 +122,8 @@ def _hero(data: HomeData, today: dt.date) -> None:
 
 def _activity(entries: Sequence[Activity]) -> None:
     now = dt.datetime.now(dt.UTC)
-    with glass_card().mark("activity"):
-        ui.label("Recent activity").style("font-weight:600;margin-bottom:10px")
+    with glass_card().classes("yul-home-activity").mark("activity"):
+        card_head("Recent activity")
         if not entries:
             ui.label("Nothing yet. Imports, reconciles and balance updates show up here.").classes(
                 "yul-muted yul-small"
@@ -156,9 +165,9 @@ def _needs_you(data: HomeData) -> None:
         ui.label("Needs you").classes("yul-section")
         items = attention_items(data)
         if not items:
-            ui.label(
-                "Nothing waiting. Drop a statement or check back after your next import."
-            ).classes("yul-muted yul-small yul-home-line").mark("nothing-waiting")
+            with ui.element("div").classes("yul-clear").mark("nothing-waiting"):
+                check()
+                ui.label("Nothing waiting. Drop a statement or check back after your next import.")
             return
         with ui.element("div").classes("yul-attn yul-stagger").mark("attention"):
             for item in items:
@@ -209,9 +218,13 @@ async def _render(body: ui.element) -> None:
             _banner(body)
         with ui.element("div").classes("yul-home-main yul-stagger"):
             _hero(data, today)
-            _import_section(data, today)
             _needs_you(data)
-        with ui.element("div").classes("yul-home-side"):
+            _import_section(data, today)
+        with ui.element("div").classes("yul-home-side yul-stagger"):
+            if data.pulse is not None:
+                month_card(data.pulse)
+                if data.pulse.top:
+                    top_card(data.pulse)
             _activity(data.activity)
 
 

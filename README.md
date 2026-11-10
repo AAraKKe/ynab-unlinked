@@ -27,33 +27,40 @@ Is your bank missing? [Open an issue](https://github.com/AAraKKe/ynab-unlinked/i
 its name and the kind of file it lets you download, or add it yourself: a bank is a small Python
 package, see the [wiki](https://github.com/AAraKKe/ynab-unlinked/wiki).
 
-## Install
+## Get started
 
-Python 3.13 or newer, tested on macOS and Linux. The recommended way is
-[uv](https://docs.astral.sh/uv/):
+1. **Install it.** Python 3.13 or newer, on macOS or Linux. The recommended way is
+   [uv](https://docs.astral.sh/uv/):
 
-```sh
-uv tool install 'ynab-unlinked[web]'   # CLI and web app
-uv tool install ynab-unlinked          # CLI only
-```
+   ```sh
+   uv tool install 'ynab-unlinked[web]'   # the app and the command line
+   uv tool install ynab-unlinked          # the command line only
+   ```
 
-`pip install 'ynab-unlinked[web]'` works too. Upgrade with `uv tool upgrade ynab-unlinked`.
+   `pip install 'ynab-unlinked[web]'` works too. Upgrade with `uv tool upgrade ynab-unlinked`.
 
-You need a YNAB Personal Access Token: in YNAB go to Account Settings, then Developer Settings,
-and create one. `yul` asks for it the first time it runs and keeps it in your system keychain.
+2. **Create a YNAB token.** Open
+   [app.ynab.com/settings/developer](https://app.ynab.com/settings/developer) (in YNAB:
+   Account Settings, then Developer Settings), click **New Token** and copy it. YNAB shows it
+   only once.
+
+3. **Run it.**
+
+   ```sh
+   yul app
+   ```
+
+   The app opens in your browser. The first run asks for the token (kept in your system
+   keychain, not in a file), lets you pick the budget and where each bank's statements go, then
+   copies the budget to your computer.
 
 ## The app
 
-```sh
-yul app
-```
+The app runs only on your computer. It works from a local copy of your budget, so every page
+is instant, and it syncs with YNAB on its own while it is open and after every change it makes.
 
-The app opens in your browser and runs only on your computer. The first run connects your YNAB
-account, picks the budget and asks where each bank's statements should go, then copies the
-budget locally, so every page after that is instant. It syncs again in the background and after
-every change it makes.
-
-- **Home**: your net worth, a place to drop statements, and what needs you today.
+- **Home**: your net worth, what needs you today, a place to drop statements, and the month
+  so far: what came in and went out against a usual month, and where it went.
 
   ![Home](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/home.png)
 
@@ -92,6 +99,14 @@ every change it makes.
 
   ![Spending](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/spending.png)
   ![A category's months](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/spending-category.png)
+
+**Search**: press ⌘K (Ctrl+K, or `/`) anywhere to jump to a page, a Settings tab, a category
+or an account, or to sync or switch between light and dark.
+
+![Search](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/palette.png)
+
+The sidebar counts what is waiting for you (transactions to reconcile, balances to update),
+and the app works in a phone-sized window too.
 
 **Settings**: the connection, the banks, which accounts count in your net worth and in which
 group, whose return to follow, the goal, the categories that are not spending, the look, and

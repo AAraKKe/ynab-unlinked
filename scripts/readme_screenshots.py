@@ -499,12 +499,15 @@ def serve(home: Path) -> None:
 WIDTH = 1440
 HEIGHTS = {"import": 480, "reconcile": 760, "settings": 880}
 """Pages with little on them are cut short of the window's 960."""
+PALETTE = "palette"
+"""Opens the command palette and types a few letters instead of clicking."""
 STATEMENT = "statement"
 """Drops a made-up Sabadell statement on the page instead of clicking."""
 
 SHOTS: list[tuple[str, str, str | None]] = [
     # file, path, text of something to click first
     ("home", "/", None),
+    ("palette", "/", PALETTE),
     ("import", "/import", STATEMENT),
     ("reconcile", "/reconcile", None),
     ("networth-overview", "/networth", None),
@@ -571,7 +574,12 @@ def shoot() -> None:
             page.goto(f"{base}{path}")
             page.wait_for_load_state("networkidle")
             time.sleep(2.5)  # charts animate in
-            if click == STATEMENT:
+            if click == PALETTE:
+                page.keyboard.press("/")
+                time.sleep(1)
+                page.keyboard.type("gro", delay=60)
+                time.sleep(1)
+            elif click == STATEMENT:
                 page.locator("input[type=file]").first.set_input_files(str(statement))
                 time.sleep(3)
             elif click:

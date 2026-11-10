@@ -281,3 +281,13 @@ async def test_a_recovered_token_whose_config_file_is_gone_is_not_saved(
     await user.should_see(marker="token-lost")
     assert not config_files.path("V4").exists()
     assert memory_keychain.passwords == {}
+
+
+async def test_the_token_step_links_to_where_ynab_creates_one(user: User):
+    await user.open("/onboarding")
+
+    await user.should_see(marker="token-hint")
+    [hint] = user.find(marker="token-hint").elements
+    [link] = [child for child in hint.descendants() if isinstance(child, ui.link)]
+    assert link.props["href"] == "https://app.ynab.com/settings/developer"
+    assert link.props["target"] == "_blank"

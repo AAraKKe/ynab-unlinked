@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import datetime as dt
 import statistics
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
 from ynab_unlinked.config import LatestConfig
-from ynab_unlinked.core.cashflow import CashFlow, CategoryTrend
+from ynab_unlinked.core.cashflow import CashFlow, CategoryTrend, rhythm
 from ynab_unlinked.store import Store
 from ynab_unlinked.web import finances
 
@@ -162,12 +162,32 @@ class Life:
 
 
 def life(trend: CategoryTrend, flow: CashFlow) -> Life:
-    months = [month.month for month in flow.complete]
+    months = [month.month for month in flow.measured]
     active = [index for index, value in enumerate(trend.spent) if value > 0]
     if not active:
         return Life(tuple(months), trend.spent)
     first, last = active[0], active[-1] + 1
     return Life(tuple(months[first:last]), trend.spent[first:last])
+
+
+def charges(trend: CategoryTrend, flow: CashFlow) -> Life:
+    """A category's history from its first spending to now: the months it spent in and the
+    quiet ones between and after them, whatever range the page shows."""
+    active = [index for index, value in enumerate(trend.past) if value > 0]
+    if not active:
+        return life(trend, flow)
+    return Life(tuple(flow.history[active[0] :]), trend.past[active[0] :])
+
+
+def every_text(every: float) -> str:
+    """How often a charge comes, in words: `once a year`, `every 3 months`."""
+    months = max(round(every), 1)
+    return {
+        1: "every month",
+        6: "twice a year",
+        12: "once a year",
+        24: "every two years",
+    }.get(months, f"every {months} months")
 
 
 @dataclass(frozen=True)
@@ -188,4 +208,137 @@ def stats(spent: Sequence[int]) -> Stats:
         lowest=min(spent, default=0),
         highest=max(spent, default=0),
         spread=statistics.pstdev(spent) if spent else 0,
+    )
+
+
+# ---- what a category's detail says, by what the category is -----------------------------------
+
+
+@dataclass(frozen=True)
+class Story:
+    """A category's detail in words and numbers. What "how much" means depends on what the
+    category is: a month for one spent every month, a charge for a lumpy one, the biggest
+    month for a spiky one, the one purchase for one bought once."""
+
+    figure: str
+    """The headline: `288.94€ a month`, `170.99€ a charge`, `up to 6,753.00€ a month`."""
+    guide: tuple[str, str, str] | None
+    """How it comes, what to set aside (shown strong), and what for. None without enough
+    months to say."""
+    section: str
+    life: Life
+    """The months the chart draws: the range's for a category spent every month, its history
+    since the first charge for one spent every so often."""
+    line: str
+    """The name of the chart's dashed line, drawn at `line_value`."""
+    line_value: float
+    rows: tuple[tuple[str, str], ...]
+    histogram: bool
+
+
+def _month(month: dt.date) -> str:
+    return f"{month:%b %Y}"
+
+
+def _last_spent(shown: Life) -> str:
+    paid = [month for month, value in zip(shown.months, shown.spent, strict=True) if value > 0]
+    return _month(paid[-1]) if paid else "—"
+
+
+def story(trend: CategoryTrend, flow: CashFlow, money: Callable[[int], str]) -> Story:
+    """Tell `trend` the way its word asks for. `money` formats milliunits."""
+    label = trend.volatility.label
+    beat = rhythm(trend.past)
+    since = charges(trend, flow)
+    ranged = life(trend, flow)
+    numbers = stats(ranged.spent)
+    every_month = (
+        ("Average", money(round(numbers.mean))),
+        ("Median", money(round(numbers.median))),
+        ("Lowest month", money(numbers.lowest)),
+        ("Highest month", money(numbers.highest)),
+        ("Spread", money(round(numbers.spread))),
+    )
+    month_figure = f"{money(round(numbers.mean))} a month"
+
+    if label == "lumpy" and beat.every and beat.set_aside:
+        aside = money(round(beat.set_aside))
+        return Story(
+            figure=f"{money(round(beat.charge))} a charge",
+            guide=(
+                f"About {every_text(beat.every)}.",
+                f"Set aside {aside} a month",
+                "to have it ready.",
+            ),
+            section="Each charge",
+            life=since,
+            line="Set aside a month",
+            line_value=beat.set_aside,
+            rows=(
+                ("A charge", money(round(beat.charge))),
+                ("Charges", str(beat.charges)),
+                ("Comes", every_text(beat.every)),
+                ("Set aside", aside),
+                ("Last one", _last_spent(since)),
+            ),
+            histogram=False,
+        )
+    if label == "spiky" and since.spent:
+        months, total = len(since.spent), sum(since.spent)
+        aside = total / months
+        return Story(
+            figure=f"up to {money(max(since.spent))} a month",
+            guide=(
+                f"Spent in {beat.charges} of the last {months} months.",
+                f"Set aside {money(round(aside))} a month",
+                "to cover months like these.",
+            ),
+            section="Each month",
+            life=since,
+            line="Set aside a month",
+            line_value=aside,
+            rows=(
+                ("Biggest month", money(max(since.spent))),
+                ("Months spent in", f"{beat.charges} of {months}"),
+                ("In all", money(total)),
+                ("Set aside", money(round(aside))),
+                ("Last one", _last_spent(since)),
+            ),
+            histogram=False,
+        )
+    if label == "steady":
+        guide = (
+            "About the same every month.",
+            f"Set aside {money(round(numbers.mean))} a month",
+            "and it is covered.",
+        )
+    elif label == "variable":
+        guide = (
+            f"Between {money(numbers.lowest)} and {money(numbers.highest)} a month.",
+            f"Set aside {money(round(numbers.mean))} a month",
+            "to cover it over time.",
+        )
+    elif beat.charges == 1:
+        # Bought once: neither a month nor something to plan for
+        return Story(
+            figure=f"{money(round(beat.charge))} once",
+            guide=(f"Spent once, in {_last_spent(since)}.", "", "Nothing to plan for yet."),
+            section="Each month",
+            life=ranged,
+            line="Average",
+            line_value=numbers.mean,
+            rows=every_month,
+            histogram=False,
+        )
+    else:
+        guide = None
+    return Story(
+        figure=month_figure,
+        guide=guide,
+        section="Each month",
+        life=ranged,
+        line="Average",
+        line_value=numbers.mean,
+        rows=every_month,
+        histogram=len(ranged.spent) > 1,
     )

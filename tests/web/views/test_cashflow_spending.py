@@ -24,11 +24,14 @@ from tests.factories import (
     CategoryGroupFactory,
     TransactionDetailFactory,
 )
+from tests.helpers.web import eventually
 from tests.helpers.ynab_api import YnabClientStub
 from tests.web.views.test_networth import texts
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.core.cashflow import CashFlow, CategoryTrend, FlowMonth, Volatility
 from ynab_unlinked.store import Store
+from ynab_unlinked.web import theme
+from ynab_unlinked.web.components.cashflow_chart import WORD_OPACITY, word_color
 from ynab_unlinked.web.state import AppState
 from ynab_unlinked.web.views.cashflow import data as cashflow
 from ynab_unlinked.web.views.spending import data as spending
@@ -318,3 +321,287 @@ async def test_a_filter_redraws_only_the_table_and_the_chart(synced: Store, no_s
     assert user.find(marker="word-steady").elements.pop().id == legend
     assert "on" in user.find(marker="word-steady").elements.pop().classes
     assert user.find(marker="sp-group-filter").elements.pop().value == "Bills"
+
+
+# ---- the range and the links the pages share -------------------------------------------------
+
+
+def on(user: User, marker: str) -> bool:
+    return "on" in user.find(marker=marker).elements.pop().classes
+
+
+async def test_a_range_picked_on_one_finance_page_is_the_range_of_the_others(
+    synced: Store, no_sync, user: User
+):
+    await user.open("/cashflow")
+    await user.should_see(marker="cf-income", retries=20)
+    assert on(user, "range-1Y")
+
+    user.find(marker="range-6M").click()
+    await eventually(lambda: on(user, "range-6M"))
+
+    await user.open("/spending")
+    await user.should_see(marker="sp-scatter", retries=20)
+    assert on(user, "range-6M")
+    assert not on(user, "range-1Y")
+    await user.open("/networth?tab=months")
+    await user.should_see(marker="range-6M", retries=20)
+    assert on(user, "range-6M")
+
+
+async def test_a_link_to_a_category_opens_spending_on_its_months(
+    synced: Store, no_sync, user: User
+):
+    await user.open(f"/spending?category={GROCERIES}")
+
+    await user.should_see(marker="category-detail", retries=20)
+    assert texts(user, "detail-title") == "Everyday / 🛒 Groceries"
+
+
+async def test_a_link_to_a_category_the_range_does_not_have_opens_the_chart(
+    synced: Store, no_sync, user: User
+):
+    await user.open("/spending?category=not-a-category")
+
+    await user.should_see(marker="sp-scatter", retries=20)
+    await user.should_not_see(marker="category-detail")
+
+
+async def test_spending_shows_the_running_month_so_far(
+    synced: Store, ynab_api: YnabClientStub, no_sync, user: User
+):
+    transactions = ynab_api.api("transactions").get_transactions.return_value.data.transactions
+    transactions.append(
+        TransactionDetailFactory(
+            id="now",
+            account_id=CHECKING,
+            var_date=dt.date.today().replace(day=1),
+            amount=-1_000_000,
+            payee_name="Landlord",
+            category_id=RENT,
+        )
+    )
+    synced.clear(BUDGET_ID)
+    synced.sync(Client("api-key"), BUDGET_ID)
+    await user.open("/spending")
+    await user.should_see(marker="sp-scatter", retries=20)
+
+    user.find(marker="range-1M").click()
+
+    await user.should_see(marker="sp-so-far", retries=20)
+    assert texts(user, "sp-total") == "Spent so far 1,000.00€"
+    # Eleven months of the same rent behind it: steady, though the range is one month
+    assert "steady" in texts(user, f"category-{RENT}")
+
+
+async def test_a_dot_of_the_scatter_is_in_the_colour_of_its_word(
+    synced: Store, no_sync, user: User
+):
+    await user.open("/spending")
+    await user.should_see(marker="sp-scatter", retries=20)
+
+    palette = theme.DARK_PALETTE
+    dots = user.find(marker="sp-scatter").elements.pop().options["series"][0]["data"]
+    colours = {dot["label"]["formatter"]: dot["itemStyle"]["color"] for dot in dots}
+    # Rent is the same every month; the one trip is a single purchase without a word
+    assert colours["🏠 Rent"] == palette.good
+    assert colours["🏝 Vacation"] == palette.text_3
+    assert {dot["itemStyle"]["opacity"] for dot in dots} == {WORD_OPACITY}
+    await user.should_see(marker="sp-dot-key")
+
+
+def test_every_word_has_its_colour():
+    palette = theme.LIGHT_PALETTE
+
+    assert [word_color(label, palette) for label in ("steady", "variable", "spiky", "lumpy")] == [
+        palette.good,
+        palette.text_2,
+        palette.warn,
+        palette.accent_solid,
+    ]
+    assert word_color(None, palette) == palette.text_3
+
+
+# ---- a lumpy category is about its charges, not about a month ----------------------------------
+
+
+@pytest.mark.parametrize(
+    ("every", "text"),
+    [
+        (12, "once a year"),
+        (11.6, "once a year"),
+        (6, "twice a year"),
+        (24, "every two years"),
+        (3, "every 3 months"),
+        (1, "every month"),
+        (0.2, "every month"),
+    ],
+)
+def test_how_often_a_charge_comes_is_said_in_words(every: float, text: str):
+    assert spending.every_text(every) == text
+
+
+async def test_a_lumpy_category_shows_its_charges_and_what_to_set_aside(
+    synced: Store, ynab_api: YnabClientStub, no_sync, user: User
+):
+    # A second trip six months before the first: the same price, twice a year
+    transactions = ynab_api.api("transactions").get_transactions.return_value.data.transactions
+    transactions.append(
+        TransactionDetailFactory(
+            id="trip-before",
+            account_id=CHECKING,
+            var_date=month_ago(10, 12),
+            amount=-2_000_000,
+            payee_name="Airline",
+            category_id=TRIP,
+        )
+    )
+    synced.clear(BUDGET_ID)
+    synced.sync(Client("api-key"), BUDGET_ID)
+
+    await user.open(f"/spending?category={TRIP}")
+    await user.should_see(marker="category-detail", retries=20)
+
+    assert texts(user, "detail-word") == "◆ lumpy"
+    assert texts(user, "detail-figure") == "2,000.00€ a charge"
+    assert texts(user, "detail-set-aside") == (
+        "About twice a year. Set aside 333.33€ a month to have it ready."
+    )
+    last = month_ago(4, 1)
+    assert texts(user, "detail-stats") == (
+        f"A charge 2,000.00€ Charges 2 Comes twice a year Set aside 333.33€ Last one {last:%b %Y}"
+    )
+    chart = user.find(marker="detail-chart").elements.pop()
+    assert [item["name"] for item in chart.options["legend"]["data"]] == [
+        "Spent",
+        "Set aside a month",
+    ]
+    # Its charges from the first one to now, the quiet months between them too
+    months = user.find(marker="detail-chart").elements.pop().options["series"][0]["data"]
+    assert months == [2_000.0, 0, 0, 0, 0, 0, 2_000.0, 0, 0, 0]
+    await user.should_not_see(marker="detail-histogram")
+
+
+async def test_a_category_spent_every_month_still_reads_a_month(synced: Store, no_sync, user: User):
+    await user.open(f"/spending?category={RENT}")
+    await user.should_see(marker="category-detail", retries=20)
+
+    assert texts(user, "detail-figure") == "1,000.00€ a month"
+    assert texts(user, "detail-set-aside") == (
+        "About the same every month. Set aside 1,000.00€ a month and it is covered."
+    )
+    await user.should_see(marker="detail-histogram")
+
+
+# ---- every kind of category is told in its own words ------------------------------------------
+
+
+def euros(milliunits: int) -> str:
+    return f"{milliunits / 1000:,.2f}€"
+
+
+def told(label: str | None, spent: list[int], past: list[int] | None = None) -> spending.Story:
+    """The story of a category that spent `spent` in the range's months (the last of the
+    history `past`, which is the range when not given)."""
+    past = spent if past is None else past
+    history = tuple(month_ago(months, 1) for months in range(len(past), 0, -1))
+    months = tuple(FlowMonth(month, 0, 0, True) for month in history[-len(spent) :])
+    category = CategoryTrend(
+        "c", "C", "G", tuple(spent), Volatility(0, 1.0, label, 0), past=tuple(past)
+    )
+    page = CashFlow(months[0].month, month_ago(0, 1), months, (category,), history=history)
+    return spending.story(category, page, euros)
+
+
+def test_a_steady_category_is_a_month_and_its_average_covers_it():
+    story = told("steady", [1_000_000] * 6)
+
+    assert story.figure == "1,000.00€ a month"
+    assert story.guide == (
+        "About the same every month.",
+        "Set aside 1,000.00€ a month",
+        "and it is covered.",
+    )
+    assert (story.section, story.line, story.histogram) == ("Each month", "Average", True)
+    assert story.rows[0] == ("Average", "1,000.00€")
+
+
+def test_a_variable_category_says_between_what_it_moves():
+    story = told("variable", [200_000, 500_000, 300_000, 400_000, 600_000, 400_000])
+
+    assert story.figure == "400.00€ a month"
+    assert story.guide == (
+        "Between 200.00€ and 600.00€ a month.",
+        "Set aside 400.00€ a month",
+        "to cover it over time.",
+    )
+    assert story.histogram
+
+
+def test_a_lumpy_category_is_a_charge_over_its_history():
+    # The range holds one charge; the history, three a year apart
+    past = [171_000, *[0] * 11, 171_000, *[0] * 11, 171_000, 0]
+    story = told("lumpy", past[-3:], past)
+
+    assert story.figure == "171.00€ a charge"
+    assert story.guide == (
+        "About once a year.",
+        "Set aside 14.25€ a month",
+        "to have it ready.",
+    )
+    assert (story.section, story.line, story.line_value) == (
+        "Each charge",
+        "Set aside a month",
+        14_250,
+    )
+    assert story.life.spent == tuple(past)
+    assert [key for key, _ in story.rows] == [
+        "A charge",
+        "Charges",
+        "Comes",
+        "Set aside",
+        "Last one",
+    ]
+    assert not story.histogram
+
+
+def test_a_spiky_category_is_its_biggest_month_and_what_covers_months_like_it():
+    # Nothing for a while, a small month, a big one, then quiet again
+    past = [0, 0, 129_000, 0, 0, 0, 6_753_000, 0, 0, 0]
+    story = told("spiky", past[-6:], past)
+
+    assert story.figure == "up to 6,753.00€ a month"
+    # 6,882 over the eight months since it first spent, the quiet ones after it too
+    assert story.guide == (
+        "Spent in 2 of the last 8 months.",
+        "Set aside 860.25€ a month",
+        "to cover months like these.",
+    )
+    assert story.life.spent == tuple(past[2:])
+    assert story.rows == (
+        ("Biggest month", "6,753.00€"),
+        ("Months spent in", "2 of 8"),
+        ("In all", "6,882.00€"),
+        ("Set aside", "860.25€"),
+        ("Last one", f"{month_ago(4, 1):%b %Y}"),
+    )
+    assert (story.line, story.histogram) == ("Set aside a month", False)
+
+
+def test_something_bought_once_is_not_a_month():
+    story = told(None, [0, 0, 2_000_000, 0, 0, 0])
+
+    assert story.figure == "2,000.00€ once"
+    assert story.guide == (
+        f"Spent once, in {month_ago(4, 1):%b %Y}.",
+        "",
+        "Nothing to plan for yet.",
+    )
+    assert not story.histogram
+
+
+def test_a_category_too_young_for_a_word_has_no_guide_yet():
+    story = told(None, [300_000, 280_000])
+
+    assert story.figure == "290.00€ a month"
+    assert story.guide is None

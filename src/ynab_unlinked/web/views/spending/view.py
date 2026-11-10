@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime as dt
 from functools import partial
 
-from nicegui import events, run, ui
+from nicegui import PageArguments, events, run, ui
 
 from ynab_unlinked.core.cashflow import CashFlow, CategoryTrend
 from ynab_unlinked.web import shell, theme
@@ -21,6 +21,7 @@ from ynab_unlinked.web.components import (
     clickable,
     empty_state,
     glass_card,
+    info_button,
     pill,
     set_class,
     stat_tile,
@@ -28,23 +29,36 @@ from ynab_unlinked.web.components import (
 from ynab_unlinked.web.components.cashflow_chart import SCATTER_HEIGHT, chart, volatility_options
 from ynab_unlinked.web.components.controls import pill_group
 from ynab_unlinked.web.finances import RANGES, period_title
+from ynab_unlinked.web.ranges import save_range, saved_range
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.spending import data
 from ynab_unlinked.web.views.spending.detail import category_detail
+from ynab_unlinked.web.wording import VERSUS_YNAB, VERSUS_YNAB_TITLE
 
 ALL_GROUPS = "__all__"
 
 
+def _word_key(marker: str) -> None:
+    """The colour of each word: the key of By group's mix bars and of the scatter's dots."""
+    with ui.element("div").classes("yul-sp-key").mark(marker):
+        for label in (*data.ORDER, data.UNRATED):
+            with ui.element("span"):
+                ui.element("i").classes(f"mix-{label}")
+                word = data.WORDS.get(label)
+                ui.label(word.text.split(" ", 1)[1] if word else "not enough months")
+
+
 class SpendingView:
-    def __init__(self) -> None:
-        self.range = data.DEFAULT_RANGE
+    def __init__(self, category: str | None = None) -> None:
+        self.range = saved_range(data.DEFAULT_RANGE)
         self.all = False
         self.group: str | None = None
         self.label: str | None = None
         self.flow: CashFlow | None = None
         self.plotted: list[CategoryTrend] = []
-        self.detail: str | None = None
-        """The category shown in the chart's place, by id ("none" for uncategorized)."""
+        self.detail: str | None = category
+        """The category shown in the chart's place, by id ("none" for uncategorized). A
+        `?category=` link opens the page on one."""
         self.side: ui.element | None = None
         # What a filter changes, redrawn alone so the page keeps its height and its scroll
         self.group_rows: dict[str, ui.element] = {}
@@ -53,6 +67,7 @@ class SpendingView:
         self.table: ui.element | None = None
         with ui.element("div").classes("yul-sp") as self.root:
             self.body = ui.element("div")
+        shell.on_refresh(self.root, self.render)
 
     async def render(self) -> None:
         config, _ = state().require()
@@ -67,6 +82,7 @@ class SpendingView:
 
     async def set_range(self, key: str) -> None:
         self.range = key
+        save_range(key)
         await self.render()
 
     def show_all(self) -> None:
@@ -135,14 +151,19 @@ class SpendingView:
         self.body.clear()
         with self.body:
             with ui.element("div").classes("yul-nwm-head"):
-                ui.label(period_title(flow.start, flow.end)).classes("yul-h2 yul-grow")
+                with ui.element("div").classes("yul-row yul-info-row yul-grow"):
+                    ui.label(period_title(flow.start, flow.end)).classes("yul-h2")
+                    info_button(VERSUS_YNAB_TITLE, VERSUS_YNAB, marker="sp-info")
                 pill_group({key: key for key in RANGES}, self.range, self.set_range, marker="range")
-            if not flow.complete or not flow.categories:
+            if not flow.categories:
                 empty_state(
-                    "Spending needs one complete month. Pick a longer range.",
-                    icon_name="spending",
+                    "Nothing was spent in this range. Pick a longer one.", icon_name="spending"
                 ).mark("sp-empty")
                 return
+            if flow.running_only:
+                ui.label(
+                    "This month so far. What each category is comes from its history."
+                ).classes("yul-muted yul-small yul-sp-so-far").mark("sp-so-far")
             self._tiles(flow)
             with ui.element("div").classes("yul-sp-split"):
                 self._groups(flow)
@@ -155,7 +176,8 @@ class SpendingView:
         money = state().require_formatter().format_amount_milli
         core = flow.core_spending()
         with ui.element("div").classes("yul-sp-tiles yul-stagger"):
-            stat_tile("Spending a month", money(round(flow.mean_spending))).mark("sp-total")
+            title = "Spent so far" if flow.running_only else "Spending a month"
+            stat_tile(title, money(round(flow.mean_spending))).mark("sp-total")
             stat_tile("Core", money(round(core)), hint="steady and variable categories").mark(
                 "sp-core"
             )
@@ -169,12 +191,7 @@ class SpendingView:
         money = state().require_formatter().format_amount_milli
         with glass_card().classes("yul-nwm-card").mark("sp-groups"):
             ui.label("By group").classes("yul-nwm-title")
-            with ui.element("div").classes("yul-sp-key").mark("sp-mix-key"):
-                for label in (*data.ORDER, data.UNRATED):
-                    with ui.element("span"):
-                        ui.element("i").classes(f"mix-{label}")
-                        word = data.WORDS.get(label)
-                        ui.label(word.text.split(" ", 1)[1] if word else "not enough months")
+            _word_key("sp-mix-key")
             with ui.element("div").classes("yul-sp-gbar head"):
                 ui.label("Group")
                 ui.label("")
@@ -235,6 +252,8 @@ class SpendingView:
             with ui.element("div").classes("yul-row"):
                 ui.label("Steady or swingy?").classes("yul-nwm-title yul-grow")
                 ui.label("click a dot to see its months").classes("yul-faint yul-small")
+            # The dots are in the colours of the words, as the bars of By group are
+            _word_key("sp-dot-key")
             dots = chart(
                 volatility_options(self.plotted, theme.palette(), config.budget.currency_format),
                 SCATTER_HEIGHT,
@@ -263,8 +282,10 @@ class SpendingView:
                         ui.label(word.hint).classes("yul-muted yul-small")
             ui.label(
                 "How much a category moves is its standard deviation over its average, from its "
-                "first month of spending to its last (quiet months in between count as zero). A "
-                "category needs six months in the range and three of its own for a word."
+                "first month of spending to its last (quiet months in between count as zero). "
+                "The word comes from up to three years of history, whatever range is shown, so a "
+                "yearly charge is lumpy even when you look at one month. A category needs six "
+                "months of history and three of its own for a word."
             ).classes("yul-faint yul-small")
 
     def _categories(self, flow: CashFlow) -> None:
@@ -356,5 +377,5 @@ class SpendingView:
     order=42,
     group="Finances",
 )
-async def spending_view() -> None:
-    await SpendingView().render()
+async def spending_view(args: PageArguments) -> None:
+    await SpendingView(args.query_parameters.get("category")).render()

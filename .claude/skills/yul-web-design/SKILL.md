@@ -45,15 +45,16 @@ same change. Never update a document to describe something you did not build.
 8. **Every write to YNAB** goes through `run.io_bound`, logs one activity entry (shapes in
    ARCHITECTURE 3.4), calls `state().invalidate()` and ends with a toast. Multi item writes
    (import commit, reconcile all) get exactly one `shell.confirm` listing what will change.
-9. **Toasts** are `shell.notify(message, kind)`: top center under the bar, 3s. Never
-   `ui.notify` directly.
+9. **Saying what happened** is `shell.notify(message, kind)`, never `ui.notify` directly.
+   `ok` and `info` are one quiet line in the top bar's status (the page already shows the
+   result); only `warn` and `error` are toasts, top center under the bar.
 10. **Views are `live` unless they hold a form.** `@shell.view(..., live=False)` for Import
     and Settings only; live views are re-rendered after a sync from the chip.
 11. **Colour carries meaning only.** Series colours from `theme.SERIES`, never status
     colours for series, never Quasar colour props. Accent gradient for the one primary
     action per screen.
 12. **Motion** is the existing set (page enter, stagger, count up, shimmer, check draw, the
-    category detail's slide in).
+    category detail's slide in, the pulse of a page still loading).
     Do not add new animations; `prefers-reduced-motion` must stay instant.
 
 ## Building blocks (use these, do not restyle Quasar by hand)
@@ -78,7 +79,13 @@ same change. Never update a document to describe something you did not build.
   `var(--text-2)`, `color-mix(...)`), never literal colours except in the token blocks: a
   colour that depends on the palette (`--accent-2`, `--on-accent`, `--ring`, ...) is a token
   set in every `yul-theme-<name>` block, light and dark.
-- `shell`: `@shell.view`, `shell.notify`, `shell.confirm`, `shell.set_header`,
+- A new page or tab is reachable from the command palette: pages are in it by themselves,
+  a tab registers with `shell.command(key, title, path, icon=...)` next to its view. A view
+  that would lose what the user set when it is rebuilt after a sync registers
+  `shell.on_refresh(owner, handler)`; one the user types in, `automatic=False`. The finance
+  pages take their range from `ranges.saved_range` and save a pick with `ranges.save_range`.
+- `shell`: `@shell.view`, `shell.command`, `shell.on_refresh`, `shell.notify`,
+  `shell.confirm`, `shell.set_header`,
   `await shell.save_config(change, "Saved")` (every config save, off the event loop, then
   the toast; returns False after toasting a failed save),
   `shell.pending_uploads` / `shell.on_drop`, `shell.refresh_view`, and every view path
@@ -128,7 +135,10 @@ token in the file, as the tests do. Delete the scratch folder afterwards: it may
 (and the scratch item may hold one in the keychain).
 
 The printed link carries the session token. Check dark and light (toggle in the top bar) of
-every palette (Settings › Appearance) and a narrow window (under 1000px Home becomes one column).
+every palette (Settings › Appearance) and narrow windows: under 1000px Home becomes one
+column, under 960px the sidebar is the rail, under 640px a bar of icons along the bottom.
+`uv run --with playwright python scripts/readme_screenshots.py` runs the app on a made-up
+budget and takes a picture of every page.
 
 ## Checklist before you commit
 

@@ -12,7 +12,7 @@ from typing import Any
 from nicegui import app, ui
 from nicegui.storage import Storage
 
-from ynab_unlinked.web import shell, storage_dir, theme
+from ynab_unlinked.web import frame, shell, storage_dir, theme
 from ynab_unlinked.web.security import (
     HOST,
     TOKEN_PARAM,
@@ -51,7 +51,7 @@ def build(token: str, port: int) -> Callable[[], Any]:
     theme.install()
     ui.button.default_props("no-caps")
     ui.page(shell.ONBOARDING_PATH, title="yul · setup")(onboarding_page)
-    return shell.root
+    return frame.root
 
 
 def _private_dir(path: Path) -> None:

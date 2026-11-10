@@ -15,9 +15,11 @@ between the first and the last month it spent in:
 - **lumpy** when it spends in at most half of the months, each time about the same amount
   (a yearly subscription, an insurance): volatile by the numbers but predictable.
 
-A range of fewer than `MIN_MONTHS` complete months, or a category that spent in one month
-only, gets no label: there is not enough to tell (a yearly charge shows as lumpy once the
-range holds two of them).
+What a category is does not depend on the range on screen: it is told from its history, the
+complete months of the last `HISTORY_MONTHS` (or the range, when that is longer). A yearly
+charge is lumpy while the page shows one month, because the history holds three of them.
+A history of fewer than `MIN_MONTHS` complete months, or a category that spent in one month
+only, gets no label: there is not enough to tell.
 """
 
 from __future__ import annotations
@@ -42,6 +44,9 @@ VARIABLE_BELOW = 0.75
 LUMPY_SAME_BELOW = 0.25
 """How alike the months a lumpy category spends in must be (their own variation)."""
 MIN_MONTHS = 6
+HISTORY_MONTHS = 36
+"""How far back a category's label looks: long enough for three yearly charges, short enough
+that how it spent years ago (another flat, another job) does not blur what it is now."""
 MIN_LIFETIME = 3
 """The fewest months from a category's first spending to its last for a label."""
 UNUSUAL_ABOVE = 1.25
@@ -66,8 +71,8 @@ class Volatility:
 def volatility(spent: Sequence[int], months: int | None = None) -> Volatility:
     """How `spent` (one positive amount per month, zero when nothing) moves around its mean.
 
-    `months`: how many months the range holds, when `spent` is only part of it (a category's
-    life); it must reach `MIN_MONTHS` for a label, and `spent` three months.
+    `months`: how many months the history holds, when `spent` is only part of it (a
+    category's life); it must reach `MIN_MONTHS` for a label, and `spent` three months.
     """
     if not spent:
         return Volatility(0, None, None, 0)
@@ -92,13 +97,46 @@ def volatility(spent: Sequence[int], months: int | None = None) -> Volatility:
 
 
 @dataclass(frozen=True)
+class Rhythm:
+    """How a category that spends every so often does it: what a charge costs and how far
+    apart charges are."""
+
+    charge: float
+    """The average of the months it spent in, positive milliunits."""
+    charges: int
+    every: float | None
+    """Months from one charge to the next, on average; None with fewer than two."""
+
+    @property
+    def set_aside(self) -> float | None:
+        """What to put away each month to have the next charge ready."""
+        return self.charge / self.every if self.every else None
+
+
+def rhythm(spent: Sequence[int]) -> Rhythm:
+    """The charges in `spent` (one amount per month, zero when nothing was spent)."""
+    active = [index for index, value in enumerate(spent) if value > 0]
+    if not active:
+        return Rhythm(0, 0, None)
+    gaps = [later - earlier for earlier, later in zip(active, active[1:], strict=False)]
+    return Rhythm(
+        charge=statistics.fmean(spent[index] for index in active),
+        charges=len(active),
+        every=statistics.fmean(gaps) if gaps else None,
+    )
+
+
+@dataclass(frozen=True)
 class CategoryTrend:
     category_id: str | None
     name: str
     group: str
     spent: tuple[int, ...]
-    """Positive milliunits per complete month, oldest first."""
+    """Positive milliunits per month measured (`CashFlow.measured`), oldest first."""
     volatility: Volatility
+    past: tuple[int, ...] = ()
+    """What it spent in each month of the history its label was told from (`CashFlow.history`),
+    oldest first: the range's months and the ones before them."""
 
     @property
     def total(self) -> int:
@@ -106,7 +144,7 @@ class CategoryTrend:
 
     @property
     def mean(self) -> float:
-        """Average per complete month of the range, quiet months included."""
+        """Average per month measured of the range, quiet months included."""
         return statistics.fmean(self.spent) if self.spent else 0
 
 
@@ -146,12 +184,25 @@ class CashFlow:
     months: tuple[FlowMonth, ...]
     categories: tuple[CategoryTrend, ...] = field(default=())
     """Most spent first."""
+    history: tuple[dt.date, ...] = field(default=())
+    """The complete months the categories' labels were told from, oldest first."""
     income: tuple[PayeeIncome, ...] = field(default=())
     """By payee over the range, most first."""
 
     @property
     def complete(self) -> tuple[FlowMonth, ...]:
         return tuple(month for month in self.months if month.complete)
+
+    @property
+    def measured(self) -> tuple[FlowMonth, ...]:
+        """The months spending is averaged over and `categories` cover: the complete ones, or
+        the running month when the range holds no other (this month so far)."""
+        return self.complete or self.months
+
+    @property
+    def running_only(self) -> bool:
+        """The range is the month still running: figures are so far, not averages."""
+        return bool(self.months) and not self.complete
 
     @property
     def mean_income(self) -> float:
@@ -163,7 +214,7 @@ class CashFlow:
 
     @property
     def mean_spending(self) -> float:
-        return statistics.fmean(m.spending for m in self.complete) if self.complete else 0
+        return statistics.fmean(m.spending for m in self.measured) if self.measured else 0
 
     @property
     def savings_rate(self) -> float | None:
@@ -206,9 +257,10 @@ def _lifetime(spent: Sequence[int]) -> Sequence[int]:
     return spent[active[0] : active[-1] + 1] if active else spent
 
 
-def _spent_by_category(
-    lines: Iterable[Line], rules: Rules, months: Sequence[dt.date], categories: Categories
-) -> list[CategoryTrend]:
+def _monthly(
+    lines: Iterable[Line], rules: Rules, months: Sequence[dt.date]
+) -> tuple[dict[str | None, list[int]], dict[str | None, str]]:
+    """What each category spent in each of `months` (positive), and a name for each."""
     index = {month: position for position, month in enumerate(months)}
     spent: dict[str | None, list[int]] = {}
     names: dict[str | None, str] = {}
@@ -221,17 +273,38 @@ def _spent_by_category(
         row = spent.setdefault(line.category_id, [0] * len(months))
         row[position] -= line.amount
         names.setdefault(line.category_id, line.category_name or "Uncategorized")
+    return spent, names
+
+
+def _spent_by_category(
+    lines: Sequence[Line],
+    rules: Rules,
+    months: Sequence[dt.date],
+    history: Sequence[dt.date],
+    categories: Categories,
+) -> list[CategoryTrend]:
+    """The categories that spent in `months` (the range), each told what it is from `history`
+    (the months its label looks at, the range's among them)."""
+    spent, names = _monthly(lines, rules, months)
+    past, _ = _monthly(lines, rules, history)
     trends = [
         CategoryTrend(
             category_id=category_id,
             name=categories.names.get(category_id or "", names[category_id]),
             group=categories.groups.get(category_id or "", "Other"),
             spent=tuple(values),
-            volatility=volatility(_lifetime(values), months=len(months)),
+            volatility=volatility(_lifetime(past.get(category_id, values)), months=len(history)),
+            past=tuple(past.get(category_id, ())),
         )
         for category_id, values in spent.items()
     ]
     return sorted(trends, key=lambda trend: (-trend.total, trend.name))
+
+
+def _months_before(month: dt.date, count: int) -> dt.date:
+    """The first day of the month `count` months before `month`."""
+    index = month.year * 12 + month.month - 1 - count
+    return dt.date(index // 12, index % 12 + 1, 1)
 
 
 def _short(text: str) -> str:
@@ -304,11 +377,15 @@ def cash_flow(
     """Every month from `start`'s to `end`'s; the last one is incomplete when `end` is before
     its last day. Blocking: it reads the store."""
     categories = categories or Categories()
-    lines = [
+    first = month_start(start)
+    # Further back than the range when it is short: what a category is takes its history
+    since = min(first, _months_before(month_start(end), HISTORY_MONTHS))
+    known = [
         line
-        for line in store.lines(budget_id, since=month_start(start), until=end)
+        for line in store.lines(budget_id, since=since, until=end)
         if line.account_id in rules.on_budget
     ]
+    lines = [line for line in known if line.date >= first]
     by_month: dict[dt.date, list[Line]] = {month: [] for month in months_between(start, end)}
     for line in lines:
         by_month[month_start(line.date)].append(line)
@@ -324,8 +401,12 @@ def cash_flow(
                 spending -= line.amount
         months.append(FlowMonth(month, income, spending, complete=month_end(month) <= end))
 
-    complete = [month.month for month in months if month.complete]
-    trends = _spent_by_category(lines, rules, complete, categories)
+    # A range that is only the running month shows it so far, rather than nothing
+    complete = [month.month for month in months if month.complete] or [m.month for m in months]
+    # The history starts with the budget: the months before its first line are not quiet ones
+    began = month_start(known[0].date) if known else first
+    history = [month for month in months_between(max(since, began), end) if month_end(month) <= end]
+    trends = _spent_by_category(known, rules, complete, history, categories)
     labels = _labels(months, by_month, rules, trends, notes or {})
     months = [
         FlowMonth(m.month, m.income, m.spending, m.complete, label)
@@ -337,4 +418,5 @@ def cash_flow(
         months=tuple(months),
         categories=tuple(trends),
         income=tuple(income_by_payee(lines, rules)),
+        history=tuple(history),
     )

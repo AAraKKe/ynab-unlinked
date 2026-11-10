@@ -685,3 +685,20 @@ async def test_picking_a_palette_saves_it_and_restyles_the_open_page(
     await user.should_see(marker="themes")
     assert _live_themes(user) == ["graphite"]
     assert palette_classes(user) == ["yul-theme-graphite"]
+
+
+async def test_a_tab_names_itself_and_is_kept_in_the_address(
+    tracked: LatestConfig, user: User, mocker: MockerFixture
+):
+    address = mocker.spy(ui.navigate.history, "replace")
+    await user.open("/settings")
+    await user.should_see(marker="settings-title")
+    [title] = user.find(marker="settings-title").elements
+    assert isinstance(title, ui.label)
+    assert title.text == "Connection"
+
+    user.find(marker="tab-data-privacy").click()
+
+    await eventually(lambda: address.call_count == 1)
+    address.assert_called_with("/settings?tab=data-privacy")
+    await user.should_see("What yul keeps on this computer, and how to remove it.")

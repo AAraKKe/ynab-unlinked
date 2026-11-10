@@ -23,14 +23,16 @@ rules in section 5.
 ## 2. Information architecture
 
 ```
-Home        net worth at a glance, drop target and last imports, what needs you, recent activity
+Home        net worth at a glance, what needs you, drop target and last imports; aside the
+            month so far, where it went, recent activity
 Import      Files -> Review -> Done
 Reconcile   per account: cleared balance vs bank balance, reconcile transactions
 Net worth   tabs: Overview (history chart, buckets, accounts with inline balance updates)
             · Months (what moved net worth each month) · Movers (how each account moved)
 Cash flow   income against spending, the savings rate, where income comes from
 Spending    by group, steady or swingy, every category with how it moves
-Settings    tabs: Connection · Banks · Accounts · Net worth · Categories · Appearance · Data & privacy
+Settings    tabs down the side: Connection · Banks · Accounts · Net worth · Categories ·
+            Appearance · Data & privacy
 Onboarding  full screen, first run only
 ```
 
@@ -38,9 +40,34 @@ Net worth, Cash flow and Spending sit under a small caps "Finances" heading in t
 (hidden in the rail, where a gap keeps the group apart).
 
 Navigation is a left sidebar, 232px with icons and labels, collapsible to a 64px icon rail
-from a "Collapse" entry under Settings (state remembered). The top bar holds the page title, the budget chip, a sync indicator
+from a "Collapse" entry under Settings (state remembered). An entry with something waiting
+behind it carries a count: Reconcile the transactions to reconcile, Net worth the balances
+set by hand gone stale (a small disc on the icon in the rail). Under 960px the sidebar is
+the rail; under 640px it is a bar of icons along the bottom of the window, and the top bar
+keeps the title, search, the sync dot and the theme toggle.
+
+The top bar holds the page title, a **search** button that looks like a field ("Search",
+⌘K or Ctrl K), the budget chip (a click opens Settings › Connection), a sync indicator
 ("synced 2 min ago", spinning while syncing, click to sync now), a theme toggle and a
-primary **Import** button that opens the file picker.
+primary **Import** button (not shown on Import itself).
+
+**Command palette**: the search button, ⌘K / Ctrl+K or "/" open one box over the page.
+Without a query it lists the pages and the actions (sync now, light or dark, collapse the
+sidebar); typing finds tabs (Net worth › Months, Settings › Banks), categories (opening
+their months in Spending) and accounts (opening their history in Net worth). Arrows move,
+Enter opens, Escape closes. It is the fastest way to anywhere, so every new page or tab
+registers itself in it.
+
+**The app keeps itself current.** A budget copy older than ten minutes syncs on its own
+while the app is open, and a sync that changed something redraws the page on screen and the
+badges. A page keeps what the user set (range, filters, an open tab); a page the user
+types in (Reconcile) is only redrawn by a sync they asked for.
+
+The range pills (1M … All) of Net worth, Cash flow and Spending are one choice: picked on
+one page it is the range of the others, and of the next visit.
+
+An address without a page says so and offers the way home; a page that fails to draw says
+so with "Try again". Both keep the sidebar and the top bar.
 
 A global drop overlay covers the whole window when files are dragged over it ("Drop to
 import"), on every page. Dropping navigates to Import with those files.
@@ -50,7 +77,8 @@ import"), on every page. Dropping navigates to Import with those files.
 ### Home
 
 Two columns centered in the main area: the main column (about 60%) holds three blocks top to
-bottom, recent activity fills the right column. One column under 1000px. Everything comes
+bottom (hero, needs you, import), the right column three cards (the month, where it went,
+recent activity, which fills what is left). One column under 1000px. Everything comes
 from the local store; Home never calls YNAB. Before the first sync a quiet banner says
 "First sync running…" and the view refreshes when it ends.
 
@@ -71,8 +99,16 @@ from the local store; Home never calls YNAB. Before the first sync a quiet banne
   - "3 balances · set by hand, older than 30 days: Broker, …" (last balance adjustment, or
     last transaction when there was never one) -> Net worth
 
-  When nothing needs you, one quiet muted line instead of cards: "Nothing waiting. Drop a
-  statement or check back after your next import."
+  When nothing needs you, one quiet dashed row with a check instead of cards: "Nothing
+  waiting. Drop a statement or check back after your next import."
+- **The month** (right column): the month's name and "day 10 of 30"; Income, Spending and
+  "Net so far" (never green or red: before payday a month is behind without anything being
+  wrong); a bar of this month's spending over a usual month's (the average of the complete
+  months of the last year; amber past 100%) with a mark at how far into the month today
+  is, and the line "64% of a usual month's spending, 33% of the month gone"; under a
+  hairline the year's savings rate and cash runway, which open Cash flow.
+- **Where it went** (right column): the five categories that spent most this month, each a
+  bar with a mark at its usual month. A row opens that category in Spending.
 - **Recent activity**: last 10 events from the store's activity log (imports, reconciles,
   adjustments) with timestamps: "29 Oct · Imported 13 transactions to 💳 Oro from
   movimientos.txt".
@@ -239,12 +275,31 @@ asks for a longer range.
   - **By group**: a key of the four words' colours, column titles (Group, A month, Share),
     then one row per group: its bar, a month, share, and under it a thin split of its
     spending by how its categories move (steady in good, variable in text-2, spiky in warn,
-    lumpy in accent-2, not enough months in border-2; each part titled with its share). A
+    lumpy in the accent, not enough months in border-2; each part titled with its share).
+    The words' colours are at 72%: they mark a kind of category, not something to act on. A
     click filters by the group, a second click shows every group again.
-  - **Steady or swingy?**: one dot per category (of the filters): average a month across on
+  - **Steady or swingy?**: the same key of colours, then one dot per category (of the
+    filters) in the colour of its word (`cashflow_chart.word_color`, at 72%, full on hover):
+    average a month across on
     a log scale, how much it moves up; the six largest named, overlapping names hidden; a
     faint line: top right is big and swingy, bottom right the fixed costs. A click on a dot,
     or on a row of the table, slides the category in from the right in the chart's place.
+  - **What the detail says depends on what the category is** (`data.story`), because "a
+    month" is only true of a category spent every month. Each has a headline and a tinted
+    line with what to set aside:
+    - steady: "1,417.00€ a month" · "About the same every month. Set aside 1,417.00€ a
+      month and it is covered."
+    - variable: "400.00€ a month" · "Between 200.00€ and 600.00€ a month. Set aside 400.00€
+      a month to cover it over time."
+    - lumpy: "170.99€ a charge" · "About once a year. Set aside 14.25€ a month to have it
+      ready." (a charge over the months between charges). "Each charge"; A charge, Charges,
+      Comes, Set aside, Last one.
+    - spiky: "up to 6,753.00€ a month" · "Spent in 2 of the last 8 months. Set aside 860.25€
+      a month to cover months like these." (all it spent over the months since its first).
+      Biggest month, Months spent in, In all, Set aside, Last one.
+    - bought once: "2,000.00€ once" · "Spent once, in Jul 2026. Nothing to plan for yet."
+    Lumpy and spiky draw their history from the first charge to now (the quiet months are
+    how they spend), with the dashed line "Set aside a month", and no histogram.
   - **Category detail** (in the chart's card): a back arrow, "Group / Category" (the range is
     the page's), "288.94€ a month" over the months from its first spending to its last, the word with "moves 6%" and its sentence;
     "Each month" (bars, series 1, a dashed "Average" line, both in the legend); the numbers
@@ -262,7 +317,9 @@ asks for a longer range.
 
 ### Settings
 
-Tabs: **Connection** (masked token with reveal and change, budget change, config version
+The tabs are a list down the left of the page, each with its icon, the open one filled; a
+row that scrolls sideways under 960px. The panel opens with the tab's name. Tabs:
+**Connection** (masked token with reveal and change, budget change, config version
 and path), **Banks**, **Accounts**, **Net worth** (debt -> accounts mapping with a visual
 picker, the goal), **Categories**, **Appearance** (the palette), **Data & privacy** (what is stored where, store size, last sync, the rows left
 out of imports with "Include again" on each, "Resync from scratch", "Reset all data" with
@@ -398,8 +455,21 @@ and brightens the border.
 ### Type
 
 Inter (bundled variable font, `font-display: swap`), fallback `system-ui`. Body 14px,
-secondary 12.5px, titles 18px semibold, hero 56px bold with `letter-spacing: -0.02em`
-and gradient text. `tabular-nums` in tables and axis ticks only.
+secondary 12.5px, titles 18px semibold, hero 56px bold with `letter-spacing: -0.03em`
+and gradient text. `tabular-nums` in tables and axis ticks only. Figures (money, counts,
+percentages) use Inter's open digits (`ss01`): the 4, 6 and 9 read faster in a column.
+
+No card has a backdrop blur: a card sits on the page's background, which has nothing to
+blur, and a blurred card next to one that repaints showed a band at its edge. Only what
+content scrolls under is blurred: the sidebar, the top bar, a flow's footer, a dialog's
+backdrop.
+
+Depth and selection: a card is lit from the top (a faint gradient from `--surface-2` to
+`--surface`), and the two heroes (Home, Net worth) carry a glow of the accent in their top
+left corner. What is chosen is tinted with the accent, never grey: the open page in the
+sidebar (and its icon), the chosen range pill, a chosen chip. A card that can be clicked
+lifts 2px and takes an accent border on hover. Everything reached with the keyboard that is
+not a field shows the same 3px ring (`--ring`). Scrollbars are thin and in the theme's greys.
 
 ### Motion
 
@@ -410,11 +480,14 @@ and gradient text. `tabular-nums` in tables and axis ticks only.
 - Progress bars have a slow moving gradient shimmer while active.
 - Success: an SVG check that draws itself, then the card settles.
 - Hover: 150ms; press: scale .98.
+- A page still reading its data shows soft blocks that pulse slowly where the content
+  will be, never a blank column.
 - `prefers-reduced-motion`: everything instant.
 
 ### Charts
 
-ECharts through NiceGUI. Line 2px round joins, area gradient for single series, 1px
+ECharts through NiceGUI. Line 2px round joins, area gradient for single series, the value
+axis of a history fitted to its values (not from zero: the moves are what it is for), 1px
 hairline grid, no vertical grid, axis text in `--text-3`, crosshair with one tooltip for
 all series, end labels on the right, legend only with two or more series. Series colours
 from the table above, assigned by entity and never recycled. Status colours never used
@@ -468,8 +541,10 @@ repeats them for agents with the build contract and the test routine; keep the t
    Save button.
 8. **Every write to YNAB**: `run.io_bound`, one activity entry, `state().invalidate()`, a
    toast. Multi item writes get exactly one confirmation listing what changes.
-9. **Toasts** come from `shell.notify`: top center under the bar, 3s, solid card, colour bar
-   per kind.
+9. **What happened is said as loudly as it deserves**, always through `shell.notify`.
+   Something that worked, or a note, is one line in the top bar's status (a check and the
+   words, 4s): the page already shows the result, so nothing drops over it. Only a warning
+   or an error is a toast: top center under the bar, 6s, solid card, colour bar per kind.
 10. **Colour carries meaning only**: series colours for series, status colours for status,
     the accent gradient for the one primary action per screen.
 11. **Motion** is the existing set; `prefers-reduced-motion` stays instant.
