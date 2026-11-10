@@ -1,1 +1,0 @@
-A full sync now drops the transactions YNAB no longer has, so a delete that a sync missed no longer stays in the budget copy, and the other side of a transfer made from a split line no longer counts as money from nowhere. The first sync after the update fetches everything again.

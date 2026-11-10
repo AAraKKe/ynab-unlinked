@@ -1,1 +1,0 @@
-Spending tells what a category is (steady, variable, spiky, lumpy) from up to three years of history instead of the range on screen, so a yearly charge is lumpy even when you look at one month, and the 1M range shows the month so far.
