@@ -227,6 +227,8 @@ class Layout:
     """The `state().data_version` the page on screen was drawn from, at the latest."""
     badges_version: int = -1
     """The one the sidebar's badges were counted from; -1 before they were."""
+    ticking: bool = False
+    """The tab is looking at the app state right now: the next look waits for it."""
     status: ui.element | None = None
     """The top bar's quiet line: what `notify` says when nothing went wrong."""
     status_text: ui.label | None = None

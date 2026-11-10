@@ -1,7 +1,9 @@
 """The layout around every page: the command palette, the sidebar's badges, the pages that are
 not there or fail, and following a sync that changed the budget copy."""
 
+import asyncio
 import dataclasses
+import threading
 
 import pytest
 from nicegui import ui
@@ -9,6 +11,7 @@ from nicegui.testing.user import User
 from pytest_mock import MockerFixture
 
 from tests.helpers.store import upsert
+from tests.helpers.web import WAIT_SECONDS, eventually
 from tests.web.views.test_cashflow_spending import (  # noqa: F401 (fixtures)
     GROCERIES,
     no_sync,
@@ -24,7 +27,7 @@ from tests.web.views.test_home import (  # noqa: F401 (fixtures)
 )
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store
-from ynab_unlinked.web import frame, shell, wording
+from ynab_unlinked.web import attention, frame, shell, wording
 from ynab_unlinked.web.state import state
 
 pytestmark = pytest.mark.version("V4")
@@ -338,3 +341,60 @@ async def test_the_month_card_explains_why_it_can_differ_from_ynab(
     [note] = user.find(marker="month-info-note").elements
     said = [child.text for child in note.descendants() if isinstance(child, ui.label)]
     assert said == [wording.VERSUS_YNAB_TITLE, *wording.VERSUS_YNAB]
+
+
+async def test_an_older_look_never_puts_its_count_back_over_a_newer_one(
+    store: Store,  # noqa: F811
+    user: User,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The tab looks at the app state on a timer. A look still counting the badges when the
+    next one started used to finish after it, and put its older count back: the badge of a
+    page already redrawn with the new data went away until the look after that."""
+    await user.open("/")
+    await user.should_see(marker="nothing-waiting")
+    with user:
+        shown = shell.layout()
+    assert shown is not None
+    await eventually(lambda: shown.badges_version == state().data_version and not shown.ticking)
+
+    reading, release = threading.Event(), threading.Event()
+    reads: list[int] = []
+
+    def waiting(*_: object) -> attention.Waiting:
+        reads.append(len(reads))
+        if len(reads) == 1:  # the older look: reads the copy as it was, slowly
+            reading.set()
+            release.wait(WAIT_SECONDS)
+            return attention.Waiting(0, 0, [])
+        return attention.Waiting(3, 1, [])
+
+    counted: list[int] = []
+    set_badge = frame._set_badge
+
+    def record(layout: shell.Layout, key: str, count: int, title: str) -> None:
+        if key == "reconcile":
+            counted.append(count)
+        set_badge(layout, key, count, title)
+
+    monkeypatch.setattr(frame.attention, "waiting", waiting)
+    monkeypatch.setattr(frame, "_set_badge", record)
+
+    async def look() -> None:
+        with user:
+            await frame._tick(shown)
+
+    state().data_version += 1
+    older = asyncio.ensure_future(look())
+    await eventually(reading.is_set)
+    # A sync lands while the older look is still reading, and the next look comes
+    state().data_version += 1
+    await asyncio.wait_for(look(), WAIT_SECONDS)
+    release.set()
+    await asyncio.wait_for(older, WAIT_SECONDS)
+    await asyncio.wait_for(look(), WAIT_SECONDS)
+
+    # Oldest first, never back: without the wait this was [3, 0, 3]
+    assert counted == [0, 3]
+    assert label(user, "nav-badge-reconcile").text == "3"
+    assert not shown.ticking

@@ -255,16 +255,22 @@ async def _tick(layout: Layout) -> None:
     """Keep the tab up to date: sync an old copy, follow a sync that changed it."""
     current = state()
     current.sync_if_stale()
-    if current.syncing:
+    # One at a time: a tick still reading the copy when the next one starts would finish
+    # after it, and put the older count back on the badges
+    if current.syncing or layout.ticking:
         return
-    # Read before the copy is: a sync landing meanwhile is then seen by the next tick,
-    # instead of being marked as drawn with what was read before it
-    version = current.data_version
-    if version != layout.badges_version:
-        await _refresh_badges(layout)
-        layout.badges_version = version
-    if version != layout.version:
-        shell.refresh_view(automatic=True)
+    layout.ticking = True
+    try:
+        # Read before the copy is: a sync landing meanwhile is then seen by the next tick,
+        # instead of being marked as drawn with what was read before it
+        version = current.data_version
+        if version != layout.badges_version:
+            await _refresh_badges(layout)
+            layout.badges_version = version
+        if version != layout.version:
+            shell.refresh_view(automatic=True)
+    finally:
+        layout.ticking = False
 
 
 def root() -> RedirectResponse | None:
