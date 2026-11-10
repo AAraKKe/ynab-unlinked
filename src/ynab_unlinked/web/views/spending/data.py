@@ -170,6 +170,26 @@ def life(trend: CategoryTrend, flow: CashFlow) -> Life:
     return Life(tuple(months[first:last]), trend.spent[first:last])
 
 
+def charges(trend: CategoryTrend, flow: CashFlow) -> Life:
+    """A lumpy category's history from its first charge to now: the charges and the quiet
+    months between them, whatever range the page shows."""
+    active = [index for index, value in enumerate(trend.past) if value > 0]
+    if not active:
+        return life(trend, flow)
+    return Life(tuple(flow.history[active[0] :]), trend.past[active[0] :])
+
+
+def every_text(every: float) -> str:
+    """How often a charge comes, in words: `once a year`, `every 3 months`."""
+    months = max(round(every), 1)
+    return {
+        1: "every month",
+        6: "twice a year",
+        12: "once a year",
+        24: "every two years",
+    }.get(months, f"every {months} months")
+
+
 @dataclass(frozen=True)
 class Stats:
     mean: float

@@ -284,6 +284,11 @@ asks for a longer range.
     a log scale, how much it moves up; the six largest named, overlapping names hidden; a
     faint line: top right is big and swingy, bottom right the fixed costs. A click on a dot,
     or on a row of the table, slides the category in from the right in the chart's place.
+  - **A lumpy category's detail** is about its charges, since it is not spent "a month":
+    "170.99€ a charge" in the place of "a month"; a tinted line "About once a year. Set
+    aside 14.25€ a month to have it ready." (a charge over the months between charges);
+    "Each charge" (its history from the first charge to now, the dashed line "Set aside a
+    month"); A charge, Charges, Comes, Set aside, Last one; no histogram.
   - **Category detail** (in the chart's card): a back arrow, "Group / Category" (the range is
     the page's), "288.94€ a month" over the months from its first spending to its last, the word with "moves 6%" and its sentence;
     "Each month" (bars, series 1, a dashed "Average" line, both in the legend); the numbers

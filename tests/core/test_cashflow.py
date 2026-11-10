@@ -5,7 +5,7 @@ import pytest
 
 from tests.factories import StoredAccountFactory, StoredTransactionFactory
 from tests.helpers.store import upsert
-from ynab_unlinked.core.cashflow import Categories, cash_flow, volatility
+from ynab_unlinked.core.cashflow import Categories, cash_flow, rhythm, volatility
 from ynab_unlinked.core.finance import Rules
 from ynab_unlinked.store import Store
 
@@ -242,3 +242,45 @@ def test_with_a_complete_month_the_running_one_is_left_out_of_the_averages(store
     assert not flow.running_only
     assert [m.month for m in flow.measured] == [dt.date(2026, 3, 1)]
     assert flow.categories[0].spent == (1_000_000,)
+
+
+# ---- the charges of a category that spends every so often -------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("spent", "charge", "charges", "every", "set_aside"),
+    [
+        # A yearly subscription: its price over twelve months
+        ([171_000, *[0] * 11, 171_000, *[0] * 5], 171_000, 2, 12, 14_250),
+        # An insurance twice a year, a little dearer each time
+        ([480_000, 0, 0, 0, 0, 0, 500_000, 0, 0, 0, 0, 0, 520_000], 500_000, 3, 6, 500_000 / 6),
+        # One charge so far: nothing to tell how often it comes
+        ([0, 0, 171_000, 0], 171_000, 1, None, None),
+        ([0, 0, 0], 0, 0, None, None),
+    ],
+    ids=["yearly", "twice a year", "one charge", "nothing"],
+)
+def test_the_rhythm_of_a_category_is_its_charge_and_how_far_apart_charges_are(
+    spent: list[int], charge: float, charges: int, every: float | None, set_aside: float | None
+):
+    beat = rhythm(spent)
+
+    assert (beat.charge, beat.charges, beat.every) == (charge, charges, every)
+    assert beat.set_aside == pytest.approx(set_aside)
+
+
+def test_a_category_keeps_the_history_its_label_was_told_from(store: Store):
+    seed(store, history_rows(2024, dt.date(2026, 3, 31)))
+
+    flow = cash_flow(store, BUDGET, RULES, dt.date(2026, 1, 1), dt.date(2026, 3, 31))
+
+    insurance = next(t for t in flow.categories if t.category_id == "insurance")
+    # The range holds one charge; the history holds the three Januaries
+    assert insurance.spent == (480_000, 0, 0)
+    assert (flow.history[0], flow.history[-1]) == (dt.date(2024, 1, 1), dt.date(2026, 3, 1))
+    assert [flow.history[i] for i, v in enumerate(insurance.past) if v] == [
+        dt.date(2024, 1, 1),
+        dt.date(2025, 1, 1),
+        dt.date(2026, 1, 1),
+    ]
+    assert rhythm(insurance.past).set_aside == 40_000

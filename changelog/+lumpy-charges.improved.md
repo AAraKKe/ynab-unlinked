@@ -1,0 +1,1 @@
+A category charged every so often (a yearly subscription, an insurance) no longer reads "a month": its detail shows what a charge costs, how often it comes and how much to set aside each month, over its history.

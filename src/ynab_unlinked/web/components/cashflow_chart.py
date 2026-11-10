@@ -338,8 +338,12 @@ def category_months_options(
     palette: Palette,
     currency_format: CurrencyFormat,
     mean: float,
+    line: str = "Average",
 ) -> dict[str, Any]:
-    """One category's spending each month (`YYYY-MM` keys) and its average as a dashed line."""
+    """One category's spending each month (`YYYY-MM` keys) and its average as a dashed line.
+
+    `line` names the dashed line in the legend: a lumpy category's is what to set aside.
+    """
     money = money_js(currency_format)
     return {
         "animationDuration": 400,
@@ -352,7 +356,7 @@ def category_months_options(
             "data": [
                 {"name": "Spent"},
                 # Three filled dashes: the dashed average line
-                {"name": "Average", "icon": _DASHES, "itemStyle": {"color": palette.text_2}},
+                {"name": line, "icon": _DASHES, "itemStyle": {"color": palette.text_2}},
             ],
         },
         "tooltip": {
@@ -380,7 +384,7 @@ def category_months_options(
             },
             {
                 "type": "line",
-                "name": "Average",
+                "name": line,
                 "color": palette.text_2,
                 "symbol": "none",
                 "lineStyle": {"type": "dashed", "width": 1},

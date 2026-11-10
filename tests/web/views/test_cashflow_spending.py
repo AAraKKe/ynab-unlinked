@@ -420,3 +420,73 @@ def test_every_word_has_its_colour():
         palette.accent_solid,
     ]
     assert word_color(None, palette) == palette.text_3
+
+
+# ---- a lumpy category is about its charges, not about a month ----------------------------------
+
+
+@pytest.mark.parametrize(
+    ("every", "text"),
+    [
+        (12, "once a year"),
+        (11.6, "once a year"),
+        (6, "twice a year"),
+        (24, "every two years"),
+        (3, "every 3 months"),
+        (1, "every month"),
+        (0.2, "every month"),
+    ],
+)
+def test_how_often_a_charge_comes_is_said_in_words(every: float, text: str):
+    assert spending.every_text(every) == text
+
+
+async def test_a_lumpy_category_shows_its_charges_and_what_to_set_aside(
+    synced: Store, ynab_api: YnabClientStub, no_sync, user: User
+):
+    # A second trip six months before the first: the same price, twice a year
+    transactions = ynab_api.api("transactions").get_transactions.return_value.data.transactions
+    transactions.append(
+        TransactionDetailFactory(
+            id="trip-before",
+            account_id=CHECKING,
+            var_date=month_ago(10, 12),
+            amount=-2_000_000,
+            payee_name="Airline",
+            category_id=TRIP,
+        )
+    )
+    synced.clear(BUDGET_ID)
+    synced.sync(Client("api-key"), BUDGET_ID)
+
+    await user.open(f"/spending?category={TRIP}")
+    await user.should_see(marker="category-detail", retries=20)
+
+    assert texts(user, "detail-word") == "◆ lumpy"
+    assert texts(user, "detail-figure") == "2,000.00€ a charge"
+    assert texts(user, "detail-set-aside") == (
+        "About twice a year. Set aside 333.33€ a month to have it ready."
+    )
+    last = month_ago(4, 1)
+    assert texts(user, "detail-stats") == (
+        "A charge 2,000.00€ Charges 2 Comes twice a year "
+        f"Set aside 333.33€ a month Last one {last:%b %Y}"
+    )
+    chart = user.find(marker="detail-chart").elements.pop()
+    assert [item["name"] for item in chart.options["legend"]["data"]] == [
+        "Spent",
+        "Set aside a month",
+    ]
+    # Its charges from the first one to now, the quiet months between them too
+    months = user.find(marker="detail-chart").elements.pop().options["series"][0]["data"]
+    assert months == [2_000.0, 0, 0, 0, 0, 0, 2_000.0, 0, 0, 0]
+    await user.should_not_see(marker="detail-histogram")
+
+
+async def test_a_category_spent_every_month_still_reads_a_month(synced: Store, no_sync, user: User):
+    await user.open(f"/spending?category={RENT}")
+    await user.should_see(marker="category-detail", retries=20)
+
+    assert texts(user, "detail-figure") == "1,000.00€ a month"
+    await user.should_not_see(marker="detail-set-aside")
+    await user.should_see(marker="detail-histogram")

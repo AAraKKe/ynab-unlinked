@@ -97,6 +97,36 @@ def volatility(spent: Sequence[int], months: int | None = None) -> Volatility:
 
 
 @dataclass(frozen=True)
+class Rhythm:
+    """How a category that spends every so often does it: what a charge costs and how far
+    apart charges are."""
+
+    charge: float
+    """The average of the months it spent in, positive milliunits."""
+    charges: int
+    every: float | None
+    """Months from one charge to the next, on average; None with fewer than two."""
+
+    @property
+    def set_aside(self) -> float | None:
+        """What to put away each month to have the next charge ready."""
+        return self.charge / self.every if self.every else None
+
+
+def rhythm(spent: Sequence[int]) -> Rhythm:
+    """The charges in `spent` (one amount per month, zero when nothing was spent)."""
+    active = [index for index, value in enumerate(spent) if value > 0]
+    if not active:
+        return Rhythm(0, 0, None)
+    gaps = [later - earlier for earlier, later in zip(active, active[1:], strict=False)]
+    return Rhythm(
+        charge=statistics.fmean(spent[index] for index in active),
+        charges=len(active),
+        every=statistics.fmean(gaps) if gaps else None,
+    )
+
+
+@dataclass(frozen=True)
 class CategoryTrend:
     category_id: str | None
     name: str
@@ -104,6 +134,9 @@ class CategoryTrend:
     spent: tuple[int, ...]
     """Positive milliunits per month measured (`CashFlow.measured`), oldest first."""
     volatility: Volatility
+    past: tuple[int, ...] = ()
+    """What it spent in each month of the history its label was told from (`CashFlow.history`),
+    oldest first: the range's months and the ones before them."""
 
     @property
     def total(self) -> int:
@@ -151,6 +184,8 @@ class CashFlow:
     months: tuple[FlowMonth, ...]
     categories: tuple[CategoryTrend, ...] = field(default=())
     """Most spent first."""
+    history: tuple[dt.date, ...] = field(default=())
+    """The complete months the categories' labels were told from, oldest first."""
     income: tuple[PayeeIncome, ...] = field(default=())
     """By payee over the range, most first."""
 
@@ -259,6 +294,7 @@ def _spent_by_category(
             group=categories.groups.get(category_id or "", "Other"),
             spent=tuple(values),
             volatility=volatility(_lifetime(past.get(category_id, values)), months=len(history)),
+            past=tuple(past.get(category_id, ())),
         )
         for category_id, values in spent.items()
     ]
@@ -382,4 +418,5 @@ def cash_flow(
         months=tuple(months),
         categories=tuple(trends),
         income=tuple(income_by_payee(lines, rules)),
+        history=tuple(history),
     )

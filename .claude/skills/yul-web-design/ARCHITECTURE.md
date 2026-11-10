@@ -705,10 +705,16 @@ def volatility(spent: Sequence[int], months: int | None = None) -> Volatility
     # the range pills. CategoryTrend.spent and .mean are the range's.
 
 @dataclass(frozen=True)
+class Rhythm: charge: float; charges: int; every: float | None    # set_aside = charge / every
+def rhythm(spent: Sequence[int]) -> Rhythm     # the charges of a category that spends every
+    # so often: the average of the months it spent in, and the months between them
+
+@dataclass(frozen=True)
 class FlowMonth: month; income; spending (positive); complete; label: str | None
     saved, rate
 @dataclass(frozen=True)
 class CategoryTrend: category_id; name; group; spent: tuple[int, ...]; volatility
+    past: tuple[int, ...]   # each month of CashFlow.history, what its label was told from
 @dataclass(frozen=True)
 class CashFlow:
     start; end; months; categories (most spent first); income (PayeeIncome, most first)
@@ -1190,7 +1196,9 @@ Cash flow: `range-{key}`, `cf-income`, `cf-spending`, `cf-rate`, `cf-runway`, `c
 `__all__` or a group name), `sp-word-clear`, `sp-categories`, `category-{category_id}`
 (`category-none` for uncategorized; a click shows it), `sp-no-match`, `sp-show-all`,
 `sp-empty`. Category detail: `category-detail`, `detail-back`, `detail-title`,
-`detail-word`, `detail-chart`, `detail-stats`, `detail-histogram`.
+`detail-word`, `detail-figure`, `detail-set-aside` (a lumpy category), `detail-chart`,
+`detail-stats`, `detail-histogram` (not for a lumpy one); `sp-so-far` (the range is the
+running month), `sp-dot-key`.
 Sidebar: `nav-group-finances` above `nav-networth`, `nav-cashflow`, `nav-spending`.
 
 #### Onboarding
