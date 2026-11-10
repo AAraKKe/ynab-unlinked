@@ -70,6 +70,27 @@ def effective_accounts(
     return accounts
 
 
+def follows_return(config: LatestConfig, account: TrackedAccount, on_budget: bool) -> bool:
+    """Whether Net worth shows the account's return: Settings say so, else asset and tracking
+    accounts do."""
+    default = account.bucket is Bucket.ASSETS or not on_budget
+    return config.finances.returns.get(account.id, default)
+
+
+def history_accounts(config: LatestConfig, stored: Iterable[StoredAccount]) -> list[TrackedAccount]:
+    """The accounts net worth counts over time: the counted ones and the closed ones not left
+    out. A closed account's balance is zero now, but it held money before it was closed, so
+    leaving it out would understate every month before and turn its transfers into money from
+    nowhere."""
+    stored = list(stored)
+    closed = [
+        settings
+        for account in stored
+        if account.closed and (settings := account_settings(config, account)).counted
+    ]
+    return [*effective_accounts(config, stored), *closed]
+
+
 def by_hand_accounts(config: LatestConfig, stored: Iterable[StoredAccount]) -> list[TrackedAccount]:
     """The counted accounts whose balance the user enters by hand."""
     return [account for account in effective_accounts(config, stored) if account.track_balance]

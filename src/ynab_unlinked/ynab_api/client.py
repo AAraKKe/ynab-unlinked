@@ -8,7 +8,11 @@ from ynab import (
     AccountsApi,
     ApiClient,
     ApiException,
+    CategoriesApi,
+    CategoryGroupWithCategories,
     Configuration,
+    MonthsApi,
+    MonthSummary,
     NewTransaction,
     PatchTransactionsWrapper,
     PlanDetail,
@@ -71,11 +75,13 @@ class _TimedApiClient(ApiClient):
 class ApisType(TypedDict):
     budget: type[PlansApi]
     accounts: type[AccountsApi]
+    categories: type[CategoriesApi]
+    months: type[MonthsApi]
     transactions: type[TransactionsApi]
 
 
-SupportedApisType = PlansApi | AccountsApi | TransactionsApi
-SupportedApisNames = Literal["budget", "accounts", "transactions"]
+SupportedApisType = PlansApi | AccountsApi | CategoriesApi | MonthsApi | TransactionsApi
+SupportedApisNames = Literal["budget", "accounts", "categories", "months", "transactions"]
 
 
 class BalanceAdjustment(Protocol):
@@ -95,6 +101,8 @@ class Client:
         self._apis: ApisType = {
             "budget": PlansApi,
             "accounts": AccountsApi,
+            "categories": CategoriesApi,
+            "months": MonthsApi,
             "transactions": TransactionsApi,
         }
 
@@ -103,6 +111,12 @@ class Client:
 
     @overload
     def api(self, api_name: Literal["accounts"]) -> AccountsApi: ...
+
+    @overload
+    def api(self, api_name: Literal["categories"]) -> CategoriesApi: ...
+
+    @overload
+    def api(self, api_name: Literal["months"]) -> MonthsApi: ...
 
     @overload
     def api(self, api_name: Literal["transactions"]) -> TransactionsApi: ...
@@ -127,6 +141,22 @@ class Client:
         api = self.api("accounts")
         response = api.get_accounts(budget_id)
         return response.data.accounts
+
+    def categories(self, budget_id: str) -> list[CategoryGroupWithCategories]:
+        """Every category group of the budget with its categories, in the budget's order.
+
+        Balances are those of the current month. Deleted groups and categories are only sent
+        by delta requests, so none come back here.
+        """
+        api = self.api("categories")
+        response = api.get_categories(budget_id)
+        return response.data.category_groups
+
+    def months(self, budget_id: str) -> list[MonthSummary]:
+        """Every month of the budget with its note and YNAB's totals; deleted ones left out."""
+        api = self.api("months")
+        response = api.get_plan_months(budget_id)
+        return [month for month in response.data.months if not month.deleted]
 
     def transactions(
         self,

@@ -6,9 +6,12 @@ import factory
 from factory.base import Factory
 from ynab import (
     Account,
+    Category,
+    CategoryGroupWithCategories,
     DateFormat,
     PlanDetail,
     PlanSummary,
+    SubTransaction,
     TransactionClearedStatus,
     TransactionDetail,
 )
@@ -109,6 +112,51 @@ class TransactionDetailFactory(Factory):
     payee_id = None
     import_id = None
     subtransactions = factory.LazyFunction(list)
+
+
+class SubTransactionFactory(Factory):
+    """One line of a split transaction as YNAB returns it, inside `TransactionDetailFactory`."""
+
+    class Meta:
+        model = SubTransaction
+
+    id = factory.Sequence(lambda n: f"sub-{n}")
+    transaction_id = "ynab-1"
+    amount = -5000
+    deleted = False
+    category_id = None
+    category_name = None
+
+
+class CategoryFactory(Factory):
+    """A category as YNAB lists it, without a goal."""
+
+    class Meta:
+        model = Category
+
+    id = factory.Sequence(lambda n: uuid.UUID(int=1000 + n))
+    category_group_id = uuid.UUID(int=900)
+    name = factory.Sequence(lambda n: f"Category {n}")
+    hidden = False
+    internal = False
+    budgeted = 0
+    activity = 0
+    balance = 0
+    deleted = False
+
+
+class CategoryGroupFactory(Factory):
+    """A category group as GET /categories returns it, with its categories."""
+
+    class Meta:
+        model = CategoryGroupWithCategories
+
+    id = uuid.UUID(int=900)
+    name = "Everyday"
+    hidden = False
+    internal = False
+    deleted = False
+    categories = factory.LazyFunction(list)
 
 
 class StoredTransactionFactory(Factory):

@@ -1,4 +1,5 @@
-"""Settings: connection, banks, accounts, net worth, appearance and data, one module per tab.
+"""Settings: connection, banks, accounts, net worth, categories, appearance and data, one module
+per tab.
 
 Every save goes through `shell.save_config`, which changes the config on disk off the event
 loop, reloads the app state, and toasts.
@@ -16,12 +17,21 @@ from ynab_unlinked.web.views.settings import (
     accounts,
     appearance,
     banks,
+    categories,
     connection,
     networth,
     privacy,
 )
 
-TABS = ("Connection", "Banks", "Accounts", "Net worth", "Appearance", "Data & privacy")
+TABS = (
+    "Connection",
+    "Banks",
+    "Accounts",
+    "Net worth",
+    "Categories",
+    "Appearance",
+    "Data & privacy",
+)
 _SLUG_ALIASES = {"networth": "net-worth", "data": "data-privacy", "privacy": "data-privacy"}
 
 TabRenderer = Callable[["Settings"], Awaitable[None] | None]
@@ -30,6 +40,7 @@ RENDERERS: dict[str, TabRenderer] = {
     "Banks": banks.render,
     "Accounts": accounts.render,
     "Net worth": networth.render,
+    "Categories": categories.render,
     "Appearance": appearance.render,
     "Data & privacy": privacy.render,
 }
@@ -86,7 +97,7 @@ class Settings:
     shell.SETTINGS_PATH,
     key="settings",
     title="Settings",
-    subtitle="Connection, banks, accounts, appearance, privacy",
+    subtitle="Connection, banks, accounts, categories, appearance, privacy",
     icon="settings",
     order=90,
     bottom=True,

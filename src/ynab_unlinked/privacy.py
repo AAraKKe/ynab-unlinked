@@ -50,7 +50,8 @@ def privacy_summary() -> None:
                 "Selected budget metadata (id, name, date and currency formats)",
                 "The YNAB account each entity imports into",
                 "Last reconciliation date",
-                "A copy of your budget's transactions and accounts, kept in sync with YNAB",
+                "A copy of your budget's transactions, accounts, categories and month notes, "
+                "kept in sync with YNAB",
                 "An activity log of what YNAB Unlinked did (imports, reconciliations, "
                 "balance adjustments)",
             ]
@@ -62,7 +63,7 @@ def privacy_summary() -> None:
         bullet_list(
             [
                 f"Configuration: [cyan]{storage_path()}[/cyan]",
-                f"Transactions, accounts and activity log: [cyan]{store_path()}[/cyan]",
+                f"Budget copy and activity log: [cyan]{store_path()}[/cyan]",
                 f"Web app preferences (theme, sidebar): [cyan]{web_storage_dir()}[/cyan]",
             ]
         )

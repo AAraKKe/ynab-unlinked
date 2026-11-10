@@ -10,6 +10,8 @@ from ynab_unlinked.web.accounts import (
     by_hand_accounts,
     effective_accounts,
     effective_nettings,
+    follows_return,
+    history_accounts,
     last_set_by_hand,
 )
 
@@ -130,3 +132,45 @@ def test_a_balance_set_by_hand_dates_from_its_newest_adjustment(
     last = last_set_by_hand(transactions, settings, None if logged is None else days_ago(logged))
 
     assert last == (None if expected is None else days_ago(expected))
+
+
+def test_the_history_counts_closed_accounts_unless_they_are_left_out(config_v4: LatestConfig):
+    assert [a.id for a in history_accounts(config_v4, BUDGET)] == [
+        "checking",
+        "card",
+        "broker",
+        "old",
+    ]
+
+    config_v4.accounts = [
+        TrackedAccount(id="old", name="Old", type="savings", bucket=Bucket.SAVINGS, counted=False)
+    ]
+
+    assert "old" not in [a.id for a in history_accounts(config_v4, BUDGET)]
+
+
+@pytest.mark.parametrize(
+    ("bucket", "on_budget", "override", "expected"),
+    [
+        (Bucket.ASSETS, True, None, True),
+        (Bucket.SAVINGS, False, None, True),
+        (Bucket.SAVINGS, True, None, False),
+        (Bucket.SAVINGS, True, True, True),
+        (Bucket.ASSETS, False, False, False),
+    ],
+    ids=[
+        "an asset account",
+        "a tracking account",
+        "a savings account on the budget",
+        "turned on in Settings",
+        "turned off in Settings",
+    ],
+)
+def test_which_accounts_show_their_return(
+    config_v4: LatestConfig, bucket, on_budget, override, expected
+):
+    account = TrackedAccount(id="a", name="A", type="savings", bucket=bucket)
+    if override is not None:
+        config_v4.finances.returns["a"] = override
+
+    assert follows_return(config_v4, account, on_budget) is expected

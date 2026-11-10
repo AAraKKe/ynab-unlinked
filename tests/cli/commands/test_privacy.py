@@ -42,5 +42,5 @@ def test_privacy_command_lists_the_local_store_and_what_it_holds(yul: CliRunner,
     assert result.exit_code == 0, result.output
     output = _flatten(result.output)
     assert str(store_file) in output
-    assert "copy of your budget's transactions and accounts" in output
+    assert "copy of your budget's transactions, accounts, categories" in output
     assert "activity log" in output

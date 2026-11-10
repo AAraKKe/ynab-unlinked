@@ -26,10 +26,16 @@ rules in section 5.
 Home        net worth at a glance, drop target and last imports, what needs you, recent activity
 Import      Files -> Review -> Done
 Reconcile   per account: cleared balance vs bank balance, reconcile transactions
-Net worth   history chart, buckets, accounts with inline balance updates
-Settings    tabs: Connection · Banks · Accounts · Net worth · Appearance · Data & privacy
+Net worth   tabs: Overview (history chart, buckets, accounts with inline balance updates)
+            · Months (what moved net worth each month) · Movers (how each account moved)
+Cash flow   income against spending, the savings rate, where income comes from
+Spending    by group, steady or swingy, every category with how it moves
+Settings    tabs: Connection · Banks · Accounts · Net worth · Categories · Appearance · Data & privacy
 Onboarding  full screen, first run only
 ```
+
+Net worth, Cash flow and Spending sit under a small caps "Finances" heading in the sidebar
+(hidden in the rail, where a gap keeps the group apart).
 
 Navigation is a left sidebar, 232px with icons and labels, collapsible to a 64px icon rail
 from a "Collapse" entry under Settings (state remembered). The top bar holds the page title, the budget chip, a sync indicator
@@ -165,11 +171,100 @@ without the ceremony.
 - Clicking an account name opens a drawer with its own balance chart and last
   transactions.
 
+The tabs **Overview · Months · Movers** sit above the page (the Settings tab style); the
+range pill is shared by the three, and `?tab=months` opens a tab directly. Months and Movers
+work in whole calendar months: 1M is this month, 3M the last three with this one, YTD from
+January, All from the first transaction. Every line of a counted account is read the same way
+(Settings › Categories explains it to the user): money in to a budget account is income,
+whatever its category, refunds too; money out is spending, unless its category is marked "not
+spending" (set aside); **Assets** is what changed an asset outside transfers, whatever the
+reason (market moves, interest, a sale recorded as an adjustment): every line of a tracking
+account, and the balance adjustments of the budget accounts whose return is followed;
+transfers between counted accounts move nothing. So the parts always add up to the change.
+Closed accounts count for the past (they held money then), in the history of Overview and
+Home too, and show a faint "closed" pill wherever they are listed; the Accounts table, which
+is about today's balances, leaves them out.
+
+- **Months**: a title with the range ("Jun 2026 – Nov 2026") and the pills, four stat tiles
+  (Change "+11,616.69€ · from 159,453.88€"; From saving, income minus spending, with "80% of
+  the change" only when it is a part of it; From assets; Months up "6 of 6 · best Nov
+  +3,695.85€"), then a card "Monthly change" with one bar per month: Saved (series 1), Assets
+  (series 5) and, only when there is some, Other (text-3), stacked up and down from zero.
+  Segments meet square and only the two ends of a month's bar are rounded, so it reads as one
+  bar split into parts. A line with dots (text colour) joins the net changes, one tooltip per
+  month. When Other shows, a faint line under the chart says what it is.
+- **Period panel**, under the chart (no dialog): with no month selected it shows the whole
+  range; a click anywhere in a month's column, or on its name, shows that month (the other
+  months fade); clicking the same month again, a click outside the chart, or the ghost
+  "× Whole range" in the panel goes back. The panel has no head of its own (the tiles and the
+  chart already give the range and its change): a picked month is named next to "Where the
+  change came from", with "× Whole range". Two columns: a vertical waterfall (Income up from zero in series 1, Spending
+  hanging from its top in series 2, Assets in series 5, Other in text-3, each starting where the
+  one before ended and joined to the next by a dashed line, then Net as a text-2 bar from zero;
+  each bar's value over it, and the values as text for screen readers) and "Accounts that moved most"
+  (five, each with why: "income +4,850.00€ · spending -3,650.00€ · transfers -1,520.00€");
+  "Came in from" (five payees: income is by payee) and "Spent most on" (five categories).
+  One column under 860px. A sync that changes nothing does not redraw the tab.
+- **Movers**: one row per counted account (closed ones that held money in the range too),
+  largest change first: name, a bar around a centre line (series 1 up, series 2 down) with
+  the change, "Your money" (what went in or out: income, spending, transfers), "Assets" (good
+  or bad) and "Return", the money weighted return of the asset changes, per year over a range
+  longer than one ("+6.1%", "−8.9%/yr", "—" for an account whose return is not followed). A
+  faint line under the card explains the three columns. Under 860px the two middle columns
+  hide.
+
+### Cash flow and Spending
+
+Both read the store like the Months tab (every line sorted the same way, closed accounts
+counted) and have the same head: the range as a title and the pills `1M 3M 6M YTD 1Y All`,
+1Y by default. Averages, rates and how a category moves use complete months only; the month
+still running shows in the charts, faded. With no complete month in the range, an empty state
+asks for a longer range.
+
+- **Cash flow**: four tiles: Income a month ("median 4,850.00€"), Spending a month ("core
+  2,700.00€ · one-offs 575.00€": the steady and variable categories against the rest),
+  Savings rate (saved over earned; "▲ 4.2 pts vs the 12 months before" when the budget goes
+  back that far), Cash runway (cash and savings after debt over core spending, "27.8
+  months"), and a faint line "Averages over 11 complete months, not this one.". Then
+  "Income and spending": income (series 1) and spending (series 2) side by side per month,
+  top corners rounded, one tooltip per month with what was saved. A month with a label carries
+  it over its taller bar: the note written on that month in YNAB (first line), else, for a
+  month far above its median (1.25×), the payee that brought more than usual or the category
+  that spent more than usual. "Savings rate": its own line chart (never a second axis), the
+  average dashed with "average 60.2%". "Came in from": the top six payees of the range as
+  bars.
+- **Spending**: three tiles (Spending a month, Core, One-offs), then side by side "By group"
+  and "Steady or swingy?". A filter (a group, a word) redraws only the group highlight, the
+  chart, the legend's choice and the table: the page keeps its height and its scroll.
+  - **By group**: a key of the four words' colours, column titles (Group, A month, Share),
+    then one row per group: its bar, a month, share, and under it a thin split of its
+    spending by how its categories move (steady in good, variable in text-2, spiky in warn,
+    lumpy in accent-2, not enough months in border-2; each part titled with its share). A
+    click filters by the group, a second click shows every group again.
+  - **Steady or swingy?**: one dot per category (of the filters): average a month across on
+    a log scale, how much it moves up; the six largest named, overlapping names hidden; a
+    faint line: top right is big and swingy, bottom right the fixed costs. A click on a dot,
+    or on a row of the table, slides the category in from the right in the chart's place.
+  - **Category detail** (in the chart's card): a back arrow, "Group / Category" (the range is
+    the page's), "288.94€ a month" over the months from its first spending to its last, the word with "moves 6%" and its sentence;
+    "Each month" (bars, series 1, a dashed "Average" line, both in the legend); the numbers
+    in a row (average, median, lowest month, highest month, spread); "How the months spread"
+    (a histogram in six slices, whole unit labels slanted 45°, series 5). A new range updates
+    it in place; the back arrow brings the chart back.
+  - **How it moves**: a card with the four words as tiles, each its pill and a sentence with
+    examples and its threshold ("Moves under 25%."); a click shows only that kind (the tile
+    accent bordered), again shows every kind. A faint line says how the number is worked out.
+  - **Categories**: a group dropdown (All groups, then each group: there are too many for
+    pills), and "Only ▲ spiky · × Every kind" when a word filters. Most spent first, twenty
+    then "Show all N" unless a filter is on (then every match). Each row: name, a month,
+    share, a sparkline (series 1) and the word as a pill with its number, or "not enough
+    months"; a click shows the category in the chart's place, scrolled into view.
+
 ### Settings
 
 Tabs: **Connection** (masked token with reveal and change, budget change, config version
 and path), **Banks**, **Accounts**, **Net worth** (debt -> accounts mapping with a visual
-picker), **Appearance** (the palette), **Data & privacy** (what is stored where, store size, last sync, the rows left
+picker, the goal), **Categories**, **Appearance** (the palette), **Data & privacy** (what is stored where, store size, last sync, the rows left
 out of imports with "Include again" on each, "Resync from scratch", "Reset all data" with
 confirmation).
 
@@ -181,15 +276,37 @@ confirmation).
   When the account picked in the dialog already takes another bank's statements, an amber
   line under it says so ("Sabadell also sends statements here; a same day, same amount row
   from both can be taken for one"); Save still works.
-- **Accounts**: one card per open account of the budget, in a grid under one section per
-  bucket (Cash, Savings, Assets, Debt, with the bucket's swatch). The lede says every open
-  account counts in net worth and a switch leaves one out. Each card: the account name and
+- **Accounts**: one card per account of the budget, closed ones too, in a grid under one
+  section per bucket (Cash, Savings, Assets, Debt, with the bucket's swatch). The lede says
+  every account counts in net worth, closed ones for the months they held money, and a
+  switch leaves one out. Closed accounts come last in their section with a dashed border, a
+  muted name and the "closed" pill, and no "balance by hand" toggle. Each card: the account name and
   a "Counted in net worth" switch (on by default), the bucket as four small pills (picking
   one moves the card to that section, the default comes from the account type) and, in the
   footer, a pencil "balance by hand" toggle (accent when on; on by default for investment
   and other asset accounts). Counted cards are live, left out ones muted with their
   controls still usable. Every change saves at once with one quiet toast ("Accounts saved",
   "Left out of net worth", "Counted in net worth"); there is no save button.
+- **Net worth › Return**: one chip per counted account; on (accent) means Movers shows its
+  return. Asset and tracking accounts are on by default. On a budget account, such as a
+  savings account, its balance adjustments then count as what it earned (Assets), not as
+  income. A click saves at once with a toast ("Showing the return of 💰 Wise Savings").
+- **Net worth › Goal**: the target the plan follows, as an accent pill ("🏠 Down Payment ·
+  70,000.00€", "the largest target" beside it until one is picked), a "Change goal"
+  category picker listing only categories with a balance target, and "Use the largest
+  target" once one is picked. The lede says yul cannot see which goal YNAB's phone app
+  shows. Without a balance target in YNAB a faint line says to add one there.
+- **Categories**: three short rules side by side (Income, Spending, Tracking accounts: how
+  every line is read), then "Not spending": a lede, the marked categories as accent pills
+  with a ×, and an "Add category" picker. Each add or removal saves at once with a toast
+  ("📈 Broker is not spending now", "... counts as spending again"). Before the first sync
+  that brings categories, a faint line says they come with it.
+- **Category picker** (every place that picks a category): a small ghost button with a
+  chevron opening a menu, never a list on the page or a plain select (a budget has hundreds
+  of categories). The menu has a search field on top, focused, then every group as a small
+  caps header with its categories under it in YNAB's order. Typing keeps the categories
+  whose name has every typed word (no case, accents or emoji), or a whole group whose name
+  matches; "No category matches" otherwise. A click picks and closes.
 - **Appearance**: the four palettes as a grid of cards like Banks: a preview tile drawn in
   that palette whatever the page's is (its background with the two blobs, a primary
   "Import", a "by hand" pill and a link), the name and one line ("Royal blue to indigo on a
@@ -287,6 +404,7 @@ and gradient text. `tabular-nums` in tables and axis ticks only.
 ### Motion
 
 - Page change: fade + 10px rise, 240ms, `cubic-bezier(.2,.7,.2,1)`.
+- A category detail slides in from the right over Spending's chart (28px, 300ms).
 - Lists: 40ms stagger on first paint.
 - Hero figures count up over 900ms (ease out cubic).
 - Progress bars have a slow moving gradient shimmer while active.

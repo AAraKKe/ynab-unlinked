@@ -8,6 +8,7 @@ from .models import (
     ConfigV3,
     ConfigV4,
     DebtMapping,
+    Finances,
     LoaderConfig,
     TrackedAccount,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "ClearedStatus",
     "Config",
     "DebtMapping",
+    "Finances",
     "LatestConfig",
     "LoaderConfig",
     "TrackedAccount",

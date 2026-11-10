@@ -29,6 +29,8 @@ src/ynab_unlinked/
     detect.py            detect_loaders (2.4)
     balances.py          net worth, debt netting, adjustments (2.5)
     history.py           balance and net worth series from the store (2.7)
+    finance.py           where a period's money came from and went: Flows, Rules, period() (2.8)
+    cashflow.py          income and spending by month, category trends and volatility (2.9)
   entities/              parsers, now with sniff() and a LoaderSpec per package (2.4)
   config/                V1..V4, migrations (2.6)
   store/                 SQLite transaction store and sync (2.7)
@@ -434,6 +436,11 @@ class Adjustments(BaseModel):
     payee: str = "Balance Adjustment"
     cleared: ClearedStatus = ClearedStatus.CLEARED
 
+class Finances(BaseModel):     # added after V4 shipped, defaults only: no migration
+    not_spending: list[str] = []            # category ids whose outflows are set aside
+    goal_category_id: str | None = None     # the plan's goal; None: the largest balance target
+    returns: dict[str, bool] = {}           # account id -> return followed, where not default
+
 class ConfigV4(BaseModel):
     api_key: str
     budget: Budget
@@ -442,6 +449,7 @@ class ConfigV4(BaseModel):
     accounts: list[TrackedAccount] = []
     adjustments: Adjustments = Adjustments()
     debt_mappings: list[DebtMapping] = []
+    finances: Finances = Finances()
     version_number: str = Field(default="V4", alias="version")
 
     # Config protocol
@@ -480,6 +488,24 @@ class StoredTransaction:
     approved: bool; deleted: bool; payee_name: str | None; category_name: str | None
     import_id: str | None; memo: str | None; transfer_account_id: str | None
     matched_transaction_id: str | None = None   # the row YNAB merged this one with
+    category_id: str | None = None
+
+@dataclass(frozen=True)
+class StoredCategory:       # table categories (migration 0006), replaced on every sync
+    id: str; name: str; group_id: str; group_name: str
+    hidden: bool; internal: bool                # internal: YNAB's own (Ready to Assign...)
+    balance: int                                # available this month
+    goal_type: str | None = None                # TB, TBD (a balance to reach), MF, NEED, DEBT
+    goal_target: int | None = None; goal_target_date: dt.date | None = None
+    note: str | None = None
+
+@dataclass(frozen=True)
+class Line:                 # a transaction, or one line of a split in its place
+    transaction_id: str; account_id: str; date: dt.date; amount: int
+    payee_name: str | None; category_id: str | None; category_name: str | None
+    transfer_account_id: str | None
+
+STARTING_BALANCE_PAYEE = "Starting Balance"
 
 @dataclass(frozen=True)
 class StoredAccount:
@@ -489,6 +515,7 @@ class StoredAccount:
 @dataclass(frozen=True)
 class SyncResult:
     full: bool; transactions_changed: int; accounts: int; server_knowledge: int
+    categories: int = 0                         # categories received
     ghosts_removed: int = 0                     # rows flagged deleted by the ghost repair
 
 @dataclass(frozen=True)
@@ -506,7 +533,9 @@ class Store:
         # (client.transactions_with_knowledge with since_date=FULL_SYNC_SINCE, 1900-01-01,
         # because YNAB defaults a missing since_date to one year ago); else
         # client.transactions_delta(budget_id, knowledge). Upserts rows, keeps deleted rows
-        # flagged, replaces the budget's accounts (closed kept, deleted skipped), stores the
+        # flagged, replaces the lines of every split received (subtransactions), replaces the
+        # budget's accounts (closed kept, deleted skipped) and categories (client.categories,
+        # in YNAB's order, deleted skipped), stores the
         # new server_knowledge (never a lower one than stored), all in one SQLite transaction.
         # A 409 on a delta forgets the budget's rows and knowledge and redoes a full fetch once.
         # Then runs the ghost repair and reports it in ghosts_removed: a match approved in
@@ -515,6 +544,11 @@ class Store:
         # transaction_exists and the missing ones flagged deleted (50 ids a sync, the rest
         # kept in ghost_checks for the next one).
     def accounts(self, budget_id: str) -> list[StoredAccount]        # sorted by name
+    def categories(self, budget_id: str) -> list[StoredCategory]     # YNAB's order
+    def lines(self, budget_id: str, *, since: dt.date | None = None,
+              until: dt.date | None = None) -> list[Line]
+        # non deleted transactions with each split replaced by its lines; they add up to the
+        # same balances. since/until inclusive, oldest first. Feeds core.finance.
     def transactions(self, budget_id: str, *, account_id: str | None = None,
                      since: dt.date | None = None, until: dt.date | None = None,
                      cleared: Iterable[TransactionClearedStatus] | None = None) -> list[StoredTransaction]
@@ -564,7 +598,19 @@ activity; the caller decides what is worth an entry. The schema steps are
 
 `ynab_api.Client` gains `transactions_delta(budget_id, server_knowledge) -> tuple[list[TransactionDetail], int]`
 and `transactions_with_knowledge(budget_id, since_date=None) -> tuple[list[TransactionDetail], int]`,
-and `transaction_exists(budget_id, transaction_id) -> bool` (False on a 404, other errors raise).
+and `transaction_exists(budget_id, transaction_id) -> bool` (False on a 404, other errors raise),
+and `categories(budget_id) -> list[CategoryGroupWithCategories]` (GET /categories, every sync),
+and `months(budget_id) -> list[MonthSummary]` (GET /months, every sync, deleted left out).
+
+Migration 0006 adds `transactions.category_id` and the `subtransactions` and `categories`
+tables, and empties `sync_state`, so the next sync is a full one that fills them in.
+Migration 0007 adds `months` (month, note, income, budgeted, activity), replaced on every
+sync; `Store.month_notes(budget_id) -> dict[dt.date, str]` gives the months with a note.
+Migration 0008 adds `subtransactions.transfer_transaction_id`: YNAB sends the other side of a
+transfer made from a split line without a transfer account, so `Store.lines` gives it the
+split's account through this column (a full sync fills it in). A full sync flags deleted every row it did
+not receive (`_tombstone_missing`), so a delete a delta missed leaves the copy; migration 0009
+forces one more full sync for that.
 
 ```python
 # core/history.py
@@ -584,6 +630,91 @@ def net_worth_series(store: Store, budget_id: str, accounts: Sequence[TrackedAcc
 
 def sample_dates(start: dt.date, end: dt.date) -> list[dt.date]
     # every day, or every Monday in the range plus `end` when end - start > 366 days
+
+def balances_at(store: Store, budget_id: str, account_ids: Sequence[str],
+                dates: Sequence[dt.date]) -> dict[str, list[int]]   # at the end of each date
+```
+
+### 2.8 Finance (`core/finance.py`)
+
+Every line of a counted account is one kind (`Rules.kind`), and the six add up to the change
+of net worth exactly:
+
+| kind | the line |
+|---|---|
+| `income` | money in to an account on the budget, not a transfer, any category (refunds too) |
+| `spending` | money out of an account on the budget, not a transfer |
+| `set_aside` | money out in a category of `Finances.not_spending` |
+| `assets` | any line of a tracking account that is not a transfer, and a balance adjustment (`adjustment_payees`) of a budget account in `returns` |
+| `transfers` | a transfer with another counted account (zero over all of them) |
+| `outside` | a starting balance, or a transfer with an account not counted |
+
+```python
+@dataclass(frozen=True)
+class Flows:                 # milliunits signed as they move net worth
+    income, spending, set_aside, assets, transfers, outside: int = 0
+    saved (income + spending), other (set_aside + outside), change; supports +
+
+@dataclass(frozen=True)
+class Rules:
+    on_budget: Mapping[str, bool]          # every counted account -> on the budget
+    not_spending: frozenset[str] = frozenset()
+    returns: frozenset[str] = frozenset()      # accounts whose return is followed
+    adjustment_payees: frozenset[str] = frozenset({RECONCILIATION_PAYEE})
+    def kind(self, line: Line) -> str | None   # None: the account is not counted
+
+@dataclass(frozen=True)
+class AccountMove:
+    account_id: str; start_balance: int; end_balance: int; flows: Flows
+    rate: float | None       # modified Dietz return over the period, for followed accounts
+    change, own_money (change minus assets)
+
+@dataclass(frozen=True)
+class Period:
+    start: dt.date; end: dt.date; flows: Flows; start_worth: int; end_worth: int
+    months: tuple[tuple[dt.date, Flows], ...]   # every calendar month touched, oldest first
+    accounts: tuple[AccountMove, ...] = ()      # largest change first
+    spending: tuple[CategorySpend, ...] = ()    # most spent first; refunds do not lower it
+    income: tuple[PayeeIncome, ...] = ()        # by payee, most first
+
+def period(store, budget_id, rules, start, end, names=None) -> Period   # blocking
+def flows_by_account(lines, rules) -> dict[str, Flows]
+def spending_by_category(lines, rules, names=None) -> list[CategorySpend]
+def income_by_payee(lines, rules) -> list[PayeeIncome]
+def period_return(start_balance, flows, gain, start, end) -> float | None
+def annualised(rate, days) -> float          # unchanged for a year or less
+def months_between(start, end) -> list[dt.date]; month_start(day); month_end(day)
+```
+
+### 2.9 Cash flow (`core/cashflow.py`)
+
+```python
+STEADY_BELOW = 0.25; VARIABLE_BELOW = 0.75; LUMPY_SAME_BELOW = 0.25; MIN_MONTHS = 6
+UNUSUAL_ABOVE = 1.25        # a month this many times its median gets a label
+
+@dataclass(frozen=True)
+class Volatility: mean: float; cv: float | None; label: str | None; active: int
+def volatility(spent: Sequence[int], months: int | None = None) -> Volatility
+    # cv = population stdev / mean over a category's life (its first to its last month of
+    # spending, quiet months in between counted as zero). lumpy: spent in at most half of
+    # them, those alike (their own cv < 0.25); else steady / variable / spiky by cv. No label
+    # when the range holds fewer than MIN_MONTHS months, the life fewer than MIN_LIFETIME,
+    # or it spent in one month only. CategoryTrend.mean is over the whole range.
+
+@dataclass(frozen=True)
+class FlowMonth: month; income; spending (positive); complete; label: str | None
+    saved, rate
+@dataclass(frozen=True)
+class CategoryTrend: category_id; name; group; spent: tuple[int, ...]; volatility
+@dataclass(frozen=True)
+class CashFlow:
+    start; end; months; categories (most spent first); income (PayeeIncome, most first)
+    complete, mean_income, median_income, mean_spending, savings_rate, core_spending(), groups()
+
+def cash_flow(store, budget_id, rules, start, end, *, categories=None, notes=None) -> CashFlow
+    # blocking; averages over complete months; a label is the month's note in YNAB (first
+    # line, 28 characters), else the payee or category most above its usual in a month far
+    # above the median
 ```
 
 ## 3. Web app (`web/`, extra `web`)
@@ -595,7 +726,12 @@ web/
   app.py               build(token, port) -> root page (guard, static files, CSS, views, /onboarding);
                        run(port: int | None, open_browser: bool, announce=None)
   state.py             AppState / state(): config, client, store, formatter, loaders, last_sync
-  accounts.py          effective_accounts() / by_hand_accounts() / effective_nettings():
+  categories.py        pure: Group, grouped(categories) (the user's, by group, YNAB's order),
+                       matching(groups, text) (every word, no case, accents or emoji),
+                       balance_goals(), goal_category(categories, chosen), BALANCE_GOALS
+  accounts.py          effective_accounts() / history_accounts() (closed ones too, for the
+                       history and the Months and Movers tabs) / follows_return() /
+                       by_hand_accounts() / effective_nettings():
                        what Home, Net worth and Settings count (3.4.1); last_set_by_hand(), STALE_AFTER_DAYS
   buckets.py           STYLES (BucketStyle: title, group_title, series slot, colour per bucket),
                        NET_WORTH_ORDER, SETTINGS_ORDER, SERIES_BUCKETS
@@ -607,7 +743,11 @@ web/
   ynab.py              fetch_budgets(token), load_budget(client, id) -> Budget,
                        stored_accounts(sdk accounts), fallback_accounts(config)
   paths.py             every page's path (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,
-                       SETTINGS_PATH, ONBOARDING_PATH), NiceGUI-free for the data modules
+                       CASHFLOW_PATH, SPENDING_PATH, SETTINGS_PATH, ONBOARDING_PATH),
+                       NiceGUI-free for the data modules
+  finances.py          pure: RANGES, RANGE_MONTHS, months_range (whole months), period_title,
+                       rules(config, stored) (closed accounts too), category_names, earliest,
+                       load_cash_flow, liquid (cash and savings after debt), previous_range
   shell.py             layout, view registry, top bar, toasts, confirm dialog, drop overlay,
                        save_config(); re-exports the paths (views use shell.<NAME>_PATH)
                        and sync_label / sync_message
@@ -620,7 +760,7 @@ web/
                        per view, motion, then every media query), fonts/InterVariable.woff2.
                        No CSS lives in Python.
   components/          button, glass_card, pill, bank_logo, stat_tile, segmented_bar, share_bar,
-                       empty_state, spinner, check, icon (+ ICONS), count_up (the one count up
+                       empty_state, spinner, check, closed_pill, icon (+ ICONS), count_up (the one count up
                        animation: Home and Net worth heroes); the helpers every view reuses:
                        set_class(el, name, on), clickable(el, handler, role="button") (role,
                        tabindex, click and Enter), loading(text) / show_state(box, kind, text)
@@ -637,6 +777,17 @@ web/
                        Reconcile's "include uncleared")
     history_chart.py   ChartSeries, history_options() / history_chart() / set_options(),
                        money_js(): the ECharts history line chart
+    flow_chart.py      months_options(months, palette, currency_format, selected=None),
+                       months_chart(..., on_pick(index), selected=None): Net worth › Months'
+                       stacked bars, net line, a transparent column per month for clicks
+                       bridge_options(steps, labels, palette, currency_format) / bridge_chart:
+                       the period panel's waterfall
+    cashflow_chart.py  income_spending_options, rate_options, volatility_options,
+                       category_months_options (bars and a dashed Average line),
+                       histogram_options (slanted whole unit slices), chart(): the charts of
+                       Cash flow and Spending
+    category_picker.py category_picker(groups, on_pick, *, label, marker): a button opening
+                       a menu of groups and categories with a search field on top
   views/
     __init__.py        register(): imports every view module
     onboarding/        /onboarding, outside the shell (token, budget, banks, done)
@@ -661,6 +812,19 @@ web/
       tables.py        badge, plan_table(plan, formatter, key, actions=None), RowActions,
                        transactions_table
       cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
+    cashflow/          /cashflow    tiles, income and spending, savings rate, came in from
+      data.py          DEFAULT_RANGE, CashFlowPage, load, percent, rate_change, runway,
+                       runway_text, spending_hint, complete_note
+      view.py          CashFlowView and the view
+    spending/          /spending    tiles, by group, steady or swingy, categories
+      data.py          DEFAULT_RANGE, SHOWN, WORDS (Word: text, pill kind, hint), ORDER,
+                       UNRATED, load, word, spark, share, matches, filtered, MixPart,
+                       group_mix, plotted (the chart's dots, in order), Bin, histogram, Life
+                       (months, spent), life, Stats, stats
+      view.py          SpendingView (filters redraw only what they change, legend, clicks,
+                       the detail in the chart's card) and the view
+      detail.py        category_detail(trend, flow, *, palette, currency_format, formatter,
+                       on_back)
     reconcile/         /reconcile   per account cleared vs bank balance, reconcile (2.3)
       data.py          scope_start, gap_candidates, ReconcileData (read,
                        open_transactions, has_anything), LOCK_TIMED_OUT, UNCLEARED_SKIPPED,
@@ -671,26 +835,38 @@ web/
       card.py          equation, section, bar, paint_bar: the account card's fixed pieces
       view.py          ReconcileView (with the reconcile: confirm, reconcile, log, checkpoint) and the view
       footer.py        selection / done / locking footers
-    networth/          /networth    history chart, buckets, accounts, balance updates, drawer
+    networth/          /networth    tabs Overview (history chart, buckets, accounts, balance
+                                    updates, drawer), Months (chart and period panel) and Movers,
+                                    from one core.finance.Period
       data.py          RANGES, MAX_PICKED, range_start, by_hand_pill, assign_slots,
                        Snapshot, load_snapshot, table_order, default_picked, parse_balance,
                        set_balance / set_balances (the one write: live balances, build and
                        create the adjustments in one batch), adjustment_entry (the activity
                        entry), plain_amount, Drafts, read_drafts, diff_label, changed_count,
                        save_label (the "Update balances" fields, their changes and footer)
-      view.py          NetWorthView (hero, ranges, chips, buckets, drawer loading) and the view
+      flows.py         pure: TABS, RANGE_MONTHS, months_range (whole months), rules, load_period,
+                       period_title, Step / bridge, why, moved, rate_text, months_up,
+                       best_month, month_bounds, share_of_change, spread
+      view.py          NetWorthView (tabs, hero, ranges, chips, buckets, drawer loading) and the view
+      periods.py       PeriodTabs (draws Months or Movers, the selected month and its panel,
+                       restyles), months_tab, movers_tab
+      period_panel.py  period_panel(period, names, closed, formatter, *, selected, on_clear):
+                       the bridge, accounts, came in from, spent most on
       table.py         AccountsTable: the accounts card, its inline balance editor and the
                        "Update balances" mode
       drawer.py        account_drawer(...) -> its chart
     settings/          /settings    one module per tab, each with render(page: Settings):
       __init__.py      Settings (tab row, panel, rerender()), TABS, RENDERERS, tab_from_slug, the view
-      common.py        current_config(), kv(key), open_accounts() (open budget accounts, the
+      common.py        current_config(), kv(key), all_accounts() (closed ones too), open_accounts() (open budget accounts, the
                        configured ones when YNAB cannot be reached)
       connection.py    token (reveal, check and save), budget dialog and switch
       banks.py         bank cards, bank_summary(), shared_account_hint(), toggle_bank(),
                        bank_dialog(), option_control()
       accounts.py      AccountCards (the Accounts tab), BY_HAND_HINT
-      networth.py      debt mappings (mapping_row) and adjustment settings, CLEARED_LABELS
+      networth.py      debt mappings (mapping_row), the goal (goal_section) and adjustment
+                       settings, CLEARED_LABELS
+      categories.py    Categories: RULES (how income and spending are read), "not spending"
+                       chips and their picker; each change saves at once
       appearance.py    Appearance: a card per palette with its preview; a click saves and applies
       privacy.py       Data & privacy: what is kept where, resync, reset; token_wording()
       left_out.py      the rows left out of imports under Data & privacy, "Include again"
@@ -739,8 +915,9 @@ from ynab_unlinked.web.state import state
 @shell.view("/networth", key="networth", title="Net worth",
             subtitle="All your accounts in one figure",   # str or Callable[[], str]
             icon="networth",                         # key of components.ICONS
-            order=40)                                # bottom=True puts it under the spacer,
-                                                     # live=False for views with forms
+            order=40,                                # bottom=True puts it under the spacer,
+            group="Finances")                        # live=False for views with forms;
+                                                     # group: the sidebar heading above it
 async def networth_view(args: PageArguments) -> None:   # the parameter is optional
     ...  # already inside shell.page(title, subtitle): just render the body
 ```
@@ -772,9 +949,10 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
   `dropzone`). `on_files(list[UploadedFile])` may be async; `accept=None` is
   `DEFAULT_ACCEPT` (`.pdf,.xlsx,.xls,.txt,.html`).
 - Deep links: `/settings?tab=<slug>` (`connection`, `banks`, `accounts`, `networth` or
-  `net-worth`, `appearance`, `data`, `privacy` or `data-privacy`, case insensitive) opens
-  that tab;
-  anything else opens Connection (`settings.tab_from_slug`).
+  `net-worth`, `categories`, `appearance`, `data`, `privacy` or `data-privacy`, case
+  insensitive) opens that tab;
+  anything else opens Connection (`settings.tab_from_slug`). `/networth?tab=months` (or
+  `movers`, `overview`) opens that Net worth tab.
 - `shell.sync_label(last, now)` / `shell.sync_message(result)` for sync wording.
 - Navigation: `ui.navigate.to(path)` with the paths on `shell` (`HOME_PATH`, `IMPORT_PATH`,
   `RECONCILE_PATH`, `NETWORTH_PATH`, `SETTINGS_PATH`, `ONBOARDING_PATH`); views never import
@@ -921,6 +1099,13 @@ when there are cards), `attention-unreconciled`, `attention-stale`, `nothing-wai
 
 #### Net worth
 
+Tabs: `nw-tabs`, `nw-tab-{overview|months|movers}`. Months: `tile-change`, `tile-saved`,
+`tile-assets`, `tile-months-up`, `months-chart` (its `componentClick` picks a month: a series
+point by `dataIndex`, or the x axis by `value`, the month as `YYYY-MM`), `other-note`. Period
+panel: `period-panel`, `period-title` and `period-clear` (a picked month only), `bridge`,
+`step-{income|spending|assets|other|net}`, `moved-{account_id}`, `came-in`, `spent-on`.
+Movers: `movers`, `mover-{account_id}`.
+
 Markers: `no-tracked`, `pick-{account_id}`, `pick-count`, `edit-{account_id}`,
 `balance-input-{account_id}`, `accept-{account_id}`, `cancel-{account_id}`,
 `balance-hint-{account_id}`; the "Update balances" mode: `update-balances`,
@@ -934,6 +1119,20 @@ balances". The deltas in the rows are the confirmation of rule 8; there is no di
 failure keeps the mode and what was typed. What was typed lives in `AccountsTable.typed` (by
 account id), so a re-render after a sync keeps it.
 
+#### Cash flow and Spending
+
+Cash flow: `range-{key}`, `cf-income`, `cf-spending`, `cf-rate`, `cf-runway`, `cf-chart`,
+`cf-rate-chart`, `cf-sources`, `cf-empty`. Spending: `range-{key}`, `sp-total`, `sp-core`,
+`sp-one-offs`, `sp-groups`, `sp-mix-key`, `group-{name}` (a click filters, again clears),
+`mix-{name}`,
+`sp-scatter` (its `componentClick` by `dataIndex` shows a category), `sp-legend`,
+`word-{steady|variable|spiky|lumpy}` (a click filters), `sp-group-filter` (a select:
+`__all__` or a group name), `sp-word-clear`, `sp-categories`, `category-{category_id}`
+(`category-none` for uncategorized; a click shows it), `sp-no-match`, `sp-show-all`,
+`sp-empty`. Category detail: `category-detail`, `detail-back`, `detail-title`,
+`detail-word`, `detail-chart`, `detail-stats`, `detail-histogram`.
+Sidebar: `nav-group-finances` above `nav-networth`, `nav-cashflow`, `nav-spending`.
+
 #### Onboarding
 
 Markers: `token-input`, `check-token`, `token-lost`, `wizard-message`, `wizard-next`,
@@ -942,11 +1141,17 @@ Markers: `token-input`, `check-token`, `token-lost`, `wizard-message`, `wizard-n
 
 #### Settings
 
-Markers: `bank-shared-{key}`, `accounts-lede`, `account-card-{id}`, `bucket-section-{bucket}`,
+Markers: `bank-shared-{key}`, `accounts-lede`, `account-card-{id}` (class `closed` on a closed
+account, tagged `closed-{id}`), `bucket-section-{bucket}`,
 `account-{id}`, `bucket-{id}`, `bucket-{id}-{bucket}`, `by-hand-{id}`, `left-out` (the list
 of rows left out of imports), `left-out-{index}`, `include-again-{index}`, `left-out-empty`;
 Appearance: `tab-appearance`, `themes` (the card grid), `theme-{name}` (a palette's card,
-`live` when chosen).
+`live` when chosen). Categories: `category-rules`, `no-categories`, `not-spending`,
+`not-spending-{id}`, `spending-again-{id}`, `add-not-spending` (a category picker). Net
+worth goal: `goal`, `goal-current`, `pick-goal` (a category picker), `goal-default`,
+`no-goal`. Net worth return: `returns`, `return-{account_id}` (`aria-pressed` on or off).
+A category picker's search field is marked with the picker's marker and -search after it,
+each category row with the marker, a dash and the category id.
 
 #### Import
 

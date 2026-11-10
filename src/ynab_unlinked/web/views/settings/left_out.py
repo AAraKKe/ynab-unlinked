@@ -27,14 +27,18 @@ def read(store: Store, budget_id: str) -> tuple[list[ExcludedRow], dict[str, str
     return store.excluded(budget_id), {a.id: a.name for a in store.accounts(budget_id)}
 
 
-async def render(page: Settings) -> None:
+async def load() -> tuple[list[ExcludedRow], dict[str, str]]:
+    """The rows left out and their account names, read off the loop (empty when it fails)."""
     config, _ = state().require()
-    store = state().store
     try:
-        rows, names = await run.io_bound(read, store, config.budget.id) or ([], {})
+        return await run.io_bound(read, state().store, config.budget.id) or ([], {})
     except Exception as error:
-        rows, names = [], {}
         shell.notify(f"Could not read the rows left out of imports: {error}", "warn")
+        return [], {}
+
+
+def draw(page: Settings, rows: list[ExcludedRow], names: dict[str, str]) -> None:
+    """The section, from what `load` read."""
     formatter = state().require_formatter()
 
     with ui.element("div").classes("yul-left-out").mark("left-out"):

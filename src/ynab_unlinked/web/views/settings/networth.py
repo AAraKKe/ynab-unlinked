@@ -1,17 +1,22 @@
-"""Settings › Net worth: which accounts pay each debt, and how balance adjustments are written."""
+"""Settings › Net worth: which accounts pay each debt, whose return Movers shows, the goal the
+plan follows, and how balance adjustments are written."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from functools import partial
 from typing import TYPE_CHECKING
 
-from nicegui import ui
+from nicegui import run, ui
 
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
+from ynab_unlinked.store import StoredCategory
 from ynab_unlinked.web import accounts as tracking
 from ynab_unlinked.web import shell
-from ynab_unlinked.web.components import button
+from ynab_unlinked.web.categories import balance_goals, goal_category, grouped
+from ynab_unlinked.web.components import button, clickable
+from ynab_unlinked.web.components.category_picker import category_picker
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.settings.common import kv, open_accounts
 
@@ -27,7 +32,13 @@ CLEARED_LABELS = {
 
 async def render(page: Settings) -> None:
     config, _ = state().require()
-    counted = tracking.effective_accounts(config, await open_accounts())
+    # Read everything first: a tab drawn around an await shows half of itself for a while
+    budget_accounts = await open_accounts()
+    categories = await run.io_bound(state().store.categories, config.budget.id)
+    if categories is None:  # the app is shutting down
+        return
+    counted = tracking.effective_accounts(config, budget_accounts)
+    on_budget = {account.id: account.on_budget for account in budget_accounts}
     ui.label(
         "Each debt is subtracted from the accounts that pay it, so cash shows what is really yours."
     ).classes("yul-muted").style("margin-bottom:10px")
@@ -53,6 +64,9 @@ async def render(page: Settings) -> None:
                 mapping_row(debt, payers, mappings[debt.id], draw)
 
     draw()
+
+    returns_section(page, config, counted, on_budget)
+    goal_section(page, config, categories)
 
     ui.label("Balance adjustments").classes("yul-section").style("margin-top:18px")
     with ui.element("div").classes("yul-kv"):
@@ -100,6 +114,84 @@ async def render(page: Settings) -> None:
         button("Save net worth settings", kind="primary", on_click=save_net_worth).mark(
             "save-networth"
         )
+
+
+def returns_section(
+    page: Settings,
+    config: LatestConfig,
+    counted: list[TrackedAccount],
+    on_budget: dict[str, bool],
+) -> None:
+    """The accounts whose return Net worth › Movers shows, as chips that save at once."""
+    ui.label("Return").classes("yul-section").style("margin-top:18px")
+    ui.label(
+        "The accounts whose return Movers shows. On a budget account, such as a savings "
+        "account, its balance adjustments count as what the account earned, not as income."
+    ).classes("yul-muted").style("margin-bottom:10px")
+
+    async def toggle(account: TrackedAccount) -> None:
+        followed = not tracking.follows_return(config, account, on_budget.get(account.id, True))
+
+        def change(config: LatestConfig) -> None:
+            config.finances.returns[account.id] = followed
+
+        verb = "Showing" if followed else "Not showing"
+        if await shell.save_config(change, f"{verb} the return of {account.name}"):
+            await page.rerender()
+
+    with ui.element("div").classes("yul-chips").mark("returns"):
+        for account in counted:
+            on = tracking.follows_return(config, account, on_budget.get(account.id, True))
+            chip = ui.element("div").classes("yul-chipc").mark(f"return-{account.id}")
+            chip.props["aria-pressed"] = "true" if on else "false"
+            if on:
+                chip.classes("on")
+            clickable(chip, partial(toggle, account))
+            with chip:
+                ui.label(account.name)
+
+
+def goal_section(
+    page: Settings, config: LatestConfig, categories: Sequence[StoredCategory]
+) -> None:
+    """The category whose target the plan follows, picked among those with a balance target."""
+    formatter = state().require_formatter()
+    ui.label("Goal").classes("yul-section").style("margin-top:18px")
+    ui.label(
+        "The target the plan follows. yul cannot see which goal YNAB shows on your phone, so "
+        "pick it here among the categories with a balance target."
+    ).classes("yul-muted").style("margin-bottom:10px")
+    goals = balance_goals(categories)
+    if not goals:
+        ui.label(
+            "No category has a balance target in YNAB. Add one there to follow it here."
+        ).classes("yul-faint").mark("no-goal")
+        return
+
+    current = goal_category(categories, config.finances.goal_category_id)
+    assert current is not None
+    chosen = config.finances.goal_category_id == current.id
+
+    async def pick(category_id: str | None) -> None:
+        def change(config: LatestConfig) -> None:
+            config.finances.goal_category_id = category_id
+
+        name = next((c.name for c in goals if c.id == category_id), None)
+        message = f"The plan follows {name}" if name else "The plan follows the largest target"
+        if await shell.save_config(change, message):
+            await page.rerender()
+
+    with ui.element("div").classes("yul-row").style("flex-wrap:wrap;gap:8px").mark("goal"):
+        target = formatter.format_amount_milli(current.goal_target or 0)
+        with ui.element("span").classes("yul-pill acc").mark("goal-current"):
+            ui.label(f"{current.name} · {target}")
+        if not chosen:
+            ui.label("the largest target").classes("yul-faint yul-small")
+        category_picker(grouped(goals), pick, label="Change goal", marker="pick-goal")
+        if chosen:
+            button(
+                "Use the largest target", kind="ghost", small=True, on_click=lambda: pick(None)
+            ).mark("goal-default")
 
 
 def mapping_row(

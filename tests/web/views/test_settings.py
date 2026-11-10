@@ -488,17 +488,21 @@ def _card(user: User, account_id: str) -> ui.element:
     return user.find(marker=f"account-card-{account_id}").elements.pop()
 
 
-async def test_every_open_account_has_a_card_and_counts_by_default(
+async def test_every_account_has_a_card_and_counts_by_default_closed_ones_too(
     mapped: LatestConfig, user: User, budget_accounts: YnabClientStub
 ):
+    closed_id = str(uuid.UUID(int=30))
     await _open_tab(user, "accounts")
     await user.should_see(marker=f"account-{CHECKING_ID}", retries=20)
 
-    await user.should_see("Every open account counts in your net worth", marker="accounts-lede")
+    await user.should_see("closed ones too", marker="accounts-lede")
     await user.should_see(marker=f"account-{CARD_ID}")
     await user.should_see(marker=f"bucket-section-{Bucket.DEBT}")
-    await user.should_not_see("Closed")
-    for account_id in (CHECKING_ID, CARD_ID):
+    # Closed: last in its section, tagged, nothing to enter by hand
+    await user.should_see(marker=f"closed-{closed_id}")
+    assert "closed" in _card(user, closed_id).classes
+    await user.should_not_see(marker=f"by-hand-{closed_id}")
+    for account_id in (CHECKING_ID, CARD_ID, closed_id):
         assert _switch(user, account_id).value is True
         assert "live" in _card(user, account_id).classes
     assert LatestConfig.load().accounts == []

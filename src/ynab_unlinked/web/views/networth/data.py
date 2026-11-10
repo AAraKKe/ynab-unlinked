@@ -37,7 +37,6 @@ from ynab_unlinked.web.accounts import STALE_AFTER_DAYS
 from ynab_unlinked.web.buckets import NET_WORTH_ORDER
 from ynab_unlinked.ynab_api import Client
 
-RANGES = ("1M", "3M", "6M", "YTD", "1Y", "All")
 DEFAULT_RANGE = "6M"
 GROUPINGS = {"total": "Total", "type": "By type", "account": "By account"}
 MAX_PICKED = 6
@@ -118,6 +117,9 @@ class Snapshot:
 
     tracked: tuple[TrackedAccount, ...]
     stored: dict[str, StoredAccount]
+    history: tuple[TrackedAccount, ...]
+    """`tracked` and the closed accounts not left out: what the history and the Months and
+    Movers tabs count, since a closed account held money before it was closed."""
     nettings: tuple[DebtNetting, ...]
     worth: NetWorth
     earliest: dt.date
@@ -131,6 +133,10 @@ class Snapshot:
     def name(self, account: TrackedAccount) -> str:
         stored = self.stored.get(account.id)
         return account.name if stored is None else stored.name
+
+    def closed(self, account_id: str) -> bool:
+        stored = self.stored.get(account_id)
+        return stored is not None and stored.closed
 
     def netted(self, account_id: str) -> int:
         return next(a.balance for a in self.worth.accounts if a.id == account_id)
@@ -148,6 +154,7 @@ def load_snapshot(store: Store, config: LatestConfig, today: dt.date) -> Snapsho
     budget_id = config.budget.id
     stored = {account.id: account for account in store.accounts(budget_id)}
     tracked = tuple(tracking.effective_accounts(config, stored.values()))
+    history = tuple(tracking.history_accounts(config, stored.values()))
     nettings = tracking.effective_nettings(config)
     worth = net_worth(
         [
@@ -161,7 +168,7 @@ def load_snapshot(store: Store, config: LatestConfig, today: dt.date) -> Snapsho
         ],
         nettings,
     )
-    amounts = store.daily_amounts(budget_id, [a.id for a in tracked]) if tracked else {}
+    amounts = store.daily_amounts(budget_id, [a.id for a in history]) if history else {}
     earliest = min((a.days[0][0] for a in amounts.values() if a.days), default=today)
     logged = tracking.logged_adjustments(store, budget_id)
     by_hand = {
@@ -174,6 +181,7 @@ def load_snapshot(store: Store, config: LatestConfig, today: dt.date) -> Snapsho
     return Snapshot(
         tracked=tracked,
         stored=stored,
+        history=history,
         nettings=nettings,
         worth=worth,
         earliest=min(earliest, today),

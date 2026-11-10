@@ -22,7 +22,8 @@ src/ynab_unlinked/
     utils.py         The token and budget prompts and the transaction tables.
     choices.py       `Choice`, the selectable rows of `yul reconcile`.
   core/              UI independent services shared by the CLI and the web app: importing,
-                     reconcile, loader detection, balances and net worth, history.
+                     reconcile, loader detection, balances and net worth, history, finance
+                     (where a period's money came from: income, spending, assets).
                      Never imports typer, rich, textual or nicegui.
   entities/          One package per bank (bbva, cobee, sabadell). `registry.py` discovers
                      their `LoaderSpec`s; `_sniff.py` has helpers for `sniff()`.
@@ -32,9 +33,10 @@ src/ynab_unlinked/
   models.py          `Transaction` and import id assignment.
   text.py            `plural`, the one wording helper the CLI and the web app share.
   buckets.py         Net worth `Bucket` and the default bucket of a YNAB account type.
-  store/             SQLite copy of the budget's accounts and transactions, synced by
-                     server knowledge, plus the activity log. Its schema is `store/migrations/NNNN_*.sql`,
-                     one numbered script per step; add the next number, never edit one.
+  store/             SQLite copy of the budget's accounts, transactions (split lines too) and
+                     categories, synced by server knowledge, plus the activity log. Its schema
+                     is `store/migrations/NNNN_*.sql`, one numbered script per step; add the
+                     next number, never edit one.
   local_data.py      What yul stores on this machine; shared by `config reset` and the app.
   keychain.py        The YNAB token in the system keychain (`keyring`); `ConfigV4.save/load`
                      move it there and back, the file holds `@keychain` in its place.
@@ -100,6 +102,7 @@ uv run poe check             # lint + format check + pyright (strict on src); ch
 uv run poe fix               # ruff format + autofix
 uv run poe tc-check          # verify a changelog fragment exists for the branch
 uv run yul app               # run the web app from the checkout
+uv run --with playwright python scripts/readme_screenshots.py  # README screenshots, made-up budget
 ```
 
 CI runs the same four things on every PR, after `uv sync --locked`. See `tests/AGENTS.md` for test conventions.
