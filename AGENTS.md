@@ -49,7 +49,7 @@ src/ynab_unlinked/
   web/               NiceGUI app behind `yul app`, only importable with the `web` extra.
 tests/               Mirrors `src`. Fixtures in `tests/assets`, helpers in `tests/helpers`.
 typings/             Local stubs pyright reads for the untyped parts of pyexcel and html_text.
-changelog/           Towncrier fragments, one per PR.
+changelog/           Towncrier fragments, each named after the PR that made it.
 .claude/skills/      Project skills. `yul-web-design/` holds the web app's architecture
                      contract (ARCHITECTURE.md) and design (DESIGN.md).
 ```
@@ -100,7 +100,7 @@ Tasks are `[tool.poe.tasks]` in `pyproject.toml` (`uv run poe` lists them).
 uv run poe cov               # tests with coverage, accepts pytest args (-k name)
 uv run poe check             # lint + format check + pyright (strict on src); check-all for a full report
 uv run poe fix               # ruff format + autofix
-uv run poe tc-check          # verify a changelog fragment exists for the branch
+uv run poe tc-check          # verify a changelog fragment exists for the branch, named after its PR
 uv run yul app               # run the web app from the checkout
 uv run --with playwright python scripts/readme_screenshots.py  # README screenshots, made-up budget
 ```
@@ -126,8 +126,13 @@ token goes to a keychain item named after that folder, never the real one).
   for the `dev` group) and locked in `uv.lock`; dependabot bumps both in the same PR.
 - Import SDK names from the package root: `from ynab import TransactionDetail`.
 - Every PR needs a changelog fragment in `changelog/` named `<pr-number>.<type>.md`, a single
-  line describing the change for users. Use `+<slug>.<type>.md` when the PR number is not
-  known yet. Types:
+  line describing the change for users. The number is not optional: the release notes link
+  every entry to the PR that made it, and a fragment named `+<slug>.<type>.md` builds an entry
+  without one. The PR number only exists once the PR is open, so the order is: commit the
+  fragment as `+<slug>.<type>.md`, push, open the PR, then `git mv` it to
+  `<pr-number>.<type>.md` and push again. Do it in the same sitting, before asking for a
+  review. `uv run poe tc-check` (CI runs it on every PR) fails while a `+` fragment is left.
+  One PR can have several fragments of different types, all with its number. Types:
   - `added`: new feature.
   - `improved`: new behaviour in an existing feature.
   - `bugfix`: undesired behaviour corrected.
