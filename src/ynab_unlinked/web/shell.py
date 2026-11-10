@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import time
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -65,6 +66,12 @@ UploadedFile = FileUpload
 """A file the browser sent. `await f.read()`, `await f.save(path)`, `f.name`, `f.size()`."""
 
 ToastKind = Literal["ok", "info", "warn", "error"]
+QUIET_KINDS: tuple[ToastKind, ...] = ("ok", "info")
+"""Said in the top bar's status line; the others are toasts."""
+STATUS_SECONDS = 4.0
+TOAST_MS = 3000
+LOUD_TOAST_MS = 6000
+"""A warning or an error stays long enough to be read."""
 
 
 LAYOUT_KEY = "yul.shell"
@@ -220,6 +227,11 @@ class Layout:
     """The `state().data_version` the page on screen was drawn from, at the latest."""
     badges_version: int = -1
     """The one the sidebar's badges were counted from; -1 before they were."""
+    status: ui.element | None = None
+    """The top bar's quiet line: what `notify` says when nothing went wrong."""
+    status_text: ui.label | None = None
+    status_until: float = 0.0
+    """When the status is put away again (`time.monotonic()`)."""
 
 
 def layout() -> Layout | None:
@@ -333,7 +345,12 @@ def _live_slot() -> Slot | None:
 
 
 def notify(message: str, kind: ToastKind = "ok") -> None:
-    """A toast under the top bar, centered over the content, gone after 3s.
+    """Tell the user what just happened, as loudly as it deserves.
+
+    Something that worked (`ok`) or a note (`info`) is said in the top bar's status line for
+    a few seconds: the page already shows the result, so nothing drops over it. A warning or
+    an error is a toast under the top bar, centered over the content, for longer. Outside the
+    shell (onboarding) everything is a toast.
 
     Safe after an await in a handler whose element a redraw removed in the meantime.
     """
@@ -341,13 +358,39 @@ def notify(message: str, kind: ToastKind = "ok") -> None:
     if slot is None:  # nothing of this tab is left: it was closed
         return
     with slot:
+        shown = layout()
+        if kind in QUIET_KINDS and shown is not None and _say(shown, message, kind):
+            return
         ui.notify(
             message,
             position="top",
-            timeout=3000,
+            timeout=TOAST_MS if kind in QUIET_KINDS else LOUD_TOAST_MS,
             classes=f"yul-toast yul-toast--{kind}",
             group=False,
         )
+
+
+def _say(shown: Layout, message: str, kind: ToastKind) -> bool:
+    """Put `message` in the top bar's status line. False when the tab has none."""
+    status, text = shown.status, shown.status_text
+    if status is None or text is None or status.is_deleted:
+        return False
+    text.set_text(message)
+    status.props["title"] = message
+    set_class(status, "info", kind == "info")
+    status.set_visibility(True)
+    status.update()
+    shown.status_until = time.monotonic() + STATUS_SECONDS
+    return True
+
+
+def hush(shown: Layout) -> None:
+    """Put the status line away once its time is up (the frame calls it on a timer)."""
+    status = shown.status
+    if status is None or status.is_deleted or not status.visible:
+        return
+    if time.monotonic() >= shown.status_until:
+        status.set_visibility(False)
 
 
 async def save_config(change: Callable[[LatestConfig], None], message: str | None = None) -> bool:

@@ -21,6 +21,7 @@ from ynab_unlinked.web.components import (
     clickable,
     empty_state,
     glass_card,
+    info_button,
     pill,
     set_class,
     stat_tile,
@@ -32,6 +33,7 @@ from ynab_unlinked.web.ranges import save_range, saved_range
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.spending import data
 from ynab_unlinked.web.views.spending.detail import category_detail
+from ynab_unlinked.web.wording import VERSUS_YNAB, VERSUS_YNAB_TITLE
 
 ALL_GROUPS = "__all__"
 
@@ -149,7 +151,9 @@ class SpendingView:
         self.body.clear()
         with self.body:
             with ui.element("div").classes("yul-nwm-head"):
-                ui.label(period_title(flow.start, flow.end)).classes("yul-h2 yul-grow")
+                with ui.element("div").classes("yul-row yul-info-row yul-grow"):
+                    ui.label(period_title(flow.start, flow.end)).classes("yul-h2")
+                    info_button(VERSUS_YNAB_TITLE, VERSUS_YNAB, marker="sp-info")
                 pill_group({key: key for key in RANGES}, self.range, self.set_range, marker="range")
             if not flow.categories:
                 empty_state(

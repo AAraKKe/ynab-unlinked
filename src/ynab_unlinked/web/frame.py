@@ -38,6 +38,8 @@ _WIDE = "wide"
 
 TICK_SECONDS = 2.0
 """How often a tab looks for a sync that changed the budget copy, or a copy gone old."""
+STATUS_TICK_SECONDS = 0.5
+"""How often a tab looks whether its status line has been up long enough."""
 PAGE_ERROR = "This page could not be drawn."
 NOT_FOUND = "There is no page at this address."
 
@@ -65,6 +67,8 @@ class _TopBar:
     import_button: ui.element
     toggle_theme: Callable[[], None]
     sync_now: Callable[[], Awaitable[None]]
+    status: ui.element
+    status_text: ui.label
 
 
 def _top_bar(dark: ui.dark_mode, open_palette: Callable[[], Awaitable[None]]) -> _TopBar:
@@ -74,6 +78,13 @@ def _top_bar(dark: ui.dark_mode, open_palette: Callable[[], Awaitable[None]]) ->
             title = ui.label("").classes("yul-title")
             subtitle = ui.label("").classes("yul-subtitle")
         ui.element("span").classes("yul-grow")
+        # What just worked, said here for a few seconds instead of in a toast over the page
+        with ui.element("div").classes("yul-status").mark("status") as status:
+            icon("check", 14)
+            status_text = ui.label("").mark("status-text")
+        status.props["role"] = "status"
+        status.props["aria-live"] = "polite"
+        status.set_visibility(False)
         _search_button(open_palette)
         if config is not None:
             with (
@@ -105,7 +116,7 @@ def _top_bar(dark: ui.dark_mode, open_palette: Callable[[], Awaitable[None]]) ->
             "Import", kind="primary", small=True, on_click=lambda: ui.navigate.to(shell.IMPORT_PATH)
         ).mark("top-import")
         import_button.classes(add="yul-top-import")
-    return _TopBar(title, subtitle, import_button, toggle_theme, sync_now)
+    return _TopBar(title, subtitle, import_button, toggle_theme, sync_now, status, status_text)
 
 
 # ---- sidebar ------------------------------------------------------------------------------
@@ -277,6 +288,8 @@ def root() -> RedirectResponse | None:
                 nav=nav,
                 badges=badges,
                 import_button=bar.import_button,
+                status=bar.status,
+                status_text=bar.status_text,
                 # Before the page reads the copy: a sync landing while it draws redraws it
                 version=state().data_version,
             )
@@ -285,6 +298,7 @@ def root() -> RedirectResponse | None:
                 layout.pages = _Pages({v.path: _renderer(v) for v in shell.views()})
         # Once right away for the badges, then to follow the syncs
         ui.timer(0, lambda: _tick(layout), once=True)
+        ui.timer(STATUS_TICK_SECONDS, lambda: shell.hush(layout))
         ui.timer(TICK_SECONDS, lambda: _tick(layout))
     actions |= {
         "sync": bar.sync_now,

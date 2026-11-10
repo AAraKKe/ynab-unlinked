@@ -284,11 +284,22 @@ asks for a longer range.
     a log scale, how much it moves up; the six largest named, overlapping names hidden; a
     faint line: top right is big and swingy, bottom right the fixed costs. A click on a dot,
     or on a row of the table, slides the category in from the right in the chart's place.
-  - **A lumpy category's detail** is about its charges, since it is not spent "a month":
-    "170.99€ a charge" in the place of "a month"; a tinted line "About once a year. Set
-    aside 14.25€ a month to have it ready." (a charge over the months between charges);
-    "Each charge" (its history from the first charge to now, the dashed line "Set aside a
-    month"); A charge, Charges, Comes, Set aside, Last one; no histogram.
+  - **What the detail says depends on what the category is** (`data.story`), because "a
+    month" is only true of a category spent every month. Each has a headline and a tinted
+    line with what to set aside:
+    - steady: "1,417.00€ a month" · "About the same every month. Set aside 1,417.00€ a
+      month and it is covered."
+    - variable: "400.00€ a month" · "Between 200.00€ and 600.00€ a month. Set aside 400.00€
+      a month to cover it over time."
+    - lumpy: "170.99€ a charge" · "About once a year. Set aside 14.25€ a month to have it
+      ready." (a charge over the months between charges). "Each charge"; A charge, Charges,
+      Comes, Set aside, Last one.
+    - spiky: "up to 6,753.00€ a month" · "Spent in 2 of the last 8 months. Set aside 860.25€
+      a month to cover months like these." (all it spent over the months since its first).
+      Biggest month, Months spent in, In all, Set aside, Last one.
+    - bought once: "2,000.00€ once" · "Spent once, in Jul 2026. Nothing to plan for yet."
+    Lumpy and spiky draw their history from the first charge to now (the quiet months are
+    how they spend), with the dashed line "Set aside a month", and no histogram.
   - **Category detail** (in the chart's card): a back arrow, "Group / Category" (the range is
     the page's), "288.94€ a month" over the months from its first spending to its last, the word with "moves 6%" and its sentence;
     "Each month" (bars, series 1, a dashed "Average" line, both in the legend); the numbers
@@ -530,8 +541,10 @@ repeats them for agents with the build contract and the test routine; keep the t
    Save button.
 8. **Every write to YNAB**: `run.io_bound`, one activity entry, `state().invalidate()`, a
    toast. Multi item writes get exactly one confirmation listing what changes.
-9. **Toasts** come from `shell.notify`: top center under the bar, 3s, solid card, colour bar
-   per kind.
+9. **What happened is said as loudly as it deserves**, always through `shell.notify`.
+   Something that worked, or a note, is one line in the top bar's status (a check and the
+   words, 4s): the page already shows the result, so nothing drops over it. Only a warning
+   or an error is a toast: top center under the bar, 6s, solid card, colour bar per kind.
 10. **Colour carries meaning only**: series colours for series, status colours for status,
     the accent gradient for the one primary action per screen.
 11. **Motion** is the existing set; `prefers-reduced-motion` stays instant.

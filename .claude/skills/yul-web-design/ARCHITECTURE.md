@@ -980,7 +980,14 @@ async def networth_view(args: PageArguments) -> None:   # the parameter is optio
   `palette-<command key>` (class `on` on the one Enter runs), `palette-none`. A category is
   `category-<id>` (-> `/spending?category=<id>`), an account `account-<id>`
   (-> `/networth?account=<id>`).
-- `shell.notify(message, kind="ok" | "info" | "warn" | "error")`: toast at the top, centered, 3s.
+- `shell.notify(message, kind="ok" | "info" | "warn" | "error")`: `ok` and `info` go to the
+  top bar's status line (markers `status`, `status-text`; 4s, put away by `shell.hush` on
+  the frame's timer); `warn` and `error` are toasts at the top, centered, 6s. Outside the
+  shell (onboarding) every kind is a toast.
+- `components.info_button(title, lines, marker=)`: an "i" opening a note (`<marker>-note`)
+  for what a figure means. `wording.VERSUS_YNAB` (why income and spending can differ from
+  YNAB's reports) sits next to the month on Home (`month-info`) and the period title of
+  Cash flow (`cf-info`) and Spending (`sp-info`).
 - `await shell.confirm(title, lines, action_label, danger=False) -> bool`: the one
   confirmation before a write, listing what will change.
 - Drop handoff: files dropped anywhere go to `/import`. The Import view reads them with

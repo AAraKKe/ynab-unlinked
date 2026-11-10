@@ -61,6 +61,7 @@ ICONS: dict[str, str] = {
     "chevron-down": '<path d="M6 9l6 6 6-6"/>',
     "arrow-left": '<path d="M19 12H5m0 0 6-6m-6 6 6 6"/>',
     "pencil": '<path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/><path d="M14.5 5.5l3 3"/>',
+    "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8.5h.01"/>',
     "search": '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
     "arrow-right": '<path d="M5 12h14m0 0-6-6m6 6-6 6"/>',
     "compass": '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
@@ -218,6 +219,26 @@ def empty_state(
         if action_label:
             button(action_label, on_click=on_action, kind="primary")
     return element
+
+
+def info_button(title: str, lines: Sequence[str], *, marker: str) -> ui.element:
+    """A small "i" that opens a note next to it: a title and a few short paragraphs.
+
+    For what a figure means when that is not what the user may expect. The button is marked
+    `marker`, the note `<marker>-note`.
+    """
+    with ui.element("button").classes("yul-info").mark(marker) as trigger:
+        icon("info", 15)
+        with ui.menu().classes("yul-info-note").mark(f"{marker}-note"):
+            ui.label(title).classes("yul-card-title")
+            for line in lines:
+                ui.label(line)
+    trigger.props["type"] = "button"
+    trigger.props["title"] = title
+    trigger.props["aria-label"] = title
+    # A click on the "i" must not also be a click on the card or the row it sits in
+    trigger.on("click.stop", lambda: None)
+    return trigger
 
 
 def token_hint() -> ui.element:

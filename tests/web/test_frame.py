@@ -24,7 +24,7 @@ from tests.web.views.test_home import (  # noqa: F401 (fixtures)
 )
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store
-from ynab_unlinked.web import frame, shell
+from ynab_unlinked.web import frame, shell, wording
 from ynab_unlinked.web.state import state
 
 pytestmark = pytest.mark.version("V4")
@@ -270,3 +270,71 @@ async def test_a_view_with_its_own_refresh_is_not_rebuilt(
 
     assert drawn == ["again"]
     assert rebuild.call_count == 0
+
+
+# ---- saying what happened --------------------------------------------------------------------
+
+
+async def test_something_that_worked_is_said_in_the_top_bar_not_over_the_page(user: User):
+    await user.open("/")
+    await user.should_not_see(marker="status")
+
+    with user:
+        shell.notify("Sabadell turned on")
+
+    await user.should_see(marker="status")
+    assert label(user, "status-text").text == "Sabadell turned on"
+    assert user.notify.messages == []
+
+
+async def test_a_note_is_said_there_too_without_the_check(user: User):
+    await user.open("/")
+
+    with user:
+        shell.notify("No change", "info")
+
+    await user.should_see(marker="status")
+    assert "info" in classes(user, "status")
+    with user:
+        shell.notify("Saved")
+    assert "info" not in classes(user, "status")
+    assert user.notify.messages == []
+
+
+@pytest.mark.parametrize("kind", ["warn", "error"])
+async def test_a_problem_is_a_toast(user: User, kind: str):
+    await user.open("/")
+
+    with user:
+        shell.notify("Could not reach YNAB", kind)  # type: ignore[arg-type]
+
+    assert user.notify.messages == ["Could not reach YNAB"]
+    await user.should_not_see(marker="status")
+
+
+async def test_the_status_line_is_put_away_when_its_time_is_up(user: User):
+    await user.open("/")
+    with user:
+        shell.notify("Saved")
+        shown = shell.layout()
+    assert shown is not None
+    await user.should_see(marker="status")
+
+    shell.hush(shown)
+    await user.should_see(marker="status")  # not yet
+
+    shown.status_until = 0
+    shell.hush(shown)
+    await user.should_not_see(marker="status")
+
+
+async def test_the_month_card_explains_why_it_can_differ_from_ynab(
+    store: Store,  # noqa: F811
+    user: User,
+):
+    await user.open("/")
+    await user.should_see(marker="month-info")
+
+    [note] = user.find(marker="month-info-note").elements
+    said = [child.text for child in note.descendants() if isinstance(child, ui.label)]
+    assert said == [wording.VERSUS_YNAB_TITLE, *wording.VERSUS_YNAB]

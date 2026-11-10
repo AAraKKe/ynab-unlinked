@@ -45,8 +45,9 @@ same change. Never update a document to describe something you did not build.
 8. **Every write to YNAB** goes through `run.io_bound`, logs one activity entry (shapes in
    ARCHITECTURE 3.4), calls `state().invalidate()` and ends with a toast. Multi item writes
    (import commit, reconcile all) get exactly one `shell.confirm` listing what will change.
-9. **Toasts** are `shell.notify(message, kind)`: top center under the bar, 3s. Never
-   `ui.notify` directly.
+9. **Saying what happened** is `shell.notify(message, kind)`, never `ui.notify` directly.
+   `ok` and `info` are one quiet line in the top bar's status (the page already shows the
+   result); only `warn` and `error` are toasts, top center under the bar.
 10. **Views are `live` unless they hold a form.** `@shell.view(..., live=False)` for Import
     and Settings only; live views are re-rendered after a sync from the chip.
 11. **Colour carries meaning only.** Series colours from `theme.SERIES`, never status

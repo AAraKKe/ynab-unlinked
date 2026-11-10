@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 from nicegui import ui
 
 from ynab_unlinked.web import shell
-from ynab_unlinked.web.components import clickable, glass_card, icon
+from ynab_unlinked.web.components import clickable, glass_card, icon, info_button
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.views.home.pulse import (
     MonthPulse,
@@ -16,6 +16,7 @@ from ynab_unlinked.web.views.home.pulse import (
     rate_text,
     runway_text,
 )
+from ynab_unlinked.web.wording import VERSUS_YNAB, VERSUS_YNAB_TITLE
 
 
 def card_head(title: str, link: str | None = None, path: str | None = None) -> None:
@@ -40,7 +41,9 @@ def month_card(pulse: MonthPulse) -> None:
     money = state().require_formatter().format_amount_milli
     with glass_card().classes("yul-month").mark("month-pulse"):
         with ui.element("div").classes("yul-card-head"):
-            ui.label(f"{pulse.month:%B}").classes("yul-card-title")
+            with ui.element("div").classes("yul-row yul-info-row"):
+                ui.label(f"{pulse.month:%B}").classes("yul-card-title")
+                info_button(VERSUS_YNAB_TITLE, VERSUS_YNAB, marker="month-info")
             ui.label(f"day {pulse.day} of {pulse.days}").classes("yul-faint yul-small")
         with ui.element("div").classes("yul-month-figs"):
             _figure("Income", money(pulse.income))

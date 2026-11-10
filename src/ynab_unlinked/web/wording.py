@@ -26,6 +26,19 @@ YNAB_TIMED_OUT = "YNAB did not answer in time. Check your connection and try aga
 YNAB_UNREACHABLE = "Could not reach YNAB. Check your connection and try again."
 UNEXPECTED = "Something went wrong. Try again."
 
+VERSUS_YNAB_TITLE = "Why this can differ from YNAB"
+VERSUS_YNAB = (
+    "yul counts money, YNAB counts categories.",
+    "Income is everything that came into your budget accounts, whatever its category. A "
+    "refund or a reimbursement is money you got, so it is income here and does not lower "
+    "spending. YNAB's reports take it off its category instead, so their spending reads "
+    "lower by that amount.",
+    "A balance adjustment in a budget account counts as income or spending too, unless you "
+    "follow that account's return (Settings › Net worth); then it is what the account did.",
+    "Transfers between your accounts are neither.",
+)
+"""What the info button next to income and spending figures says (Home, Cash flow, Spending)."""
+
 _NUMBER = re.compile(r"\d{4,}")
 
 
