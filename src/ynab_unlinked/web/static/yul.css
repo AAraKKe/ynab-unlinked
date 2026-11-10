@@ -190,7 +190,16 @@ body {
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "calt", "ss03";
   min-height: 100vh;
+}
+/* Thin scrollbars in the theme's own greys, wherever something scrolls */
+* { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+/* One focus ring for everything reached with the keyboard that has no field of its own */
+[role="link"]:focus-visible, [role="button"]:focus-visible, [role="tab"]:focus-visible,
+[role="option"]:focus-visible, [role="switch"]:focus-visible, .yul-pills > *:focus-visible {
+  outline: none; box-shadow: 0 0 0 3px var(--ring);
 }
 body::before, body::after {
   content: "";
@@ -215,13 +224,17 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .yul-small { font-size: 12.5px; }
 .yul-mono { font-family: var(--mono); font-size: 12px; }
 .yul-num { font-variant-numeric: tabular-nums; }
+/* Figures: Inter's open digits, the 4, 6 and 9 read faster in a column of money */
+.yul-num, .yul-hero, .yul-tile-v, .yul-nw-figure, .yul-month-k, .yul-month-s, .yul-attn-k, .yul-nav-badge {
+  font-feature-settings: "calt", "ss01", "ss03";
+}
 .yul-good { color: var(--good); }
 .yul-warn { color: var(--warn); }
 .yul-bad { color: var(--bad); }
 .yul-h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; line-height: 1.3; }
 .yul-lede { margin: 0 0 16px; color: var(--text-2); }
 .yul-grad { background: var(--accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.yul-hero { font-size: 56px; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
+.yul-hero { font-size: 56px; font-weight: 700; letter-spacing: -.03em; line-height: 1; }
 .yul-label { font-size: 11.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
 .yul-link { color: var(--accent-2); text-decoration: underline; text-underline-offset: 3px; }
 .yul-link:hover { color: var(--text); }
@@ -267,7 +280,8 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .yul-nav svg { width: 20px; height: 20px; flex: none; }
 .yul-nav-label { font-weight: 500; }
 .yul-nav:hover, .yul-nav:focus-visible { background: var(--surface-2); color: var(--text); transform: translateX(1px); }
-.yul-nav.on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+.yul-nav.on { background: color-mix(in oklab, var(--accent-solid) 14%, var(--surface)); color: var(--text); }
+.yul-nav.on svg { color: var(--accent-2); }
 .yul-nav.on::before {
   content: ""; position: absolute; left: -10px; top: 10px; bottom: 10px; width: 3px;
   border-radius: 3px; background: var(--accent);
@@ -403,7 +417,7 @@ body[data-mac] .yul-kbd-palette::before { content: "⌘K"; }
 .q-btn.yul-btn:active { transform: scale(.98); }
 /* The gradient starts at the border box: from the padding box it tiles into the transparent
    1px border and paints the opposite end there (a cyan hairline on the left, indigo on the right). */
-.q-btn.yul-btn.primary { background: var(--accent) border-box; color: var(--on-accent); border-color: transparent; box-shadow: 0 10px 24px -10px color-mix(in oklab, var(--accent-solid) 80%, transparent); }
+.q-btn.yul-btn.primary { background: var(--accent) border-box; color: var(--on-accent); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 6px 16px -8px color-mix(in oklab, var(--accent-solid) 75%, transparent); }
 .q-btn.yul-btn.primary:hover { filter: brightness(1.08); }
 .q-btn.yul-btn.ghost { border-color: transparent; background: transparent; backdrop-filter: none; }
 .q-btn.yul-btn.ghost:hover { background: var(--surface-2); }
@@ -445,12 +459,16 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
 
 /* ---- glass card ---- */
 .yul-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface) 140px) var(--surface);
+  border: 1px solid var(--border); border-radius: var(--r);
   padding: 18px 20px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   box-shadow: inset 0 1px 0 var(--highlight), var(--shadow);
   transition: border-color .2s, transform .2s;
 }
-.yul-card.hov:hover { border-color: var(--border-2); transform: translateY(-1px); }
+.yul-card.hov:hover {
+  border-color: color-mix(in oklab, var(--accent-solid) 45%, var(--border-2)); transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 var(--highlight), 0 24px 44px -30px color-mix(in oklab, var(--accent-solid) 60%, transparent), var(--shadow);
+}
 .yul-card.flush { padding: 0; overflow: hidden; }
 /* Cards with a switch (Settings Banks and Accounts): the whole card is the state, never a pill.
    live = switched on, off = muted; an off card keeps its controls usable. */
@@ -468,7 +486,7 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
 /* ---- stat tile, segmented bar, empty state ---- */
 .yul-tile { padding: 14px 16px; }
 .yul-tile-l { color: var(--text-2); font-size: 12px; display: flex; align-items: center; gap: 7px; }
-.yul-tile-v { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.yul-tile-v { font-size: 23px; font-weight: 680; letter-spacing: -.025em; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .yul-tile-w { font-size: 11.5px; color: var(--text-3); }
 .yul-swatch { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: none; }
 .yul-seg { display: flex; height: 10px; gap: 2px; border-radius: 6px; overflow: hidden; margin: 4px 0 2px; }
@@ -751,6 +769,11 @@ body.yul-dragging .yul-dropover { display: grid; animation: yul-fade .15s ease b
   border: 1px dashed var(--border); color: var(--text-2); font-size: 13px;
 }
 .yul-hero-card { cursor: pointer; }
+.yul-hero-card, .yul-nw-hero {
+  background:
+    radial-gradient(90% 120% at 0% 0%, color-mix(in oklab, var(--accent-solid) 13%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--surface-2), var(--surface) 140px) var(--surface);
+}
 .yul-hero-card .yul-hero { font-size: clamp(34px, 6.2vw, 60px); white-space: nowrap; font-weight: 750; letter-spacing: -.025em; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
 .yul-delta { font-weight: 600; }
 .yul-spark { height: 120px; margin-top: 12px; }
@@ -814,7 +837,7 @@ body.yul-dragging .yul-dropover { display: grid; animation: yul-fade .15s ease b
   white-space: nowrap;
 }
 .yul-pills > *:hover, .yul-pills > *:focus-visible { color: var(--text); }
-.yul-pills > .on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-2); }
+.yul-pills > .on { background: var(--pill-acc-bg); color: var(--pill-acc-text); box-shadow: inset 0 0 0 1px var(--pill-acc-border); font-weight: 600; }
 .yul-rec-switch {
   display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;
   color: var(--text-2); user-select: none; outline: none; flex: none;

@@ -436,8 +436,16 @@ and brightens the border.
 ### Type
 
 Inter (bundled variable font, `font-display: swap`), fallback `system-ui`. Body 14px,
-secondary 12.5px, titles 18px semibold, hero 56px bold with `letter-spacing: -0.02em`
-and gradient text. `tabular-nums` in tables and axis ticks only.
+secondary 12.5px, titles 18px semibold, hero 56px bold with `letter-spacing: -0.03em`
+and gradient text. `tabular-nums` in tables and axis ticks only. Figures (money, counts,
+percentages) use Inter's open digits (`ss01`): the 4, 6 and 9 read faster in a column.
+
+Depth and selection: a card is lit from the top (a faint gradient from `--surface-2` to
+`--surface`), and the two heroes (Home, Net worth) carry a glow of the accent in their top
+left corner. What is chosen is tinted with the accent, never grey: the open page in the
+sidebar (and its icon), the chosen range pill, a chosen chip. A card that can be clicked
+lifts 2px and takes an accent border on hover. Everything reached with the keyboard that is
+not a field shows the same 3px ring (`--ring`). Scrollbars are thin and in the theme's greys.
 
 ### Motion
 
