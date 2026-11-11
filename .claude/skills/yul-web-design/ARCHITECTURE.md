@@ -962,16 +962,28 @@ hand gone stale; hidden at zero) and calls `shell.refresh_view(automatic=True)`.
 ```python
 from nicegui import PageArguments, ui
 from ynab_unlinked.web import shell, theme
-from ynab_unlinked.web.components import button, glass_card, pill, stat_tile, Segment, segmented_bar, empty_state
+from ynab_unlinked.web.components import (
+    button,
+    glass_card,
+    pill,
+    stat_tile,
+    Segment,
+    segmented_bar,
+    empty_state,
+)
 from ynab_unlinked.web.state import state
 
-@shell.view("/networth", key="networth", title="Net worth",
-            subtitle="All your accounts in one figure",   # str or Callable[[], str]
-            icon="networth",                         # key of components.ICONS
-            order=40,                                # bottom=True puts it under the spacer,
-            group="Finances")                        # live=False for views with forms;
-                                                     # group: the sidebar heading above it
-async def networth_view(args: PageArguments) -> None:   # the parameter is optional
+
+@shell.view(
+    "/networth",
+    key="networth",
+    title="Net worth",
+    subtitle="All your accounts in one figure",  # str or Callable[[], str]
+    icon="networth",  # key of components.ICONS
+    order=40,  # bottom=True puts it under the spacer, live=False for views with forms
+    group="Finances",  # the sidebar heading above it
+)
+async def networth_view(args: PageArguments) -> None:  # the parameter is optional
     ...  # already inside shell.page(title, subtitle): just render the body
 ```
 
@@ -1146,25 +1158,26 @@ through `run.io_bound`; Home never calls YNAB.
 
 ```python
 @dataclass(frozen=True)
-class LoaderDue:            # one bank of the last imports line
-    name: str               # config key (LoaderSpec.name)
-    key: str                # loader key, for the logo
-    title: str              # LoaderSpec.title
-    last: date | None       # newest import (Store.last_import_per_loader), None if never
+class LoaderDue:  # one bank of the last imports line
+    name: str  # config key (LoaderSpec.name)
+    key: str  # loader key, for the logo
+    title: str  # LoaderSpec.title
+    last: date | None  # newest import (Store.last_import_per_loader), None if never
+
 
 @dataclass(frozen=True)
 class HomeData:
-    net_worth: int          # milliunits, tracked accounts with debt netted
-    delta: int              # change since `since`
-    since: date             # last reconcile, or 30 days ago
-    spark: list[Point]      # 90 days of net worth
-    unreconciled: int       # cleared, not reconciled, open accounts
+    net_worth: int  # milliunits, tracked accounts with debt netted
+    delta: int  # change since `since`
+    since: date  # last reconcile, or 30 days ago
+    spark: list[Point]  # 90 days of net worth
+    unreconciled: int  # cleared, not reconciled, open accounts
     unreconciled_accounts: int
-    stale: list[str]        # accounts set by hand older than 30 days
+    stale: list[str]  # accounts set by hand older than 30 days
     last_imports: list[LoaderDue]  # banks turned on in Settings, registry order
-    activity: list[Activity]       # newest 10
-    pulse: MonthPulse | None       # the month so far (home/pulse.py); None without accounts
-    every_account: bool = False    # nothing tracked: hero says "every open account"
+    activity: list[Activity]  # newest 10
+    pulse: MonthPulse | None  # the month so far (home/pulse.py); None without accounts
+    every_account: bool = False  # nothing tracked: hero says "every open account"
 ```
 
 `pulse.load_pulse(store, config, today) -> MonthPulse`: the running month (`income`,

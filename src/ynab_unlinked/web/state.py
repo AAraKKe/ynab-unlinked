@@ -64,7 +64,7 @@ class AppState:
         self._sync_attempt: dt.datetime | None = None
         """When the last sync started, so a failing one is not retried at every look."""
         self._store: Store | None = None
-        self._sync_task: asyncio.Task[SyncResult | None] | None = None
+        self._sync_task: asyncio.Task[SyncResult] | None = None
         self._written = False
         """Something was written to YNAB since the current sync round started, if any: the
         store lags behind until the next round."""
@@ -174,16 +174,13 @@ class AppState:
         self.reload()
         return config
 
-    async def sync(self, progress: Progress = _NO_PROGRESS) -> SyncResult | None:
-        """Bring the store up to date with YNAB. Concurrent callers share the running sync.
-
-        Returns None when the app is shutting down before YNAB answers.
-        """
+    async def sync(self, progress: Progress = _NO_PROGRESS) -> SyncResult:
+        """Bring the store up to date with YNAB. Concurrent callers share the running sync."""
         if self._sync_task is None or self._sync_task.done():
             self._sync_task = asyncio.ensure_future(self._sync_rounds(progress))
         return await asyncio.shield(self._sync_task)
 
-    async def resync(self, progress: Progress = _NO_PROGRESS) -> SyncResult | None:
+    async def resync(self, progress: Progress = _NO_PROGRESS) -> SyncResult:
         """Forget the budget's copy (not the activity log) and fetch all of it again.
 
         Waits for a running sync first, so its delta cannot land in the emptied copy, and
@@ -215,12 +212,12 @@ class AppState:
             # wait() never raises: how the running sync ended is its callers' business
             await asyncio.wait({self._sync_task})
 
-    async def _resync(self, progress: Progress) -> SyncResult | None:
+    async def _resync(self, progress: Progress) -> SyncResult:
         config, _ = self.require()
         await run.io_bound(lambda: self.store.clear(config.budget.id))
         return await self._sync_rounds(progress)
 
-    async def _sync_rounds(self, progress: Progress) -> SyncResult | None:
+    async def _sync_rounds(self, progress: Progress) -> SyncResult:
         """Sync, and once more each time `invalidate()` was called while syncing."""
         while True:
             self._written = False
@@ -253,7 +250,7 @@ class AppState:
         self.sync_in_background()
         return True
 
-    async def _sync(self, progress: Progress) -> SyncResult | None:
+    async def _sync(self, progress: Progress) -> SyncResult:
         config, client = self.require()
         self._sync_attempt = dt.datetime.now(dt.UTC)
         try:
@@ -266,9 +263,7 @@ class AppState:
         self.sync_error = None
         self.last_sync = await run.io_bound(lambda: self.store.last_sync(config.budget.id))
         # A sync that brought nothing is not worth a line in the feed (one runs at every start)
-        if result is not None and (
-            result.full or result.transactions_changed or result.ghosts_removed
-        ):
+        if result.full or result.transactions_changed or result.ghosts_removed:
             changes = result.transactions_changed
             ghosts = result.ghosts_removed
             message = f"Synced · {plural(changes, 'change')} from YNAB"

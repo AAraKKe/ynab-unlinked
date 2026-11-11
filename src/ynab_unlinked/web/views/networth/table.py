@@ -413,8 +413,6 @@ class AccountsTable:
             return
         finally:
             self.busy = False
-        if adjustments is None:
-            return
 
         self.editing = None
         self.draft = self.hint = ""
@@ -486,8 +484,6 @@ class AccountsTable:
         finally:
             self.busy = False
             self._update_bulk()
-        if adjustments is None:
-            return
 
         self.bulk = False
         self.typed = {}

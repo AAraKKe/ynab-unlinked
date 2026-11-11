@@ -35,8 +35,6 @@ async def render(page: Settings) -> None:
     # Read everything first: a tab drawn around an await shows half of itself for a while
     budget_accounts = await open_accounts()
     categories = await run.io_bound(state().store.categories, config.budget.id)
-    if categories is None:  # the app is shutting down
-        return
     counted = tracking.effective_accounts(config, budget_accounts)
     on_budget = {account.id: account.on_budget for account in budget_accounts}
     ui.label(

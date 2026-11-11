@@ -43,8 +43,6 @@ RULES = (
 async def render(page: Settings) -> None:
     config = current_config()
     categories = await run.io_bound(state().store.categories, config.budget.id)
-    if categories is None:  # the app is shutting down
-        return
 
     with ui.element("div").classes("yul-catrules").mark("category-rules"):
         for title, text in RULES:

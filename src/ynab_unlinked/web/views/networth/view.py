@@ -158,7 +158,7 @@ class NetWorthView:
         async with self.lock:
             config, _ = state().require()
             snapshot = await run.io_bound(load_snapshot, state().store, config, dt.date.today())
-            if snapshot is None or self.root.is_deleted:  # the app is shutting down
+            if self.root.is_deleted:
                 return
             self.snapshot = snapshot
             if self.tab == "overview" and snapshot.stored and snapshot.tracked:
@@ -172,7 +172,7 @@ class NetWorthView:
                 period = await run.io_bound(
                     flows.load_period, state().store, config, snapshot, start, end
                 )
-                if period is None or self.root.is_deleted:
+                if self.root.is_deleted:
                     return
             if self.picked is None and snapshot.tracked:
                 self.picked = default_picked(snapshot)
@@ -491,7 +491,7 @@ class NetWorthView:
                 store.transactions(config.budget.id, account_id=account_id),
             )
         )
-        if loaded is None or self.root.is_deleted:
+        if self.root.is_deleted:
             return
         points, transactions = loaded
         name = snapshot.name(account)

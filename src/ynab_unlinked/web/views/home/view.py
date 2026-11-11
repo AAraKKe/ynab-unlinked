@@ -208,8 +208,7 @@ async def _render(body: ui.element) -> None:
     config, _ = current.require()
     today = dt.date.today()
     data = await run.io_bound(load_home, current.store, config, current.loaders, today)
-    # None when the app shuts down while reading
-    if data is None or body.is_deleted:
+    if body.is_deleted:
         return
 
     body.clear()

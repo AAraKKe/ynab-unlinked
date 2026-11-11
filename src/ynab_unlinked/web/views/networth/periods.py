@@ -135,7 +135,7 @@ class PeriodTabs:
         config, _ = state().require()
         start, end = words.month_bounds(period.months[wanted][0], dt.date.today())
         month = await run.io_bound(words.load_period, state().store, config, snapshot, start, end)
-        if month is None or self.panel is None or self.panel.is_deleted:
+        if self.panel is None or self.panel.is_deleted:
             return
         self.selected, self.month = wanted, month
         self._restyle_chart()

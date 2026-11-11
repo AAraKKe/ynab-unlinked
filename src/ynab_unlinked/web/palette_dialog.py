@@ -70,7 +70,7 @@ class PaletteDialog:
             return
         config, _ = current.require()
         extra = await run.io_bound(palette.budget_commands, current.store, config)
-        if extra is None or self.dialog.is_deleted:  # the app is shutting down, or the tab left
+        if self.dialog.is_deleted:  # the tab left
             return
         self.commands = [*self.static(), *extra]
         if self.input.value:

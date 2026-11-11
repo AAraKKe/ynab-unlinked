@@ -26,8 +26,6 @@ async def fetch_budgets(token: str) -> list[PlanSummary]:
 async def load_budget(client: Client, budget_id: str) -> Budget:
     """The budget's settings (name, date and currency format) as the config stores them."""
     plan = await run.io_bound(client.budget, budget_id)
-    if plan is None:
-        raise ValueError(f"Could not find budget with ID {budget_id}")
     return budget_from_plan(plan)
 
 

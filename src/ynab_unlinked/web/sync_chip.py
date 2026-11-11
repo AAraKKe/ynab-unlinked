@@ -79,10 +79,9 @@ def sync_chip(
         except Exception as error:
             notify(f"Sync failed. {ynab_error_message(error)}", "error")
         else:
-            if result is not None:
-                notify(sync_message(result), "ok")
-                if result.full or result.transactions_changed:
-                    refresh_view()
+            notify(sync_message(result), "ok")
+            if result.full or result.transactions_changed:
+                refresh_view()
         refresh()
 
     chip.on("click", sync_now)

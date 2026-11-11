@@ -72,8 +72,7 @@ async def render(page: Settings) -> None:
         except Exception as error:
             shell.notify(f"Sync failed. {ynab_error_message(error)}", "error")
         else:
-            if result is not None:
-                shell.notify(shell.sync_message(result))
+            shell.notify(shell.sync_message(result))
         finally:
             resync.enable()
         await page.rerender()

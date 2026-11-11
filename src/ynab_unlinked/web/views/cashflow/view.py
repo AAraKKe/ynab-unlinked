@@ -36,7 +36,7 @@ class CashFlowView:
     async def render(self) -> None:
         config, _ = state().require()
         page = await run.io_bound(data.load, state().store, config, self.range, dt.date.today())
-        if page is None or self.body.is_deleted:
+        if self.body.is_deleted:
             return
         self.body.clear()
         with self.body:
