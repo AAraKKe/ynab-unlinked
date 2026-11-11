@@ -1208,6 +1208,69 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-sp-key > span { display: inline-flex; align-items: center; gap: 5px; }
 .yul-sp-key i { display: inline-block; width: 10px; height: 4px; border-radius: 2px; }
 .yul-sp-mix > i { display: block; height: 4px; border-radius: 2px; }
+/* ---- plan: the sliders beside the charts (views/plan) ---- */
+.yul-plan-grid { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 10px; align-items: start; }
+.yul-plan-knobs { padding: 14px 16px; margin-top: 10px; }
+.yul-plan-knobs > .yul-row { min-height: 30px; }
+/* Each group of sliders under its own small caps title, a hairline apart from the one before */
+.yul-plan-section {
+  margin: 12px 0 2px; padding-top: 12px; border-top: 1px solid var(--border);
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3);
+}
+.yul-plan-knobs > .yul-row + .yul-plan-section { border-top: 0; padding-top: 0; }
+/* The folded group: its title, what it holds in a few words and a chevron, all one button */
+.yul-plan-fold {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border); cursor: pointer; outline: none; color: var(--text-3);
+}
+.yul-plan-fold > .yul-plan-section { margin: 0; padding: 0; border: 0; }
+.yul-plan-fold > .yul-knob-h { margin: 0; text-align: right; }
+.yul-plan-fold svg { transition: transform .2s var(--ease); flex: none; }
+.yul-plan-fold.open svg { transform: rotate(180deg); }
+.yul-plan-fold:hover, .yul-plan-fold:focus-visible { color: var(--text); }
+/* A fold inside a group (what happens once the goal is reached): no hairline of its own */
+.yul-plan-fold.nested { border-top: 0; padding-top: 0; margin-top: 8px; }
+.yul-plan-switches { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 6px; }
+.yul-plan-switches > .yul-rec-switch { display: flex; justify-content: space-between; }
+.yul-knob { padding: 5px 0 3px; }
+/* As tall as the way back, so the row does not move when it shows */
+.yul-knob > .yul-row { min-height: 22px; }
+.yul-knob-l { font-size: 13px; color: var(--text-2); }
+.yul-knob-v { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.yul-knob-h { font-size: 11.5px; color: var(--text-3); line-height: 1.35; margin-top: -3px; }
+.yul-plan-measured {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 16px 0 6px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+/* Quasar's slider in the app's colours: the accent for what is picked, a hairline for the rest */
+.q-slider.yul-slider { color: var(--accent-solid); height: 22px; }
+/* --mark (0 to 100) is where the slider started. Left of it the track is a clearer grey and
+   right of it the fill a paler accent, so what shows between the mark and the thumb is how far
+   it was moved, either way. The fill reads the track's width (cqw) to find the mark. */
+.yul-slider .q-slider__track {
+  container-type: inline-size; box-shadow: inset 0 0 0 1px var(--border);
+  background: linear-gradient(to right,
+    color-mix(in oklab, var(--text-3) 70%, transparent) 0 calc(var(--mark, 0) * 1%),
+    var(--surface-2) calc(var(--mark, 0) * 1%) 100%);
+}
+.yul-slider .q-slider__inner { background: none; }
+.yul-slider .q-slider__selection {
+  background: linear-gradient(to right,
+    var(--accent-solid) 0 calc(var(--mark, 100) * 1cqw),
+    color-mix(in oklab, var(--accent-solid) 45%, var(--surface-solid)) calc(var(--mark, 100) * 1cqw) 100%);
+}
+.yul-slider .q-slider__track-container::before {
+  content: ""; position: absolute; left: calc(var(--mark, 0) * 1%); top: 50%; width: 2px; height: 8px;
+  border-radius: 1px; background: var(--text-2); transform: translate(-50%, -50%); pointer-events: none;
+}
+.q-btn.yul-btn.yul-knob-back { width: 22px; height: 22px; min-height: 0; border-radius: 6px; color: var(--text-3); }
+.q-btn.yul-btn.yul-knob-back svg { width: 13px; height: 13px; }
+.yul-plan-check { margin-top: 8px; line-height: 1.4; }
+/* The sum the goal's share is of: a little apart from the slider's own line, in text-2 */
+.yul-plan-stays { margin: 8px 0 0; color: var(--text-2); }
+.yul-slider .q-slider__thumb { color: var(--accent-solid); }
+.yul-slider .q-slider__focus-ring { color: var(--accent-solid); }
+
 /* The words' colours, quieter than the status colours they come from: they mark a kind of
    category, not something to act on. The scatter's dots use the same (cashflow_chart.py). */
 .yul-sp-mix > i.mix-steady, .yul-sp-key i.mix-steady { background: color-mix(in oklab, var(--good) 72%, transparent); }
@@ -1259,6 +1322,7 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 }
 @media (max-width: 1000px) {
   .yul-home { grid-template-columns: 1fr; }
+  .yul-plan-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
 }
 @media (max-width: 900px) {
   .yul-rec-ah { grid-template-columns: minmax(0, 1fr); }

@@ -40,6 +40,7 @@ ICONS: dict[str, str] = {
     "networth": '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
     "cashflow": '<path d="M7 4v16m0 0-3-3m3 3 3-3"/><path d="M17 20V4m0 0-3 3m3-3 3 3"/>',
     "spending": '<path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+    "plan": '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4 2.5 4H5"/>',
     "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 '
     "2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 "
     "1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 "
@@ -57,6 +58,7 @@ ICONS: dict[str, str] = {
     "plus": '<path d="M12 5v14M5 12h14"/>',
     "x": '<path d="M6 6l12 12M18 6 6 18"/>',
     "check": '<path d="M20 6 9 17l-5-5"/>',
+    "undo": '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
     "refresh": '<path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/>',
     "chevron-down": '<path d="M6 9l6 6 6-6"/>',
     "arrow-left": '<path d="M19 12H5m0 0 6-6m-6 6 6 6"/>',

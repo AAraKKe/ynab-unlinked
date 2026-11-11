@@ -12,6 +12,7 @@ from ynab import (
     CategoriesApi,
     CategoryGroupWithCategories,
     Configuration,
+    MonthDetail,
     MonthsApi,
     MonthSummary,
     NewTransaction,
@@ -168,6 +169,13 @@ class Client:
         api = self.api("months")
         response = api.get_plan_months(budget_id)
         return [month for month in response.data.months if not month.deleted]
+
+    def month(self, budget_id: str, month: dt.date) -> MonthDetail:
+        """One month of the budget (its first day) with every category as it stood in it:
+        what was assigned, its activity and what it held at the end."""
+        api = self.api("months")
+        response = api.get_plan_month(budget_id, month)
+        return response.data.month
 
     def transactions(
         self,

@@ -10,6 +10,7 @@ _VIEW_MODULES = (
     "networth.view",
     "cashflow.view",
     "spending.view",
+    "plan.view",
     "reconcile.view",
     "settings",
 )

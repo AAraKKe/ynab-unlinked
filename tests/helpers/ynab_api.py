@@ -1,13 +1,32 @@
+import datetime as dt
 from unittest.mock import MagicMock
 
 from ynab import (
     CategoriesResponse,
     CategoriesResponseData,
+    Category,
+    MonthDetail,
+    MonthDetailResponse,
+    MonthDetailResponseData,
     MonthSummariesResponse,
     MonthSummariesResponseData,
 )
 
 from ynab_unlinked.ynab_api.client import Client, SupportedApisNames
+
+
+def month_response(month: dt.date, categories: list[Category] | None = None) -> MonthDetailResponse:
+    """What YNAB answers for one month: its categories as they stood in it."""
+    detail = MonthDetail(
+        month=month,
+        income=0,
+        budgeted=0,
+        activity=0,
+        to_be_budgeted=0,
+        deleted=False,
+        categories=categories or [],
+    )
+    return MonthDetailResponse(data=MonthDetailResponseData(month=detail))
 
 
 class YnabClientStub(Client):
@@ -29,6 +48,9 @@ class YnabClientStub(Client):
                 registered_mock.get_plan_months.return_value = MonthSummariesResponse(
                     data=MonthSummariesResponseData(months=[], server_knowledge=0)
                 )
+                # A sync asks for each past month it lists: without categories unless a test
+                # says so
+                registered_mock.get_plan_month.side_effect = lambda _, month: month_response(month)
             self.registry[api_name] = registered_mock
 
         return registered_mock

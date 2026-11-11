@@ -102,6 +102,13 @@ is instant, and it syncs with YNAB on its own while it is open and after every c
   ![Spending](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/spending.png)
   ![A category's months](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/spending-category.png)
 
+- **Plan**: where your net worth is heading. It starts from what your last months measured
+  (what comes in, what you spend, where your saving goes, what your assets return) and lets
+  you move any of it to see another future, next to the one you are on. It also says when the
+  category you are saving in reaches its target.
+
+  ![Plan](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/plan.png)
+
 **Search**: press ⌘K (Ctrl+K, or `/`) anywhere to jump to a page, a Settings tab, a category
 or an account, or to sync or switch between light and dark.
 

@@ -31,12 +31,14 @@ Net worth   tabs: Overview (history chart, buckets, accounts with inline balance
             · Months (what moved net worth each month) · Movers (how each account moved)
 Cash flow   income against spending, the savings rate, where income comes from
 Spending    by group, steady or swingy, every category with how it moves
+Plan        net worth and the goal in the years ahead, with sliders that start at what the
+            last months measured
 Settings    tabs down the side: Connection · Banks · Accounts · Net worth · Categories ·
             Appearance · Data & privacy
 Onboarding  full screen, first run only
 ```
 
-Net worth, Cash flow and Spending sit under a small caps "Finances" heading in the sidebar
+Net worth, Cash flow, Spending and Plan sit under a small caps "Finances" heading in the sidebar
 (hidden in the rail, where a gap keeps the group apart).
 
 Navigation is a left sidebar, 232px with icons and labels, collapsible to a 64px icon rail
@@ -333,6 +335,82 @@ asks for a longer range.
     then "Show all N" unless a filter is on (then every match). Each row: name, a month,
     share, a sparkline (series 1) and the word as a pill with its number, or "not enough
     months"; a click shows the category in the chart's place, scrolled into view.
+
+### Plan
+
+Where this is heading, and what would change it. The plan starts from what was measured
+over the last complete months (12 by default): a month's income, spending and where the
+saving went. Each slider says what was measured under it. Two figures may not be the
+budget's own: inflation (2% until changed), and the assets' return, which is the measured
+one only when the months cover three years and 5% a year otherwise.
+
+- **Head**: "The next 10 years" (follows the Years slider) with an "i" on how the plan is
+  worked out, and on the right the pills "Today's money · With inflation" with their own
+  "i". Today's money (the default) takes the rise of prices out of the figures ahead.
+- **Tiles**: Net worth in N years (under it "150,433.45€ today", or "+104,158.90€ against
+  what was measured" once a slider is moved), Saved a month ("58% of what comes in"), Goal
+  reached ("May 2028", "reached", "not in 10 years"; under it the goal and its target, and
+  "3 months late" or "2 months early" against the date of YNAB's target when it has one),
+  Financial independence (the month 4% of net worth a year covers the spending).
+- **What if** (a card on the left, the first thing on a narrow window): the sliders in
+  small caps groups, a hairline between them, in this order: Each month, Assets, The
+  goal, How far, and Returns, which is folded. *Each month*: Income and Spending, as a change in percent with the
+  amount it makes ("5,394.72€ · +8%"). *Assets*: Ends up in assets, what was put into them less what was taken out,
+  as an amount and its share of what is saved ("501.00€ · 29%", under it "of what you save
+  · measured 500.00€ in, 100.00€ out a month"). Shares that vest and are sold pass through
+  assets, so what went in can be more than was saved: the slider carries what was left
+  there, and the line under it keeps both figures. Below nothing, assets give money back
+  ("-300.00€", "assets give back · measured …"). The slider ends at all that is
+  saved ("1,700.00€ · 100%"): no more can end up in assets than was not spent, and the
+  end moves with the Income and Spending sliders. Under it, in text-2, the sum: "Left in the
+  budget: 1,700.00€ saved − 501.00€ into assets = 1,199.00€ a month" ("+ 300.00€ out of
+  assets" when they give back; ", made up from cash" when it is negative). *The goal*:
+  Goes to the goal, a share of that ("17% · 203.83€", under it "of the 1,199.00€ left in
+  the budget · measured 200.00€ a month"), so it fits whatever the assets take.
+  Under the goal's slider one folded row, "ONCE REACHED  nothing
+  changes" and a chevron, opens two switches, both off until flipped since nothing in a
+  budget says what a goal is for: "Its money is spent" (what it holds leaves net worth
+  the month after it is reached, and its line in the goal's chart ends there) and "Its
+  share goes to assets" (what it took a month is invested from then on). A line under
+  them says it in the plan's own figures: "Once it is reached in Mar 2029: 12,000.00€
+  leaves net worth, and 150.00€ a month goes to assets." The folded row reads "spent ·
+  share to assets". "Reset all" turns them off. *How far*: Years ahead ("until Nov 2036"), always in sight: it is the slider played
+  with most. *Returns*: one row, "RETURNS  assets 5.0% · inflation 2.0%" and a chevron,
+  that opens Assets return, Savings interest and Inflation on a click (Enter too) and stays
+  as it was left. Under each slider one faint line with what was measured. The assets'
+  return says only "measured over the last 3.0 years" or "a default: too little measured";
+  an "i" next to its name tells the rest: what the assets returned and over how long, that
+  a return needs three years of months to be used and 5% a year stands in until then
+  ("Pick 3Y or All under Measured over to start from your own return"), or that the slider
+  ends before the figure. A slider that was moved gets a small undo arrow before its
+  value that puts that one back, and "Reset all" (ghost, small, the same arrow) shows in
+  the card's title row once anything is moved. Each track carries a tick where the slider
+  started; between the tick and the thumb the track is a clearer grey when it was moved
+  down and the fill a paler accent when it was moved up, so how far it is from what was
+  measured shows at a glance. At the bottom "Measured over" with the pills `6M 1Y 3Y All`
+  and "12 complete months, Nov 2025 – Oct 2026". The goal's slider is not there without a
+  goal, nor Savings interest without savings.
+- **Net worth** (a card on the right) with the pills "Total · By type". Total: what was
+  ("So far", text-2), the plan (accent, its end labelled), a soft accent band for assets
+  returning two points more or less a year, and, once a slider is moved, the plan of what was
+  measured as a dashed text-3 line with its own end label. By type: assets, savings and cash
+  stacked from zero in their series colours, what was and what is planned in one run. A
+  dashed vertical line marks today. The tooltip names the month and lists the lines of that
+  day, then the range or the total.
+  Under the chart one faint line checks the plan against the past: "Checked against your
+  past: measured up to Oct 2025, this plan said 141,200.00€ for Oct 2026. It was
+  148,900.00€, 5.5% more." ("about that" within half a percent). It follows the months
+  measured, not the sliders, and is not there for a budget younger than a year and a half.
+- **The goal** (a card under it, only with a goal): its name, "12,400.00€ of 20,000.00€ ·
+  62%", then what it held, where the plan takes it and its target as a line across. A goal
+  that is reached stays at its target, and the chart looks no further than a year past that
+  month. It is always shown as its category will read: the target is a fixed amount.
+
+Moving a slider changes the tiles, the words and the charts in place; the lines follow the
+thumb (120ms). What was moved is still there after a sync and on the next visit, and a
+slider left alone follows what the months measure. Sliders are Quasar's, in the accent on a
+surface-2 track (`yul-slider`). Before the budget has a complete month, an empty state says
+the plan starts from one.
 
 ### Settings
 

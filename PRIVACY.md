@@ -17,7 +17,7 @@ When you run a command or use the web app, YNAB Unlinked may read the following 
 - Transactions
 - Payees
 - Categories, with their groups, targets and notes
-- Months, with their notes and totals
+- Months, with their notes and totals, and what each category held in the last 36
 
 It also writes data back to YNAB on your behalf:
 
@@ -66,7 +66,7 @@ If you have an old configuration created before version `0.7.0`, a legacy file m
 
 ### Local transaction store
 
-YNAB Unlinked also keeps a local copy of your budget's transactions (split lines included), accounts, categories and month notes, kept in sync with YNAB, plus an activity log of what it did (imports, reconciliations, balance adjustments). It is a SQLite file named `store.sqlite` in your user data directory (on macOS the same directory as the configuration, on Linux typically `~/.local/share/ynab-unlinked/`, on Windows `%LOCALAPPDATA%\committhatline\ynab-unlinked\`). It is not encrypted either, and `yul config reset` deletes it.
+YNAB Unlinked also keeps a local copy of your budget's transactions (split lines included), accounts, categories (and what they held in past months) and month notes, kept in sync with YNAB, plus an activity log of what it did (imports, reconciliations, balance adjustments). It is a SQLite file named `store.sqlite` in your user data directory (on macOS the same directory as the configuration, on Linux typically `~/.local/share/ynab-unlinked/`, on Windows `%LOCALAPPDATA%\committhatline\ynab-unlinked\`). It is not encrypted either, and `yul config reset` deletes it.
 
 ### Local web app
 

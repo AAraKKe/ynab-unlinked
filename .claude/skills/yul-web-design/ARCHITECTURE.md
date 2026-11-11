@@ -32,6 +32,7 @@ src/ynab_unlinked/
     finance.py           where a period's money came from and went: Flows, Rules, period() (2.8)
     cashflow.py          income and spending by month, category trends and volatility (2.9)
     update.py            a newer yul on PyPI and how this install gets it (2.10)
+    plan.py              what the last months measured, carried forward month by month (2.11)
   entities/              parsers, now with sniff() and a LoaderSpec per package (2.4)
   config/                V1..V4, migrations (2.6)
   store/                 SQLite transaction store and sync (2.7)
@@ -621,7 +622,9 @@ activity; the caller decides what is worth an entry. The schema steps are
 and `transactions_with_knowledge(budget_id, since_date=None) -> tuple[list[TransactionDetail], int]`,
 and `transaction_exists(budget_id, transaction_id) -> bool` (False on a 404, other errors raise),
 and `categories(budget_id) -> list[CategoryGroupWithCategories]` (GET /categories, every sync),
-and `months(budget_id) -> list[MonthSummary]` (GET /months, every sync, deleted left out).
+and `months(budget_id) -> list[MonthSummary]` (GET /months, every sync, deleted left out),
+and `month(budget_id, month) -> MonthDetail` (GET /months/{month}: every category as it stood
+in that month).
 
 Migration 0006 adds `transactions.category_id` and the `subtransactions` and `categories`
 tables, and empties `sync_state`, so the next sync is a full one that fills them in.
@@ -632,6 +635,15 @@ transfer made from a split line without a transfer account, so `Store.lines` giv
 split's account through this column (a full sync fills it in). A full sync flags deleted every row it did
 not receive (`_tombstone_missing`), so a delete a delta missed leaves the copy; migration 0009
 forces one more full sync for that.
+Migration 0010 adds `category_months` (month, category, budgeted, activity, balance) and
+`fetched_months`: what every category held in each of the `store.PAST_MONTHS` (36) months
+before the current one. YNAB sends one month per request, so a sync asks only for the past
+months it does not hold (all of them on a full sync) and for the last one again once a day,
+since money is still assigned in a month while it is being closed. A month edited later in
+YNAB stays as fetched until the next full sync.
+`Store.category_balances(budget_id, category_id) -> dict[dt.date, int]` gives a category's
+balance at the end of each of those months, by the month's first day; the current month is
+`StoredCategory.balance`.
 
 ```python
 # core/history.py
@@ -784,6 +796,76 @@ def restart_command(arguments) -> list[str]           # [sys.executable, "-m", "
   when it fails, and when it worked but the version on disk is not newer than `current` (an
   install pinned to a version): the app never restarts into the same yul.
 
+### 2.11 Plan (`core/plan.py`)
+
+```python
+WITHDRAWAL_RATE = 0.04; RETURN_BAND = 0.02; DEFAULT_INFLATION = 0.02
+DEFAULT_RETURN = 0.05; MIN_RETURN_MONTHS = 36; MONTH_CAP = 0.5
+
+@dataclass(frozen=True)
+class Position: cash; savings; assets          # today, debts off the cash that pays them; total
+@dataclass(frozen=True)
+class Goal: name; balance; target; target_date: dt.date | None
+@dataclass(frozen=True)
+class Assumptions:                             # a month from here on
+    income; spending                           # milliunits a month
+    to_assets                                  # share of what comes in that ends up in assets
+    from_assets                                # milliunits a month assets give back
+    to_savings; to_goal                        # shares of what stays in the budget
+    assets_return; savings_return; inflation   # a year
+    goal_spent; goal_to_assets                 # once the goal is reached, off by default
+    saving, savings_rate, into_assets
+    stays                                      # saving - into_assets + from_assets
+@dataclass(frozen=True)
+class BucketMonth: start; own; gain            # one month of a bucket, for its return
+@dataclass(frozen=True)
+class Return: rate; years                      # a year, time weighted; how long measured
+@dataclass(frozen=True)
+class Seen: put_in; taken_out; assets: tuple[BucketMonth, ...]; savings: tuple[BucketMonth, ...]
+@dataclass(frozen=True)
+class Fit: start; end; months; assumptions; assets_return: Return | None
+    savings_return: Return | None; goal_pace: float | None      # None: not measured
+    put_in; taken_out                          # into and out of assets, a month
+    trusts_return                              # assets moved, over MIN_RETURN_MONTHS
+
+def see(store, budget_id, rules, buckets, start, end) -> Seen
+    # blocking, over start..end. put_in / taken_out: transfers between an asset and another
+    # bucket (between two assets: neither). assets / savings: each month.
+def yearly_return(months: Sequence[BucketMonth]) -> Return | None
+    # each month's gain over (start + own / 2), compounded and brought to a year; a month
+    # that held nothing or moved by more than MONTH_CAP of it is left out
+def fit(period: Period, buckets: Mapping[str, Bucket], goal_balances=None, seen=None) -> Fit
+    # whole months. Income and spending are the period's a month. What ends up in assets
+    # is put_in less taken_out (shares that vest and are sold pass through): to_assets when
+    # they took money, over the income (0..1); from_assets when they gave it back. Fit keeps
+    # put_in and taken_out as they were, for the words. What stays
+    # goes to savings and cash as the money that stayed in each did (saved + set aside +
+    # transfers; one drawn from takes none; debt counts as cash). to_goal is goal_pace over
+    # what stays (0..1). assets_return is what assets returned over the months when
+    # those are MIN_RETURN_MONTHS or more (Fit.trusts_return), DEFAULT_RETURN otherwise.
+def goal_pace(balances: Mapping[dt.date, int], months: Sequence[dt.date]) -> float | None
+    # from the end of the month before `months`, else from the first month with a balance
+
+@dataclass(frozen=True)
+class Step: month; cash; savings; assets; prices; goal: float | None     # total
+@dataclass(frozen=True)
+class Projection: steps (steps[0] is today); goal_month: int | None; free_month: int | None
+
+def project(position, assumptions, months, goal=None) -> Projection
+    # a month at a time: income and spending rise with inflation; savings and assets grow;
+    # assets take their share of the income and give back from_assets (never more than they
+    # hold); what stays goes to savings and cash, and the goal takes its share of it until
+    # it holds its target and stays there; a month that leaves the budget short (more put
+    # into assets than is saved and comes back, or more spent than earned) takes it
+    # from cash, then savings, then assets, then cash goes into the red. Amounts are in the
+    # money of their month: divide by Step.prices for today's. free_month: WITHDRAWAL_RATE
+    # of net worth pays a year of spending. goal_spent: the month after the goal is
+    # reached what it holds leaves net worth (savings, then cash, then assets) and
+    # Step.goal is None from then on. goal_to_assets: from that month its share of what
+    # stays goes to assets.
+def date_after(day, months) -> dt.date         # the same day, the month's last when shorter
+```
+
 ## 3. Web app (`web/`, extra `web`)
 
 ```
@@ -826,7 +908,8 @@ web/
   ynab.py              fetch_budgets(token), load_budget(client, id) -> Budget,
                        stored_accounts(sdk accounts), fallback_accounts(config)
   paths.py             every page's path (HOME_PATH, IMPORT_PATH, RECONCILE_PATH, NETWORTH_PATH,
-                       CASHFLOW_PATH, SPENDING_PATH, SETTINGS_PATH, ONBOARDING_PATH),
+                       CASHFLOW_PATH, SPENDING_PATH, PLAN_PATH, SETTINGS_PATH,
+                       ONBOARDING_PATH),
                        NiceGUI-free for the data modules
   finances.py          pure: RANGES, RANGE_MONTHS, months_range (whole months), period_title,
                        rules(config, stored) (closed accounts too), category_names, earliest,
@@ -875,6 +958,10 @@ web/
                        category_months_options (bars and a dashed Average line),
                        histogram_options (slanted whole unit slices), chart(): the charts of
                        Cash flow and Spending
+    plan_chart.py      worth_options (so far, the plan, as measured dashed, the range as a
+                       band), types_options (stacked by bucket), goal_options (to its target
+                       line): the Plan's charts, each series given one value per day of a
+                       shared axis and None where it has none
     category_picker.py category_picker(groups, on_pick, *, label, marker): a button opening
                        a menu of groups and categories with a search field on top
   views/
@@ -908,6 +995,22 @@ web/
       data.py          DEFAULT_RANGE, CashFlowPage, load, percent, rate_change, runway,
                        runway_text, spending_hint, complete_note
       view.py          CashFlowView and the view
+    plan/              /plan        tiles, the sliders, net worth ahead, the goal
+      data.py          WINDOWS, CHECK_MONTHS, CHECK_MIN_MONTHS, KNOBS (Knob: key, label,
+                       low, high, step), SECTIONS, RETURNS, SWITCHES (key -> label: what
+                       comes after the goal), Knobs, mark(knob, value, high=None),
+                       ceiling(fit, knobs) (all that is saved, as a share of income:
+                       where the assets' slider ends), measured(fit),
+                       with_changes(start, changes), moved, assumptions(fit, knobs), Check
+                       (since, until, said, was, off), PlanPage, Past, window_months, load,
+                       Plan, build(page, fit, changes), worth, Timeline (behind, ahead,
+                       until), timeline, by_type, goal_so_far, goal_ahead, goal_months, and
+                       the words (knob_value, knob_hint, end_hint, saving_hint, goal_value,
+                       goal_hint, free_value, stays_note, return_note, returns_summary,
+                       after_summary, after_note,
+                       check_note, measured_note)
+      view.py          PlanView (render reads the store; update() puts another plan on the
+                       page that is there) and the view
     spending/          /spending    tiles, by group, steady or swingy, categories
       data.py          DEFAULT_RANGE, SHOWN, WORDS (Word: text, pill kind, hint), ORDER,
                        UNRATED, load, word, spark, share, matches, filtered, MixPart,
@@ -1060,8 +1163,8 @@ async def networth_view(args: PageArguments) -> None:  # the parameter is option
   keep what the user is editing.
 - `shell.on_refresh(owner, handler=None, *, automatic=True)`: how the view on screen is
   drawn again while `owner` exists. `handler` replaces the rebuild, so the view keeps what
-  the user set: Cash flow and Spending pass their `render` (range, filters, the open
-  category), Net worth a no-op (its own tick follows the sync and keeps tab, range and
+  the user set: Cash flow, Spending and Plan pass their `render` (range, filters, the open
+  category, the sliders), Net worth a no-op (its own tick follows the sync and keeps tab, range and
   selection). `automatic=False` leaves the view alone after a sync nobody asked for:
   Reconcile, where balances are typed.
 - `shell.command(key, title, path, *, icon, hint="", keywords="")`: a place in the command
@@ -1311,7 +1414,41 @@ Cash flow: `range-{key}`, `cf-income`, `cf-spending`, `cf-rate`, `cf-runway`, `c
 `detail-word`, `detail-figure`, `detail-set-aside` (a lumpy category), `detail-chart`,
 `detail-stats`, `detail-histogram` (not for a lumpy one); `sp-so-far` (the range is the
 running month), `sp-dot-key`.
-Sidebar: `nav-group-finances` above `nav-networth`, `nav-cashflow`, `nav-spending`.
+Sidebar: `nav-group-finances` above `nav-networth`, `nav-cashflow`, `nav-spending`,
+`nav-plan`.
+
+#### Plan
+
+`plan-title`, `plan-info`, `money-{today|future}`, `money-info`; tiles `plan-end`,
+`plan-saving`, `plan-goal`, `plan-free`; `plan-knobs`, `plan-reset` ("Reset all", hidden until
+a slider is moved), `knob-{key}` (the row), `plan-{key}` (its `ui.slider`, with `--mark` in
+its style: where it started, 0 to 100), `plan-{key}-value`, `plan-{key}-reset` (hidden while
+the slider is where it started), with key one of `income`, `spending`, `net_assets`,
+`to_goal` (only with a goal), `assets_return`, `plan-stays` (the sum under the assets' slider),
+`plan-returns` (the heading that opens the returns, `aria-expanded`), `plan-returns-summary`,
+`plan-returns-body`, `plan-assets_return-info` and its `-note`, `plan-after` (the heading
+that opens what comes after the goal, only with a goal), `plan-after-summary`,
+`plan-after-body`, `plan-goal_spent` and `plan-goal_to_assets` (switches, `aria-checked`),
+`plan-after-note`,
+`savings_return` (only with savings), `inflation`, `years`; `window-{6M|1Y|3Y|All}`,
+`plan-months`; `grouping-{total|type}`, `plan-chart`, `plan-check` (only when the budget goes
+back far enough); `plan-goal-card`, `plan-goal-chart` (only with a goal); `plan-empty`.
+
+What the user set is kept per browser under `yul.plan` (`window`, `money`, `grouping`,
+`returns` and `after`: whether those groups are open, `changes`: only the sliders moved
+and the switches flipped, by key), so
+a slider left alone follows what the months
+measure the next time. A slider move calls `PlanView.update()`: the tiles, the words and
+the charts' options change in place, nothing is rebuilt. A slider starts exactly on what
+was measured (`measured` only keeps it inside the range) and snaps to its steps once it is
+moved (`with_changes`). The assets' slider ends at `ceiling()`: `PlanView._place` sets its
+`max` and its `--mark` on every update, since both move with income and spending, and
+`build` keeps the knob under it.
+
+The check (`PlanPage.check`) is the plan as `load` would have made it `CHECK_MONTHS` (12)
+ago, with the same window and nothing read after that day, projected to the end of the last
+complete month and set against what net worth was then. It needs `CHECK_MIN_MONTHS` (6)
+months measured before that day. It ignores the sliders: it checks the measuring.
 
 #### Onboarding
 
