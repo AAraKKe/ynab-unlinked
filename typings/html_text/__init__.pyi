@@ -1,5 +1,5 @@
 # The part of html_text yul uses. The package is typed, but its signature names lxml's
-# HtmlElement and lxml ships no types, so pyright sees that parameter as unknown.
+# HtmlElement and lxml ships no types, so a type checker sees that parameter as unknown.
 from collections.abc import Iterable
 
 def extract_text(

@@ -113,7 +113,7 @@ same change. Never update a document to describe something you did not build.
   `Store.sync` with the stub (see `seed` in `test_reconcile.py`). The keychain is a fail
   backend by default; `memory_keychain` when a test needs one.
 - Run `uv run pytest -q tests/web` while iterating, the whole suite and
-  `uv run poe check` (pyright strict on src) before you finish.
+  `uv run poe check` (ty, strict on src) before you finish.
 
 ## Looking at it
 

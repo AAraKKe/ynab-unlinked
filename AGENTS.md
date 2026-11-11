@@ -48,7 +48,8 @@ src/ynab_unlinked/
                      `Budget` from YNAB's answer.
   web/               NiceGUI app behind `yul app`, only importable with the `web` extra.
 tests/               Mirrors `src`. Fixtures in `tests/assets`, helpers in `tests/helpers`.
-typings/             Local stubs pyright reads for the untyped parts of pyexcel and html_text.
+typings/             Local stubs ty reads (`environment.extra-paths`) for the untyped parts of
+                     pyexcel and html_text.
 changelog/           Towncrier fragments, each named after the PR that made it.
 .claude/skills/      Project skills. `yul-web-design/` holds the web app's architecture
                      contract (ARCHITECTURE.md) and design (DESIGN.md).
@@ -98,7 +99,7 @@ Tasks are `[tool.poe.tasks]` in `pyproject.toml` (`uv run poe` lists them).
 
 ```bash
 uv run poe cov               # tests with coverage, accepts pytest args (-k name)
-uv run poe check             # lint + format check + pyright (strict on src); check-all for a full report
+uv run poe check             # lint + format check + ty (strict on src); check-all for a full report
 uv run poe fix               # ruff format + autofix
 uv run poe tc-check          # verify a changelog fragment exists for the branch, named after its PR
 uv run yul app               # run the web app from the checkout

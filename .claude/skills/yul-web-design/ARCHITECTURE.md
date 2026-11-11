@@ -54,8 +54,8 @@ Rules:
   `from ynab_unlinked.config import LatestConfig` (a type alias to the newest version).
   `LatestConfig = ConfigV4`. Read loader accounts through `config.entity(name)`, not a field.
 - Every change adds a towncrier fragment `changelog/+<slug>.<type>.md`.
-- `uv run poe check` (ruff, format, pyright) and `uv run poe cov` must pass before a
-  task is done. Pyright is strict about `src`; keep it green.
+- `uv run poe check` (ruff, format, ty) and `uv run poe cov` must pass before a
+  task is done. ty checks `src` with the strict rules of `[tool.ty]`; keep it green.
 - No commit trailers of any kind.
 
 ## 2. Core contracts

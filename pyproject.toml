@@ -62,7 +62,6 @@ dev = [
   "ynab-unlinked[web]",
   "poethepoet==0.49.0",
   "ruff==0.17.4",
-  "pyright==1.1.414",
   "pytest==9.2.0",
   "pytest-cov==7.1.0",
   "pytest-mock==3.17.0",
@@ -71,12 +70,13 @@ dev = [
   "freezegun==1.5.5",
   "towncrier==26.9.0",
   "httpx==0.28.1",
+  "ty==0.0.100",
 ]
 
 [tool.poe.tasks]
 lint = { cmd = "ruff check", help = "Lint with ruff" }
 format-check = { cmd = "ruff format --check", help = "Check the formatting" }
-type-check = { cmd = "pyright src", help = "Type check src with pyright" }
+type-check = { cmd = "ty check src", help = "Type check src with ty" }
 check = { sequence = ["lint", "format-check", "type-check"], help = "Lint, format check and type check, stopping at the first failure" }
 check-all = { sequence = ["lint", "format-check", "type-check"], ignore_fail = "return_non_zero", help = "Every check even when an earlier one fails, for a full report" }
 format = { cmd = "ruff format", help = "Format with ruff" }
@@ -90,31 +90,32 @@ tc-show = { cmd = "towncrier build --draft", help = "Preview the next changelog"
 tc-build = { cmd = "towncrier build --yes", help = "Build CHANGELOG.md from the fragments" }
 release = { cmd = "python scripts/release.py", help = "Open the release PR: uv run poe release X.Y.Z [-m MESSAGE]" }
 
-[tool.pyright]
-# `src` is checked in strict mode; tests stay at the default level.
-strict = ["src"]
-exclude = [
-  "**/.vscode/**",
-  "**/__pycache__/**",
-  "**/.egg-info/**",
-  "**/.git/**",
-  "**/.mypy_cache/**",
-  "**/.pytest_cache/**",
-  "**/.venv/**",
-  "**/*.egg-info/**",
-  "dist",
-]
-ignore = [
-  "**/.vscode/**",
-  "**/__pycache__/**",
-  "**/.egg-info/**",
-  "**/.git/**",
-  "**/.mypy_cache/**",
-  "**/.pytest_cache/**",
-  "**/.venv/**",
-  "**/*.egg-info/**",
-  "dist",
-]
+[tool.ty.environment]
+# Local stubs for the untyped parts of pyexcel and html_text yul uses.
+extra-paths = ["typings"]
+
+[tool.ty.terminal]
+# A warning fails the check too.
+error-on-warning = true
+
+# `src` is strict: on top of the defaults, the rules ty leaves off or at warn, and every
+# suppression names its rule and still suppresses something. Tests stay at the default level.
+[[tool.ty.overrides]]
+include = ["src/**"]
+
+[tool.ty.overrides.rules]
+blanket-ignore-comment = "error"
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
+missing-type-argument = "error"
+possibly-unresolved-reference = "error"
+possibly-missing-attribute = "error"
+possibly-missing-import = "error"
+dynamic-function-decorator-return = "error"
+redundant-cast = "error"
+redundant-condition = "error"
+deprecated = "error"
+division-by-zero = "error"
 
 [tool.ruff]
 line-length = 100

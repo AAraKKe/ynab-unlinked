@@ -421,8 +421,9 @@ def bank_command(spec: LoaderSpec) -> Callable[..., None]:
             for option in spec.options
         ),
     ]
-    # Typer reads the parameters from the signature and the annotations
-    command.__signature__ = inspect.Signature(parameters)  # pyright: ignore[reportFunctionMemberAccess]
+    # Typer reads the parameters from the signature and the annotations. A function takes any
+    # attribute, but typeshed does not declare `__signature__` on one.
+    command.__signature__ = inspect.Signature(parameters)  # ty: ignore[missing-attribute]
     command.__annotations__ = {parameter.name: parameter.annotation for parameter in parameters}
     command.__doc__ = spec.help
     return command
@@ -435,9 +436,10 @@ def _option_annotation(option: LoaderOption) -> Any:
     if option.integer:
         return Annotated[int | None, flags]
     if choices := [choice for choice in option.choices or () if choice != AUTO]:
-        # An enum is what Typer lists as `<es|en|pt>`; left out, the value is read from the file
-        values = StrEnum(option.key.title(), {choice: choice for choice in choices})
-        return Annotated[values | None, flags]  # pyright: ignore[reportInvalidTypeForm]
+        # An enum is what Typer lists as `<es|en|pt>`; left out, the value is read from the file.
+        # It is built from the bank's choices at runtime, so it is no type a checker can read.
+        values = StrEnum(option.key.title(), {choice: choice for choice in choices})  # ty: ignore[mismatched-type-name]
+        return Annotated[values | None, flags]  # ty: ignore[invalid-type-form]
     return Annotated[str | None, flags]
 
 

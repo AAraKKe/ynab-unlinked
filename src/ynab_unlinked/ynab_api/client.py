@@ -63,7 +63,7 @@ class _TimedApiClient(ApiClient):
     made without a timeout.
     """
 
-    def call_api(  # pyright: ignore[reportIncompatibleMethodOverride]
+    def call_api(
         self,
         method: Any,
         url: Any,
@@ -73,7 +73,7 @@ class _TimedApiClient(ApiClient):
         _request_timeout: Any = None,
     ) -> RESTResponse:
         # The SDK leaves the parameters of `call_api` untyped
-        return super().call_api(  # pyright: ignore[reportUnknownMemberType]
+        return super().call_api(
             method,
             url,
             header_params,
