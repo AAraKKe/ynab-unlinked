@@ -156,5 +156,6 @@ never offers to: the install is from source.
   `pyproject.toml`; `__about__.py` reads it from the installed metadata), `uv run poe
   tc-build`, commit, push, `gh pr create`. The changelog build must stay the LAST change of
   the release branch (the release workflow refuses a tag while a fragment is pending). Merge,
-  then push a `yul-X.Y.Z` tag on the merge commit. The release workflow checks the tag
+  then push a signed, annotated `yul-X.Y.Z` tag on the merge commit (`origin/main`, not the
+  local checkout) with the command the release PR gives. The release workflow checks the tag
   against `uv version`, runs the checks and tests, then `uv build` and publishes to PyPI.
