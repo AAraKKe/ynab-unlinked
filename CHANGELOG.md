@@ -6,6 +6,16 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.3.3 (2026-11-11)
+
+### Polished Until It Shines
+* [[#153](https://github.com/AAraKKe/ynab-unlinked/issues/153)] Net worth calls what an account changed by on its own Growth instead of Assets, and the "i" next to Return explains, step by step, how Return and Growth can point different ways.
+* [[#154](https://github.com/AAraKKe/ynab-unlinked/issues/154)] Spending: a category is lumpy when it has an expense in few of its months (fewer than 2 of 5), whatever each one costs, so a yearly subscription with one stray purchase or something bought now and then is no longer called spiky. Spiky is now a category that keeps coming with some months far bigger than the rest.
+
+### Bugs Squashed, Peace Restored
+* [[#153](https://github.com/AAraKKe/ynab-unlinked/issues/153)] Net worth Movers shows the return of an account that was emptied during the range, such as stock sold and moved out, marked with * when it covers only part of the range.
+* [[#152](https://github.com/AAraKKe/ynab-unlinked/issues/152)] The cash flow chart names what pushed a month's income and its spending each over its own bar, no longer only the income when both were high, and its tooltip says what stood out.
+
 ## ynab-unlinked 1.3.2 (2026-11-11)
 
 ### Bugs Squashed, Peace Restored
