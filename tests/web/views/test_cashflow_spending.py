@@ -284,6 +284,29 @@ async def test_a_dot_of_the_chart_opens_its_category(synced: Store, no_sync, use
     assert texts(user, "detail-title") == "Everyday / 🏝 Vacation"
 
 
+async def test_a_filter_brings_the_chart_back_in_place_of_a_category(
+    synced: Store, no_sync, user: User
+):
+    await user.open("/spending")
+    await user.should_see(marker="sp-categories", retries=20)
+
+    user.find(marker=f"category-{RENT}").click()
+    await user.should_see(marker="category-detail", retries=20)
+    user.find(marker="group-Everyday").click()
+
+    await user.should_see(marker="sp-scatter", retries=20)
+    await user.should_not_see(marker="category-detail")
+    dots = user.find(marker="sp-scatter").elements.pop().options["series"][0]["data"]
+    assert "🏠 Rent" not in [dot["label"]["formatter"] for dot in dots]
+
+    user.find(marker=f"category-{GROCERIES}").click()
+    await user.should_see(marker="category-detail", retries=20)
+    user.find(marker="word-steady").click()
+
+    await user.should_see(marker="sp-scatter", retries=20)
+    await user.should_not_see(marker="category-detail")
+
+
 def test_a_histogram_counts_months_in_equal_slices():
     bins = spending.histogram([0, 100, 100, 600], bins=3)
 
