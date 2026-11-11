@@ -49,6 +49,7 @@ from ynab_unlinked.web.paths import HOME_PATH as HOME_PATH
 from ynab_unlinked.web.paths import IMPORT_PATH as IMPORT_PATH
 from ynab_unlinked.web.paths import NETWORTH_PATH as NETWORTH_PATH
 from ynab_unlinked.web.paths import ONBOARDING_PATH as ONBOARDING_PATH
+from ynab_unlinked.web.paths import PLAN_PATH as PLAN_PATH
 from ynab_unlinked.web.paths import RECONCILE_PATH as RECONCILE_PATH
 from ynab_unlinked.web.paths import SETTINGS_PATH as SETTINGS_PATH
 from ynab_unlinked.web.paths import SPENDING_PATH as SPENDING_PATH

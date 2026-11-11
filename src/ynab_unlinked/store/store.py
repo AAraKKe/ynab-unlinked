@@ -15,6 +15,7 @@ from ynab import (
     Account,
     ApiException,
     CategoryGroupWithCategories,
+    MonthDetail,
     MonthSummary,
     TransactionClearedStatus,
     TransactionDetail,
@@ -37,6 +38,8 @@ _BUDGET_TABLES = (
     "accounts",
     "categories",
     "months",
+    "category_months",
+    "fetched_months",
     "sync_state",
     "ghost_checks",
 )
@@ -46,6 +49,10 @@ STARTING_BALANCE_PAYEE = "Starting Balance"
 
 # YNAB allows 200 requests an hour: the ghost repair leaves most of them to the import
 GHOST_CHECKS_PER_SYNC = 50
+
+PAST_MONTHS = 36
+"""How many months before the current one the copy keeps every category's balance of. YNAB
+sends one month per request, so a sync that fetches everything makes this many."""
 
 # The CLI and the app share the file: a write waits this long for the other one to finish
 BUSY_TIMEOUT_SECONDS = 30
@@ -419,6 +426,13 @@ class Store:
         months = client.months(budget_id)
         progress.done(f"{len(months)} months received")
 
+        wanted = self._past_months_to_fetch(budget_id, months, full=knowledge is None)
+        past: list[MonthDetail] = []
+        if wanted:
+            progress.start("Fetching what the categories held in past months")
+            past = [client.month(budget_id, month) for month in wanted]
+            progress.done(f"{len(past)} past months received")
+
         progress.start("Saving to the local store")
         with self._connect() as conn:
             self._upsert_transactions(conn, budget_id, transactions)
@@ -427,6 +441,7 @@ class Store:
             self._replace_accounts(conn, budget_id, accounts)
             self._replace_categories(conn, budget_id, groups)
             self._replace_months(conn, budget_id, months)
+            self._save_past_months(conn, budget_id, past, fetched_at)
             # With two app runs on one file, an older delta can be written last: never let
             # the knowledge go back
             conn.execute(
@@ -543,6 +558,57 @@ class Store:
                 for m in months
             ],
         )
+
+    def _past_months_to_fetch(
+        self, budget_id: str, months: Sequence[MonthSummary], *, full: bool
+    ) -> list[dt.date]:
+        """The past months whose categories to ask YNAB for, newest first.
+
+        The `PAST_MONTHS` before the current one that the copy does not hold; all of them on
+        a full sync. The last one is asked for again once a day: money is still assigned in
+        a month after it ended, while it is being closed.
+        """
+        today = dt.date.today()
+        ended = sorted((m.month for m in months if m.month < today.replace(day=1)), reverse=True)
+        ended = ended[:PAST_MONTHS]
+        if full or not ended:
+            return ended
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT month, fetched_at FROM fetched_months WHERE budget_id = ?", (budget_id,)
+            ).fetchall()
+        held = {
+            dt.date.fromisoformat(row["month"]): dt.datetime.fromisoformat(row["fetched_at"])
+            for row in rows
+        }
+        last = ended[0]
+        return [
+            month
+            for month in ended
+            if month not in held or (month == last and held[month].astimezone().date() < today)
+        ]
+
+    @staticmethod
+    def _save_past_months(
+        conn: sqlite3.Connection, budget_id: str, months: Sequence[MonthDetail], fetched_at: str
+    ) -> None:
+        for month in months:
+            key = (budget_id, month.month.isoformat())
+            conn.execute("DELETE FROM category_months WHERE budget_id = ? AND month = ?", key)
+            conn.executemany(
+                "INSERT INTO category_months (budget_id, month, category_id, budgeted, "
+                "activity, balance) VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    (*key, str(c.id), c.budgeted, c.activity, c.balance)
+                    for c in month.categories
+                    if not c.deleted
+                ],
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO fetched_months (budget_id, month, fetched_at) "
+                "VALUES (?, ?, ?)",
+                (*key, fetched_at),
+            )
 
     @staticmethod
     def _replace_categories(
@@ -668,6 +734,18 @@ class Store:
                 (budget_id,),
             ).fetchall()
         return {dt.date.fromisoformat(row["month"]): row["note"].strip() for row in rows}
+
+    def category_balances(self, budget_id: str, category_id: str) -> dict[dt.date, int]:
+        """What a category held at the end of each past month the copy keeps (`PAST_MONTHS`),
+        keyed by the month's first day, oldest first. The current month is not in it: that is
+        `StoredCategory.balance`."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT month, balance FROM category_months WHERE budget_id = ? "
+                "AND category_id = ? ORDER BY month",
+                (budget_id, category_id),
+            ).fetchall()
+        return {dt.date.fromisoformat(row["month"]): row["balance"] for row in rows}
 
     def lines(
         self,

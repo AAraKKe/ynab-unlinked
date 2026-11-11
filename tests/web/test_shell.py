@@ -79,6 +79,7 @@ async def test_the_finance_pages_sit_under_one_heading(user: User):
             "nav-networth",
             "nav-cashflow",
             "nav-spending",
+            "nav-plan",
             "nav-settings",
         )
     ]

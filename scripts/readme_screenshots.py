@@ -1,6 +1,7 @@
 """Screenshots of every page of `yul app` for the README, taken on a made-up budget.
 
     uv run --with playwright python scripts/readme_screenshots.py
+    uv run --with playwright python scripts/readme_screenshots.py plan cashflow   # only these
 
 The app runs on a scratch home (`YUL_HOME` in a temporary folder, no keychain) with a YNAB
 client that answers from the fake budget below, so it never talks to YNAB or touches your
@@ -73,6 +74,11 @@ GROUPS: dict[str, list[str]] = {
     "Savings goals": ["Emergency fund"],
 }
 READY = "Inflow: Ready to Assign"
+GOAL = "Emergency fund"
+GOAL_TARGET = 20_000_000
+GOAL_NOW = 12_400_000
+GOAL_A_MONTH = 350_000
+"""The goal the Plan follows: what it holds, its target and what it grew by each past month."""
 NOTES = {
     (2024, 7): "Summer in Portugal",
     (2025, 3): "Annual bonus",
@@ -298,6 +304,7 @@ def serve(home: Path) -> None:
         CategoryGroupWithCategories,
         CurrencyFormat,
         DateFormat,
+        MonthDetail,
         MonthSummary,
         PlanDetail,
         PlanSummary,
@@ -370,7 +377,9 @@ def serve(home: Path) -> None:
                     internal=group.startswith("Internal"),
                     budgeted=0,
                     activity=0,
-                    balance=0,
+                    balance=GOAL_NOW if name == GOAL else 0,
+                    goal_type="TB" if name == GOAL else None,
+                    goal_target=GOAL_TARGET if name == GOAL else None,
                     deleted=False,
                 )
                 for name in names
@@ -417,6 +426,20 @@ def serve(home: Path) -> None:
 
         def months(self, budget_id: str) -> list[MonthSummary]:
             return months
+
+        def month(self, budget_id: str, month: dt.date) -> MonthDetail:
+            ago = (today.year - month.year) * 12 + today.month - month.month
+            goal = next(c for group in groups for c in group.categories if c.name == GOAL)
+            held = goal.model_copy(update={"balance": max(GOAL_NOW - GOAL_A_MONTH * ago, 0)})
+            return MonthDetail(
+                month=month,
+                income=0,
+                budgeted=0,
+                activity=0,
+                to_be_budgeted=0,
+                deleted=False,
+                categories=[held],
+            )
 
         def transactions(self, budget_id, account_id=None, since_date=None):
             return [
@@ -516,6 +539,7 @@ SHOTS: list[tuple[str, str, str | None]] = [
     ("cashflow", "/cashflow", None),
     ("spending", "/spending", None),
     ("spending-category", "/spending", "Eating out"),
+    ("plan", "/plan", None),
     ("settings", "/settings?tab=accounts", None),
 ]
 
@@ -555,7 +579,7 @@ def sabadell_statement(today: dt.date, folder: Path) -> Path:
     return path
 
 
-def shoot() -> None:
+def shoot(only: list[str]) -> None:
     from playwright.sync_api import sync_playwright
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -571,6 +595,8 @@ def shoot() -> None:
         page.wait_for_load_state("networkidle")
         time.sleep(4)  # the first sync
         for name, path, click in SHOTS:
+            if only and name not in only:
+                continue
             page.goto(f"{base}{path}")
             page.wait_for_load_state("networkidle")
             time.sleep(2.5)  # charts animate in
@@ -610,7 +636,7 @@ def main() -> None:
                     break
                 except OSError:
                     time.sleep(0.2)
-            shoot()
+            shoot(sys.argv[1:])
         finally:
             server.terminate()
             server.wait()
