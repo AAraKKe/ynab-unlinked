@@ -305,7 +305,7 @@ asks for a longer range.
     "Each month" (bars, series 1, a dashed "Average" line, both in the legend); the numbers
     in a row (average, median, lowest month, highest month, spread); "How the months spread"
     (a histogram in six slices, whole unit labels slanted 45°, series 5). A new range updates
-    it in place; the back arrow brings the chart back.
+    it in place; the back arrow, or a click on a group or a word, brings the chart back.
   - **How it moves**: a card with the four words as tiles, each its pill and a sentence with
     examples and its threshold ("Moves under 25%."); a click shows only that kind (the tile
     accent bordered), again shows every kind. A faint line says how the number is worked out.
