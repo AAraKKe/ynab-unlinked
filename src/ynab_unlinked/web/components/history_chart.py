@@ -237,7 +237,7 @@ def history_chart(
 def set_options(chart: ui.echart, options: dict[str, Any]) -> None:
     """Replace the chart's option, for a new range, grouping or theme."""
     # NiceGUI types an echart's option as a bare `dict`
-    current = cast(dict[str, Any], chart.options)  # pyright: ignore[reportUnknownMemberType]
+    current = cast(dict[str, Any], chart.options)
     current.clear()
     current.update(options)
     chart.update()

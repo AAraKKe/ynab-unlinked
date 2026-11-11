@@ -113,7 +113,7 @@ class View:
     in `order`."""
 
     def resolved_subtitle(self) -> str:
-        return self.subtitle() if callable(self.subtitle) else self.subtitle
+        return self.subtitle if isinstance(self.subtitle, str) else self.subtitle()
 
 
 _VIEWS: dict[str, View] = {}
@@ -325,7 +325,7 @@ def refresh_view(*, automatic: bool = False) -> None:
             result = target.handler()
             if inspect.isawaitable(result):
                 # NiceGUI returns the task as a bare `asyncio.Task`
-                background_tasks.create(result, name="yul view refresh")  # pyright: ignore[reportUnknownMemberType]
+                background_tasks.create(result, name="yul view refresh")
             return
     shell.pages.refresh()
 

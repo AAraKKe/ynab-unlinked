@@ -556,7 +556,7 @@ def sabadell_statement(today: dt.date, folder: Path) -> Path:
 
 
 def shoot() -> None:
-    from playwright.sync_api import sync_playwright  # pyright: ignore[reportMissingImports]
+    from playwright.sync_api import sync_playwright
 
     OUT.mkdir(parents=True, exist_ok=True)
     base = f"http://127.0.0.1:{PORT}"

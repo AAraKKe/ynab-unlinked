@@ -66,7 +66,7 @@ class Ynab:
 def waiting_for_sync(mocker: MockerFixture) -> asyncio.Event:
     """Set once a resync or a reset starts waiting for the running sync to end."""
     entered = asyncio.Event()
-    original = AppState._sync_ended  # pyright: ignore[reportPrivateUsage]
+    original = AppState._sync_ended
 
     async def sync_ended(self: AppState) -> None:
         entered.set()

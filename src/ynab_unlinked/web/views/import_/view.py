@@ -172,7 +172,7 @@ class ImportFlow:
             if item.status is Status.UNSUPPORTED:
                 continue
             # NiceGUI returns the task as a bare `asyncio.Task`
-            background_tasks.create(self.detect(item), name=f"yul detect {item.name}")  # pyright: ignore[reportUnknownMemberType]
+            background_tasks.create(self.detect(item), name=f"yul detect {item.name}")
         self.draw_footer()
 
     async def detect(self, item: ImportFile) -> None:
@@ -589,7 +589,7 @@ async def import_view() -> None:
     flow = ImportFlow()
     storage[_FLOW_KEY] = flow
     # NiceGUI types the handler as a bare `Callable`
-    context.client.on_delete(flow.close)  # pyright: ignore[reportUnknownMemberType]
+    context.client.on_delete(flow.close)
 
     root = flow.render()
     shell.on_drop(flow.add_files, owner=root)

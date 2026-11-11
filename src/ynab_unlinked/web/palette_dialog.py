@@ -62,7 +62,7 @@ class PaletteDialog:
         if self.dialog.value:
             return
         self.commands = self.static()
-        self.input.value = ""
+        self.input.set_value("")
         self._show("")
         self.dialog.open()
         current = state()

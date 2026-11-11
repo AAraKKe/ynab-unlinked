@@ -97,7 +97,7 @@ def run(
 
     state().load()
     # NiceGUI types the handler as a bare `Callable`
-    app.on_startup(state().sync_in_background)  # pyright: ignore[reportUnknownMemberType]
+    app.on_startup(state().sync_in_background)
     root = build(token, port)
 
     if announce is not None:
@@ -105,7 +105,7 @@ def run(
         announce("Press Ctrl+C to stop it.")
 
     # NiceGUI types the root builder as a bare `Callable`
-    ui.run(  # pyright: ignore[reportUnknownMemberType]
+    ui.run(
         root,
         host=HOST,
         port=port,

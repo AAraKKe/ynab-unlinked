@@ -287,7 +287,7 @@ class AppState:
                 logger.warning("Background sync with YNAB failed: %s", error)
 
         # NiceGUI returns the task as a bare `asyncio.Task`
-        background_tasks.create(sync_logged(), name="yul store sync")  # pyright: ignore[reportUnknownMemberType]
+        background_tasks.create(sync_logged(), name="yul store sync")
 
     async def budget_accounts(self) -> list[StoredAccount]:
         """Every account of the budget, from the store once synced, from YNAB before that."""
