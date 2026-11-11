@@ -19,9 +19,8 @@ LOOK_SECONDS = 5.0
 LAST_WORDS_SECONDS = 0.6
 """How long the dialog's last line gets to reach the browser before the server stops."""
 
-HOW = (
-    "yul runs the line below, starts again and reloads this page. It takes about a minute "
-    "and changes nothing in your budget."
+CONFIRM = (
+    "The new version will be downloaded and this page refreshed once any ongoing operation is done."
 )
 BY_HAND = "This yul cannot update itself. Run this in a terminal, then start yul again:"
 FROM_SOURCE = (
@@ -116,23 +115,27 @@ async def _run(box: DialogBox, upgrade: Upgrade) -> None:
 
 
 async def update_dialog() -> None:
-    """Offer the update: what will run and one primary action, or how to do it by hand."""
+    """Offer the update: one line and one primary action, or how to do it by hand.
+
+    The confirmation does not say how yul updates itself; the command only shows where the
+    user has to run it (an install yul cannot update, a failed update).
+    """
     status = updates()
     version = status.available
     if version is None or status.updating:
         return
     upgrade = await run.io_bound(upgrade_plan, web=True)
 
-    box = dialog_box(f"Update to yul {version}", lede=f"You have yul {__version__}.")
+    box = dialog_box(f"Update to yul {version}")
     box.card.mark("update-dialog")
     with box.body:
         if upgrade.automatic:
-            ui.label(HOW).classes("yul-muted")
+            ui.label(CONFIRM).classes("yul-lede").mark("update-confirm")
         else:
             ui.label(FROM_SOURCE if upgrade.install is Install.SOURCE else BY_HAND).classes(
-                "yul-muted"
+                "yul-lede"
             ).mark("update-by-hand")
-        _command(upgrade)
+            _command(upgrade)
         ui.link("See what changed", CHANGELOG_URL, new_tab=True).classes(
             "yul-link yul-small yul-update-link"
         ).mark("update-changes")

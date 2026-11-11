@@ -993,7 +993,8 @@ web/
 
 - **Updates.** Each tab's `update_button()` asks `updates().due()` and runs `check()`; the
   button shows while `available` is set. `update_dialog()` shows `upgrade_plan(web=True)`:
-  the command and "Update and restart" when `automatic`, otherwise how to do it by hand.
+  one line (`CONFIRM`) and "Update and restart" when `automatic`, otherwise the command to
+  run by hand. The command never shows on the confirmation, only where the user must run it.
   `Updates.update()` runs `run_upgrade` off the event loop; on success `restart()` sets
   `restarting` and calls `app.shutdown()`. `run()` then, after `ui.run` returned, waits for
   NiceGUI's worker pool (a write to YNAB in flight ends first), calls
@@ -1267,7 +1268,7 @@ card), `month-pace`, `month-rate`, `month-runway`, `month-top` (where it went),
 #### Updates
 
 Sidebar: `version`, `update` (the button, hidden until a newer yul is known). Dialog:
-`update-dialog`, `update-command`, `update-changes`, `update-by-hand` (an install yul cannot
+`update-dialog`, `update-confirm`, `update-command` (by hand or after a failure only), `update-changes`, `update-by-hand` (an install yul cannot
 update), `update-cancel`, `update-run`, `update-running`, `update-done`, `update-failed`,
 `update-output` (what the command printed), `update-close`.
 

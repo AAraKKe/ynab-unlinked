@@ -56,7 +56,7 @@ async def test_a_newer_yul_puts_the_update_button_next_to_the_version(newer: Non
     assert button.props["title"] == f"yul {NEWER} is out"
 
 
-async def test_the_dialog_says_what_will_run_before_anything_does(
+async def test_the_confirmation_is_one_line_and_nothing_runs_before_it(
     newer: None, user: User, mocker: MockerFixture
 ):
     installed_with(mocker, UV_TOOL)
@@ -65,7 +65,9 @@ async def test_the_dialog_says_what_will_run_before_anything_does(
     await open_dialog(user)
 
     await user.should_see(f"Update to yul {NEWER}")
-    assert text(user, "update-command") == "uv tool upgrade ynab-unlinked"
+    assert text(user, "update-confirm") == update_dialog.CONFIRM
+    # How yul updates itself is not the user's business until they must do it by hand
+    await user.should_not_see(marker="update-command")
     user.find(marker="update-cancel").click()
     await user.should_not_see(marker="update-dialog")
     run_upgrade.assert_not_called()

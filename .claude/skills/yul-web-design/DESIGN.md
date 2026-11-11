@@ -48,9 +48,10 @@ keeps the title, search, the sync dot and the theme toggle.
 
 The sidebar ends with the version ("yul 1.1.0"). When a newer yul is out an accent
 **Update** pill sits next to it (an up arrow alone in the rail; not on a phone, where
-Settings › Data & privacy has it). A click opens a dialog: "Update to yul 1.2.0", "You have
-yul 1.1.0.", the one line yul will run, "See what changed", then Cancel and the primary
-**Update and restart**. While it runs the dialog cannot be dismissed and says "Updating
+Settings › Data & privacy has it). A click opens a dialog: "Update to yul 1.2.0", one
+line ("The new version will be downloaded and this page refreshed once any ongoing operation
+is done."), "See what changed", then Cancel and the primary **Update and restart**. It does
+not say how yul updates itself: the command only shows where the user has to run it. While it runs the dialog cannot be dismissed and says "Updating
 yul…"; then "yul 1.2.0 is installed. Starting it again…" and the page reloads by itself on
 the new version: no new tab. A failure keeps the running yul, says so, shows what the
 command printed and the line to run by hand. An install yul cannot update (from source, no
