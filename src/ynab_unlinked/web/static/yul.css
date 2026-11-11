@@ -1135,6 +1135,13 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 /* ---- net worth › months and movers, the period drawer (views/networth/periods.py, period_drawer.py) ---- */
 .yul-nwm-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 2px; }
 .yul-nwm-card { padding: 14px 16px; margin-top: 10px; }
+.yul-nwm-info { justify-content: flex-end; gap: 2px; }
+.yul-nwm-info .yul-info { width: 18px; height: 18px; }
+/* The Return explainer (views/networth/return_story.py) */
+.yul-dialog.yul-story { width: min(560px, 94vw); }
+.yul-story-step { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 14px; min-height: 172px; }
+.yul-story-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.yul-story-tiles .yul-tile-v { font-size: clamp(18px, 4.6vw, 23px); white-space: nowrap; }
 .yul-nwm-title { font-weight: 600; }
 .yul-nwm-click { cursor: pointer; outline: none; }
 .yul-nwm-click:hover, .yul-nwm-click:focus-visible { border-color: var(--border-2); }

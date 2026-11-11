@@ -223,6 +223,20 @@ def empty_state(
     return element
 
 
+def explain_button(title: str, on_click: Callable[[], Any], *, marker: str) -> ui.element:
+    """The "i" of `info_button` for an explanation too long for its note: it calls `on_click`
+    (which opens a dialog) instead."""
+    with ui.element("button").classes("yul-info").mark(marker) as trigger:
+        icon("info", 15)
+    trigger.props["type"] = "button"
+    trigger.props["title"] = title
+    trigger.props["aria-label"] = title
+    trigger.on("click", on_click)
+    # A click on the "i" must not also be a click on the card or the row it sits in
+    trigger.on("click.stop", lambda: None)
+    return trigger
+
+
 def info_button(title: str, lines: Sequence[str], *, marker: str) -> ui.element:
     """A small "i" that opens a note next to it: a title and a few short paragraphs.
 

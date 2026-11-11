@@ -19,7 +19,7 @@ from nicegui import run, ui
 from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.core.finance import Period
 from ynab_unlinked.formatter import Formatter
-from ynab_unlinked.web.components import closed_pill, glass_card, stat_tile
+from ynab_unlinked.web.components import closed_pill, explain_button, glass_card, stat_tile
 from ynab_unlinked.web.components.controls import pill_group
 from ynab_unlinked.web.components.flow_chart import months_chart, months_options
 from ynab_unlinked.web.components.history_chart import set_options
@@ -29,6 +29,7 @@ from ynab_unlinked.web.theme import KEEP_PROP, OUTSIDE_EVENT, OUTSIDE_PROP, Pale
 from ynab_unlinked.web.views.networth import flows as words
 from ynab_unlinked.web.views.networth.data import Snapshot, signed
 from ynab_unlinked.web.views.networth.period_panel import period_panel
+from ynab_unlinked.web.views.networth.return_story import show_return_story
 
 
 class PeriodTabs:
@@ -65,7 +66,13 @@ class PeriodTabs:
                 "ranges"
             )
         if tab != "months":
-            movers_tab(period, words.account_names(snapshot), self._closed(), formatter)
+            movers_tab(
+                period,
+                words.account_names(snapshot),
+                self._closed(),
+                formatter,
+                lambda: show_return_story(formatter, config.budget.currency_format, palette),
+            )
             return
         with ui.element("div").classes("yul-nwm-months").mark("months-tab") as months:
             # A click anywhere but on the chart or the panel of the month goes back to the range
@@ -175,7 +182,7 @@ def months_tab(
             hint=words.share_of_change(flows.saved, flows) or "income minus spending",
         ).mark("tile-saved")
         stat_tile(
-            "From assets",
+            "From growth",
             signed(formatter, flows.assets),
             hint=words.share_of_change(flows.assets, flows) or "markets, interest, sales",
         ).mark("tile-assets")
@@ -200,7 +207,11 @@ def months_tab(
 
 
 def movers_tab(
-    period: Period, names: dict[str, str], closed: Collection[str], formatter: Formatter
+    period: Period,
+    names: dict[str, str],
+    closed: Collection[str],
+    formatter: Formatter,
+    explain: Callable[[], Any],
 ) -> None:
     """One row per counted account, largest change first, with a bar around zero."""
     widest = words.spread(period.accounts) or 1
@@ -209,11 +220,13 @@ def movers_tab(
             ui.label("Account")
             ui.label("Change")
             ui.label("Your money").classes("yul-nwm-r")
-            ui.label("Assets").classes("yul-nwm-r")
-            ui.label("Return").classes("yul-nwm-r").props["title"] = (
-                "What the asset changes earned on the money in the account, per year over a "
-                "range longer than one. Settings › Net worth picks the accounts."
-            )
+            ui.label("Growth").classes("yul-nwm-r")
+            with ui.element("div").classes("yul-nwm-r yul-row yul-info-row yul-nwm-info"):
+                ui.label("Return").props["title"] = (
+                    "How the account itself did, shown per year when it covers more than a "
+                    "year. Settings › Net worth picks the accounts."
+                )
+                explain_button(words.RETURN_TITLE, explain, marker="return-info")
         for move in period.accounts:
             if not move.change and not move.start_balance and move.account_id in closed:
                 continue  # closed before the range: nothing to show
@@ -241,9 +254,16 @@ def movers_tab(
                     "yul-num yul-nwm-r "
                     + ("yul-good" if assets > 0 else "yul-bad" if assets < 0 else "yul-faint")
                 )
-                ui.label(words.rate_text(move, period.days)).classes("yul-num yul-nwm-r")
+                rate = ui.label(words.rate_text(move, period.days)).classes("yul-num yul-nwm-r")
+                if title := words.rate_title(move, period.days):
+                    rate.props["title"] = title
     ui.label(
-        "Your money is what you put in or took out: income, spending and transfers. Assets is "
+        "Your money is what you put in or took out: income, spending and transfers. Growth is "
         "what changed the account outside transfers: market moves, interest, sales recorded as "
-        "an adjustment. Return weighs it by how long the money was in the account."
+        "an adjustment. Return is how much the money in the account grew or shrank on its own, day "
+        "by day: money you put in or take out is not a gain or a loss."
     ).classes("yul-faint yul-small").style("margin:8px 4px 0")
+    if any(words.partial(move, period.days) for move in period.accounts):
+        ui.label(words.PART_NOTE).classes("yul-faint yul-small").style("margin:4px 4px 0").mark(
+            "part-note"
+        )

@@ -113,22 +113,57 @@ def test_months_between_covers_every_month_the_period_touches():
     ]
 
 
-@pytest.mark.parametrize(
-    ("start_balance", "flows", "gain", "expected"),
-    [
-        (100_000, [], 10_000, 0.10),
-        # Money put in halfway through counts for half of it
-        (100_000, [(dt.date(2025, 1, 16), 100_000)], 15_000, 0.10),
-        (0, [], 5_000, None),
-    ],
-    ids=["no flows", "a contribution mid period", "nothing invested"],
-)
-def test_period_return_weighs_money_by_how_long_it_was_invested(
-    start_balance, flows, gain, expected
-):
-    rate = period_return(start_balance, flows, gain, dt.date(2025, 1, 1), dt.date(2025, 1, 30))
+def day(n: int) -> dt.date:
+    return dt.date(2025, 1, n)
 
-    assert rate == (None if expected is None else pytest.approx(expected, abs=1e-3))
+
+@pytest.mark.parametrize(
+    ("start_balance", "flows", "gains", "expected"),
+    [
+        (100_000, [], [(day(30), 10_000)], (0.10, 30)),
+        # The gain is on what the account held that day, whenever the money came in
+        (100_000, [(day(16), 100_000)], [(day(30), 20_000)], (0.10, 30)),
+        # +10% then -10%, the days it was empty left out
+        (
+            100_000,
+            [(day(10), -110_000), (day(20), 50_000)],
+            [(day(5), 10_000), (day(25), -5_000)],
+            (-0.01, 21),
+        ),
+        # A gain on the day it was filled is on the money that came in
+        (0, [(day(10), 100_000)], [(day(10), 10_000)], (0.10, 21)),
+        # Money in the same day as a gain earns it, money out leaves after it
+        (1_000, [(day(10), 9_000), (day(10), -500)], [(day(10), 1_000)], (0.10, 30)),
+        # Sold and moved out, its last gain written down the day after
+        (10_000, [(day(10), -16_000)], [(day(11), 6_000)], (0.60, 10)),
+        # Shares that arrive as a gain fill it; only what they earn after counts
+        (0, [], [(day(5), 5_000), (day(20), 500)], (0.10, 26)),
+        # Never below everything
+        (100, [], [(day(5), -150), (day(10), -10)], (-1.0, 5)),
+        (0, [], [], None),
+    ],
+    ids=[
+        "no flows",
+        "a contribution",
+        "emptied and filled",
+        "filled with a gain",
+        "in and out on a gain day",
+        "gain after the sale",
+        "filled by a gain",
+        "lost more than held",
+        "nothing held",
+    ],
+)
+def test_period_return_compounds_each_days_gain_on_what_was_held(
+    start_balance, flows, gains, expected
+):
+    measured = period_return(start_balance, flows, gains, day(1), day(30))
+
+    if expected is None:
+        assert measured is None
+    else:
+        assert measured is not None
+        assert (measured.rate, measured.days) == (pytest.approx(expected[0]), expected[1])
 
 
 def test_annualised_leaves_a_year_or_less_alone_and_compounds_longer_periods():
@@ -195,7 +230,9 @@ def test_a_period_explains_the_whole_change_of_net_worth(store: Store):
         1_000_000,
         -400_000,
     )
-    assert moves[FUND].rate == pytest.approx(-400_000 / (10_000_000 + 1_000_000 * 21 / 30))
+    # What it held when the asset changed: the 10,000.00 it started with and the 1,000.00 put in
+    assert moves[FUND].rate == pytest.approx(-400_000 / 11_000_000)
+    assert moves[FUND].rate_days == 30
     assert moves[CHECKING].rate is None
     assert [spend.category_id for spend in april.spending] == ["rent", "groceries"]
 

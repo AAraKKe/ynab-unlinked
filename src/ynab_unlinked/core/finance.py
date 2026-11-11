@@ -123,8 +123,11 @@ class AccountMove:
     end_balance: int
     flows: Flows
     rate: float | None
-    """Its return over the period (money weighted) when it is followed and its assets moved;
-    not annualised."""
+    """Its time weighted return over the days of the period it held money (`period_return`),
+    when it is followed and its assets moved; not annualised."""
+    rate_days: int = 0
+    """How many days `rate` is measured over: fewer than the period's when the account held
+    no money for part of it (opened late, or emptied and filled again)."""
 
     @property
     def change(self) -> int:
@@ -233,27 +236,66 @@ def income_by_payee(lines: Iterable[Line], rules: Rules) -> list[PayeeIncome]:
     )
 
 
+@dataclass(frozen=True)
+class Return:
+    rate: float
+    """Not annualised."""
+    days: int
+    """The days it is measured over: the ones the account held money."""
+
+
 def period_return(
     start_balance: int,
     flows: Sequence[tuple[dt.date, int]],
-    gain: int,
+    gains: Sequence[tuple[dt.date, int]],
     start: dt.date,
     end: dt.date,
-) -> float | None:
-    """The modified Dietz return of an account over `start`..`end`, both included.
+) -> Return | None:
+    """The time weighted return of an account over `start`..`end`, both included.
 
-    `flows` are the money put in (positive) or taken out (negative) on each date, `gain` what
-    the asset changes added. Money counts from the start of the day it came in, so money put in late
-    in the period counts for less of it. None when there
-    was nothing invested to earn a return on.
+    `flows` are the money put in (positive) or taken out (negative) on each date, `gains` what
+    the asset changes added on each date. Each day's gain is measured against what the account
+    held that morning plus the money that came in that day (money taken out leaves after the
+    gain), and the days are compounded. Days it held nothing are left out, so emptying an
+    account and filling it again later does not break it. A gain written down after the money
+    left (the account below zero) belongs to the money it last held. A gain on an empty
+    account (shares recorded as they arrive) earns nothing: it is what fills it. None when it
+    never held money.
     """
-    days = (end - start).days + 1
-    invested = start_balance + sum(
-        amount * ((end - day).days + 1) / days for day, amount in flows if start <= day <= end
-    )
-    if invested <= 0:
+    into: dict[dt.date, int] = {}
+    out: dict[dt.date, int] = {}
+    gained: dict[dt.date, int] = {}
+    for day, amount in flows:
+        if start <= day <= end:
+            side = into if amount > 0 else out
+            side[day] = side.get(day, 0) + amount
+    for day, amount in gains:
+        if start <= day <= end:
+            gained[day] = gained.get(day, 0) + amount
+    growth, days, balance = 1.0, 0, start_balance
+    last_base = max(start_balance, 0)
+    held_since: dt.date | None = start if start_balance > 0 else None
+    for day in sorted(into.keys() | out.keys() | gained.keys()):
+        gain = gained.get(day, 0)
+        base = balance + into.get(day, 0)
+        if base > 0:
+            last_base = base
+            growth *= max(0.0, 1 + gain / base)
+        elif base < 0 and gain and last_base:
+            growth *= max(0.0, 1 + gain / last_base)
+        after = base + out.get(day, 0) + gain
+        # Days are counted between the moments it starts and stops holding money
+        if held_since is None and (base > 0 or after > 0):
+            held_since = day
+        if held_since is not None and after <= 0:
+            days += (day - held_since).days + 1
+            held_since = None
+        balance = after
+    if held_since is not None:
+        days += (end - held_since).days + 1
+    if days == 0:
         return None
-    return gain / invested
+    return Return(growth - 1, days)
 
 
 def annualised(rate: float, days: int) -> float:
@@ -296,15 +338,25 @@ def period(
     for account_id in account_ids:
         flows = per_account.get(account_id, Flows())
         start_balance, end_balance = balances[account_id]
-        rate = None
+        measured = None
         if account_id in rules.returns and flows.assets:
-            own = [
-                (line.date, line.amount)
-                for line in lines
-                if line.account_id == account_id and rules.kind(line) != "assets"
-            ]
-            rate = period_return(start_balance, own, flows.assets, start, end)
-        moves.append(AccountMove(account_id, start_balance, end_balance, flows, rate))
+            own: list[tuple[dt.date, int]] = []
+            gains: list[tuple[dt.date, int]] = []
+            for line in lines:
+                if line.account_id == account_id:
+                    kind = rules.kind(line)
+                    (gains if kind == "assets" else own).append((line.date, line.amount))
+            measured = period_return(start_balance, own, gains, start, end)
+        moves.append(
+            AccountMove(
+                account_id,
+                start_balance,
+                end_balance,
+                flows,
+                measured.rate if measured else None,
+                measured.days if measured else 0,
+            )
+        )
     moves.sort(key=lambda move: (-abs(move.change), move.account_id))
 
     return Period(

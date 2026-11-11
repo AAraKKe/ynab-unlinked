@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.core.finance import (
+    DAYS_IN_YEAR,
     AccountMove,
     Flows,
     Period,
@@ -64,14 +65,14 @@ class Step:
 
 
 def bridge(flows: Flows) -> list[Step]:
-    """Income, spending, assets and the rest, then the net change. Empty steps are left out.
+    """Income, spending, growth and the rest, then the net change. Empty steps are left out.
 
     Transfers between counted accounts add up to zero, so they are not a step.
     """
     steps = [
         Step("Income", flows.income, "income"),
         Step("Spending", flows.spending, "spending"),
-        Step("Assets", flows.assets, "assets"),
+        Step("Growth", flows.assets, "assets"),
         Step("Other", flows.other + flows.transfers, "other"),
     ]
     return [step for step in steps if step.amount] + [Step("Net", flows.change, "net")]
@@ -85,7 +86,7 @@ def why(move: AccountMove, formatter: Formatter) -> str:
         ("spending", flows.spending),
         ("set aside", flows.set_aside),
         ("transfers", flows.transfers),
-        ("assets", flows.assets),
+        ("growth", flows.assets),
         ("from outside", flows.outside),
     ]
     text = " · ".join(f"{label} {signed(formatter, amount)}" for label, amount in parts if amount)
@@ -97,13 +98,104 @@ def moved(period: Period, limit: int = TOP_ACCOUNTS) -> list[AccountMove]:
     return [move for move in period.accounts if move.change or move.flows.transfers][:limit]
 
 
+PART_MARK = "*"
+PART_NOTE = (
+    "* Measured only over the days the account held money. It was empty, or not open yet, "
+    "for the rest of the range."
+)
+
+
 def rate_text(move: AccountMove, days: int) -> str:
-    """The account's return, per year when the period is longer than one: `6.1%`, `−8.9%/yr`."""
+    """The account's return, per year when it is measured over more than one: `6.1%`,
+    `−8.9%/yr`, with `PART_MARK` when it is measured over fewer days than the range's."""
     if move.rate is None:
         return "—"
-    rate = annualised(move.rate, days)
-    suffix = "/yr" if days > 365 else ""
-    return f"{rate * 100:+.1f}%{suffix}".replace("-", "−")
+    rate = annualised(move.rate, move.rate_days)
+    suffix = "/yr" if move.rate_days > DAYS_IN_YEAR else ""
+    mark = PART_MARK if partial(move, days) else ""
+    return f"{rate * 100:+.1f}%{suffix}{mark}".replace("-", "−")
+
+
+def partial(move: AccountMove, days: int) -> bool:
+    """Whether the return leaves out days of the range: the account held nothing on them."""
+    return move.rate is not None and move.rate_days < days
+
+
+def rate_title(move: AccountMove, days: int) -> str | None:
+    """The hover of a partial return: `Held money on 205 of the 315 days of the range`."""
+    if not partial(move, days):
+        return None
+    yearly = ", per year over those days" if move.rate_days > DAYS_IN_YEAR else ""
+    return f"Held money on {move.rate_days} of the {days} days of the range{yearly}"
+
+
+RETURN_TITLE = "How Return is measured"
+RETURN_LEDE = (
+    "Return is how the account itself did: what was in it grew or shrank by that much, "
+    "whatever you put in or took out. Growth is what that made you, in money. The two can "
+    "point different ways."
+)
+RETURN_END = (
+    "So Return says how the account did, and selling or emptying it does not make it look "
+    "worse; Growth says what it made you. Finance calls Return the time weighted return, and "
+    "what your money made the money weighted one."
+)
+
+
+@dataclass(frozen=True)
+class StoryStep:
+    """One step of the made-up account behind the "i" of Return."""
+
+    label: str
+    """Under its bar."""
+    text: str
+    held: int
+    """What the account holds after it, milliunits."""
+    put_in: int
+    """What you put in so far."""
+    rate: float
+    """Return so far."""
+
+    @property
+    def growth(self) -> int:
+        return self.held - self.put_in
+
+
+def return_story(formatter: Formatter) -> list[StoryStep]:
+    """1,000 that grows 50%, 8,500 more put in, and a 20% fall: Return ends up, Growth down."""
+    money = formatter.format_amount_milli
+    return [
+        StoryStep("Start", f"You put {money(1_000_000)} into an account.", 1_000_000, 1_000_000, 0),
+        StoryStep(
+            "+50%",
+            f"It grows 50%: it holds {money(1_500_000)}. Return is +50.0%, Growth "
+            f"+{money(500_000)}.",
+            1_500_000,
+            1_000_000,
+            0.5,
+        ),
+        StoryStep(
+            "Put in",
+            f"You put {money(8_500_000)} more in. That is your money, not a gain: Return and "
+            "Growth stay where they were.",
+            10_000_000,
+            9_500_000,
+            0.5,
+        ),
+        StoryStep(
+            "−20%",
+            f"It falls 20%: {money(10_000_000)} becomes {money(8_000_000)}. Up 50% and then "
+            "down 20% is up 20%, so Return is +20.0%. But the fall hit ten times the money the "
+            f"rise did: Growth is {money(-1_500_000)}.",
+            8_000_000,
+            9_500_000,
+            0.2,
+        ),
+    ]
+
+
+def percent_text(rate: float) -> str:
+    return f"{rate * 100:+.1f}%".replace("-", "−")
 
 
 def next_selection(current: int | None, clicked: int | None) -> int | None:
