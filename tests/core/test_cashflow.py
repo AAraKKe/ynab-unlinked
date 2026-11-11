@@ -99,9 +99,11 @@ def test_a_month_far_above_the_usual_is_labelled_by_what_stood_out_or_by_its_not
     rows += [
         ("2026-03-15", 2_000_000, "Stock sale", "rta"),
         ("2026-05-20", -2_500_000, "Airline", "trip"),
+        ("2026-06-10", 2_000_000, "Stock sale", "rta"),
+        ("2026-06-20", -2_500_000, "Airline", "trip"),
     ]
     seed(store, rows)
-    notes = {dt.date(2026, 6, 1): "Moved flat\nand more"}
+    notes = {dt.date(2026, 2, 1): "Moved flat\nand more"}
 
     flow = cash_flow(
         store,
@@ -113,13 +115,14 @@ def test_a_month_far_above_the_usual_is_labelled_by_what_stood_out_or_by_its_not
         notes=notes,
     )
 
-    assert [m.label for m in flow.months] == [
-        None,
-        None,
-        "Stock sale",
-        None,
-        "🏝 Vacation",
-        "Moved flat",
+    assert [(m.note, m.income_label, m.spending_label) for m in flow.months] == [
+        (None, None, None),
+        ("Moved flat", None, None),
+        (None, "Stock sale", None),
+        (None, None, None),
+        (None, None, "🏝 Vacation"),
+        # Far above in both: each says what stood out in it, income does not hide spending
+        (None, "Stock sale", "🏝 Vacation"),
     ]
 
 

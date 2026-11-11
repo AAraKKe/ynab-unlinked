@@ -743,7 +743,8 @@ def rhythm(spent: Sequence[int]) -> Rhythm     # the charges of a category that 
     # so often: the average of the months it spent in, and the months between them
 
 @dataclass(frozen=True)
-class FlowMonth: month; income; spending (positive); complete; label: str | None
+class FlowMonth: month; income; spending (positive); complete
+    note, income_label, spending_label: str | None
     saved, rate
 @dataclass(frozen=True)
 class CategoryTrend: category_id; name; group; spent: tuple[int, ...]; volatility
@@ -754,9 +755,10 @@ class CashFlow:
     complete, mean_income, median_income, mean_spending, savings_rate, core_spending(), groups()
 
 def cash_flow(store, budget_id, rules, start, end, *, categories=None, notes=None) -> CashFlow
-    # blocking; averages over complete months; a label is the month's note in YNAB (first
-    # line, 28 characters), else the payee or category most above its usual in a month far
-    # above the median
+    # blocking; averages over complete months; note is the month's note in YNAB (first line,
+    # 28 characters); income_label the payee most above its usual in a month that earned far
+    # above the median, spending_label the category most above its usual in one that spent far
+    # above it, each told on its own
 ```
 
 ### 2.10 Updates (`core/update.py`)

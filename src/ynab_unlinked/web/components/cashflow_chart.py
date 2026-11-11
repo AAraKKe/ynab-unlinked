@@ -1,8 +1,11 @@
 """The charts of Cash flow and Spending, in the look of `history_chart` and `flow_chart`.
 
 - `income_spending_options`: income and spending side by side per month; the month still
-  running is faded, and a month with a label (a note in YNAB, or what stood out) carries it
-  over its taller bar.
+  running is faded. A note in YNAB sits over the month's taller bar; otherwise what stood out
+  in its income sits over the income bar and what stood out in its spending over the spending
+  bar. A month with both sends them apart, income to the left and spending to the right, each
+  tied to its bar by a line. A label that would cover another one is hidden; the tooltip of
+  the month always says what stood out.
 - `rate_options`: the savings rate of each complete month, with its average dashed. A chart of
   its own: a rate never shares an axis with amounts.
 - `volatility_options`: one dot per category, average monthly spending across (log scale)
@@ -11,6 +14,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 from collections.abc import Sequence
 from typing import Any
@@ -28,6 +32,10 @@ RATE_HEIGHT = 150
 SCATTER_HEIGHT = 280
 INCOME_SLOT = 0
 SPENDING_SLOT = 1
+APART = 10
+"""How far out from its bar, in pixels, a label of a month with both labels sits."""
+ABOVE = 18
+"""How far above the month's taller bar, in pixels, the labels of a month with both sit."""
 LABELLED = 6
 """How many dots of the volatility chart carry their category's name."""
 
@@ -93,13 +101,24 @@ def _legend(palette: Palette) -> dict[str, Any]:
     }
 
 
+def _told(month: FlowMonth) -> list[str]:
+    """What the tooltip of a month says about it, escaped: the chart may hide a label that
+    would cover another one, and on a long range it is hard to tell which month one is over."""
+    told = [month.note] if month.note else []
+    if month.income_label:
+        told.append(f"{month.income_label} brought more than usual")
+    if month.spending_label:
+        told.append(f"{month.spending_label} spent more than usual")
+    return [html.escape(line) for line in told]
+
+
 def income_spending_options(
     months: Sequence[FlowMonth], palette: Palette, currency_format: CurrencyFormat
 ) -> dict[str, Any]:
     keys = [month.month.strftime("%Y-%m") for month in months]
 
     def bars(
-        name: str, color: str, values: Sequence[int], labelled: Sequence[bool]
+        name: str, color: str, values: Sequence[int], labels: Sequence[str | None]
     ) -> dict[str, Any]:
         return {
             "type": "bar",
@@ -116,18 +135,53 @@ def income_spending_options(
                         "opacity": 1 if month.complete else 0.4,
                     },
                     "label": {
-                        "show": bool(month.label and labelled[index]),
+                        "show": bool(label),
                         "position": "top",
-                        "formatter": month.label or "",
+                        "formatter": label or "",
                         "color": palette.text_2,
                         "fontSize": 10.5,
                     },
+                    "labelLine": {
+                        "show": pair,
+                        "lineStyle": {"color": palette.text_3, "width": 1},
+                    },
                 }
-                for index, (month, value) in enumerate(zip(months, values, strict=True))
+                for month, value, label, pair in zip(months, values, labels, both, strict=True)
             ],
         }
 
+    def apart(values: Sequence[int], others: Sequence[int], side: str) -> str:
+        """Where the labels of a month with both go: `ABOVE` the taller bar, `APART` out to
+        `side` of their own. A bar only knows its own rectangle, so the taller one's top comes
+        from how much taller it is than this one."""
+        taller = [
+            max(value, other) / value if pair and value > 0 else None
+            for value, other, pair in zip(values, others, both, strict=True)
+        ]
+        out, align = (-APART, "right") if side == "left" else (APART, "left")
+        return (
+            "(p) => {"
+            f"const taller = {json.dumps(taller)}[p.dataIndex];"
+            "if (taller == null) return {hideOverlap: true};"
+            "const r = p.rect;"
+            f"return {{x: r.x + r.width / 2 + ({out}), y: r.y + r.height * (1 - taller) - {ABOVE},"
+            f" align: '{align}', verticalAlign: 'bottom', hideOverlap: true}};"
+            "}"
+        )
+
     income_taller = [m.income >= m.spending for m in months]
+    both = [bool(m.income_label and m.spending_label and not m.note) for m in months]
+    income_labels = [
+        (m.note if taller else None) if m.note else m.income_label
+        for m, taller in zip(months, income_taller, strict=True)
+    ]
+    spending_labels = [
+        (None if taller else m.note) if m.note else m.spending_label
+        for m, taller in zip(months, income_taller, strict=True)
+    ]
+    income = [m.income for m in months]
+    spending = [m.spending for m in months]
+    told = json.dumps([_told(m) for m in months])
     tooltip_js = (
         "(params) => {"
         "const ps = Array.isArray(params) ? params : [params];"
@@ -143,6 +197,10 @@ def income_spending_options(
         "if (income && spending) { const saved = income.value - spending.value;"
         " rows += row('Saved', money(saved) + (income.value > 0 ? ' · '"
         " + Math.round(saved / income.value * 100) + '%' : '')); }"
+        f"const told = {told}[ps[0].dataIndex];"
+        "if (told.length) rows += '<div style=\"margin-top:6px;padding-top:6px;border-top:1px solid"
+        f" {palette.hair};color:{palette.text_2};max-width:240px;white-space:normal\">'"
+        " + told.join('<br>') + '</div>';"
         f"return '<div style=\"color:{palette.text_3};margin-bottom:4px\">' + title + '</div>' + rows;"
         "}"
     )
@@ -160,18 +218,10 @@ def income_spending_options(
         "xAxis": _month_axis(palette, keys),
         "yAxis": _value_axis(palette, compact_js(currency_format)),
         "series": [
-            bars(
-                "Income",
-                palette.series[INCOME_SLOT],
-                [m.income for m in months],
-                income_taller,
-            ),
-            bars(
-                "Spending",
-                palette.series[SPENDING_SLOT],
-                [m.spending for m in months],
-                [not taller for taller in income_taller],
-            ),
+            bars("Income", palette.series[INCOME_SLOT], income, income_labels)
+            | {":labelLayout": apart(income, spending, "left")},
+            bars("Spending", palette.series[SPENDING_SLOT], spending, spending_labels)
+            | {":labelLayout": apart(spending, income, "right")},
         ],
     }
 
