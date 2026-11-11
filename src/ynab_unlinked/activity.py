@@ -57,11 +57,12 @@ def log_import(
     skipped: int,
     matched: int,
     excluded: int,
+    held: int = 0,
 ) -> None:
     """One `import` entry; `loader` is the config key of the bank (`Entity.name()`).
 
     `matched` counts the rows of `skipped` YNAB holds through a match only, `excluded` the
-    rows the user left out of imports.
+    rows the user left out of imports, `held` the ones not sent because they may be in YNAB.
     """
     if (store := _open_store()) is None:
         return
@@ -81,6 +82,7 @@ def log_import(
             "skipped": skipped,
             "matched": matched,
             "excluded": excluded,
+            "held": held,
         },
     )
 

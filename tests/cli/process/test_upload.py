@@ -226,6 +226,7 @@ def test_an_import_is_noted_in_the_activity_log_the_app_reads(
         "skipped": 0,
         "matched": 0,
         "excluded": 0,
+        "held": 0,
     }
 
 

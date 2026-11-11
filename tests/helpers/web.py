@@ -67,6 +67,17 @@ async def eventually(check: Callable[[], bool]) -> None:
     assert check()
 
 
+async def arrived(user: NiceGUIUser, path: str) -> None:
+    """Wait for the browser to be at `path`, after a click that goes to another page.
+
+    The app shows a page first and tells the browser its address after (`history.pushState`,
+    which NiceGUI sends one turn of the event loop later). `should_see` can return in between,
+    so reading `user.back_history` right after it fails now and then, mostly on a slow runner.
+    """
+    await _poll(lambda: user.back_history[-1] == path, WAIT_SECONDS)
+    assert user.back_history[-1] == path
+
+
 class User(NiceGUIUser):
     """NiceGUI's simulated user, looking at the page every 5 ms for up to `WAIT_SECONDS`.
 

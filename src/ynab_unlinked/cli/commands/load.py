@@ -223,12 +223,14 @@ def auto(
     for plan, (input_file, candidate) in zip(plans, chosen, strict=True):
         display.console().rule(f"{input_file.name}: {candidate.loader.title}")
         display_import_table(plan.rows, ctx.formatter)
-        plan_notes(plan)
+        plan_notes(plan, ctx.formatter)
         excluded = len(plan.with_status(RowStatus.EXCLUDED))
+        held = len(plan.with_status(RowStatus.MAYBE_IN_YNAB))
         display.info(
             f"{len(plan.new_rows)} to import into {_account_name(plan.account_id, ctx)}, "
             f"{plan.already_imported_count} already in YNAB"
             + (f", {excluded} left out" if excluded else "")
+            + (f", {held} may be in YNAB" if held else "")
         )
 
     to_import = [plan for plan in plans if plan.new_rows]
@@ -253,7 +255,12 @@ def auto(
             continue
         with display.CliProgress() as progress:
             result = commit_import_plan(
-                client, budget_id=budget_id, plan=plan, cleared=cleared, progress=progress
+                client,
+                budget_id=budget_id,
+                plan=plan,
+                cleared=cleared,
+                progress=progress,
+                store=store,
             )
         log_import(
             ctx.config,
@@ -265,6 +272,7 @@ def auto(
             skipped=plan.already_imported_count,
             matched=len(plan.with_status(RowStatus.MATCHED)),
             excluded=len(plan.with_status(RowStatus.EXCLUDED)),
+            held=len(plan.with_status(RowStatus.MAYBE_IN_YNAB)),
         )
         created[plan.account_id] = created.get(plan.account_id, 0) + result.created
         duplicates.extend(result.duplicate_import_ids)

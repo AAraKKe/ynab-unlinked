@@ -255,6 +255,18 @@ class Store:
         ghosts = self._repair_ghosts(client, budget_id, None if result.full else received, progress)
         return replace(result, ghosts_removed=ghosts)
 
+    def save_transactions(self, budget_id: str, transactions: Sequence[TransactionDetail]) -> None:
+        """Keep the transactions YNAB just created, ahead of the sync that would bring them.
+
+        An import matched in YNAB before that sync never reaches the copy otherwise: YNAB
+        hides it from then on. The server knowledge stays where it is, so the next sync
+        sends them again, with whatever changed meanwhile.
+        """
+        if not transactions:
+            return
+        with self._connect() as conn:
+            self._upsert_transactions(conn, budget_id, transactions)
+
     def _repair_ghosts(
         self,
         client: Client,
