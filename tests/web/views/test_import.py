@@ -15,6 +15,7 @@ from ynab import ApiException, TransactionClearedStatus
 from tests.factories import (
     AccountFactory,
     ImportRowFactory,
+    StoredAccountFactory,
     StoredTransactionFactory,
     TransactionDetailFactory,
 )
@@ -23,7 +24,7 @@ from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.store import upsert
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, LoaderConfig
-from ynab_unlinked.core.detect import resolve_options
+from ynab_unlinked.core.detect import Candidate, resolve_options
 from ynab_unlinked.core.importing import ImportPlan, ImportResult
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
@@ -31,7 +32,7 @@ from ynab_unlinked.models import assign_import_ids
 from ynab_unlinked.store import ExcludedRow, Store
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.state import AppState, state
-from ynab_unlinked.web.views.import_.data import import_log
+from ynab_unlinked.web.views.import_.data import ImportFile, forget_gone_account, import_log
 from ynab_unlinked.web.wording import IMPORT_FAILED
 
 pytestmark = pytest.mark.version("V4")
@@ -310,6 +311,63 @@ async def test_a_loader_without_an_account_asks_for_one_and_saves_it_on_import(
     assert saved is not None
     assert saved.account_id == MAXIMA
     assert list(created(ynab)) == [MAXIMA]
+
+
+@pytest.mark.parametrize(
+    ("oro", "reason"),
+    [
+        ([AccountFactory(id=uuid.UUID(int=1), name="💳 Oro", closed=True)], "is closed in YNAB"),
+        ([], "is no longer in the budget"),
+    ],
+    ids=["closed", "deleted"],
+)
+async def test_a_saved_account_gone_from_ynab_asks_for_another_one_and_saves_it(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, oro: list, reason: str
+):
+    # YNAB takes transactions into a closed account and then shows them nowhere
+    ynab.answer_accounts(*oro, AccountFactory(id=uuid.UUID(int=2), name="💳 Maxima"))
+
+    await drop(user, SABADELL)
+
+    await user.should_see(
+        f"The account saved for Sabadell {reason}. Pick another one.",
+        marker="account-gone-1",
+        retries=30,
+    )
+    assert not review_button(user).enabled
+    select = user.find(marker="account-select-1").elements.pop()
+    assert isinstance(select, ui.select)
+    assert select.options == {MAXIMA: "💳 Maxima"}
+    select.set_value(MAXIMA)
+
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+
+    await user.should_see("3 transactions imported", retries=30)
+    assert list(created(ynab)) == [MAXIMA]
+    saved = LatestConfig.load().entity("sabadell")
+    assert saved is not None
+    assert saved.account_id == MAXIMA
+
+
+@pytest.mark.parametrize(
+    ("chosen", "accounts"),
+    [
+        (False, None),
+        (True, [StoredAccountFactory(id=ORO, closed=True)]),
+    ],
+    ids=["the budget's accounts could not be read", "picked on the row"],
+)
+def test_an_account_that_cannot_be_judged_gone_is_kept(chosen: bool, accounts: list | None):
+    item = ImportFile(key=1, name="movements.txt", size=1, path=SABADELL, account_id=ORO)
+    item.candidate = Candidate(loader("sabadell"), 1.0, "test", {}, (), None)
+    item.account_chosen = chosen
+
+    forget_gone_account(item, accounts)
+
+    assert item.account_id == ORO
+    assert item.problem is None
 
 
 async def test_a_ynab_failure_is_shown_on_the_row_and_can_be_retried(

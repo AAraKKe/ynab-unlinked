@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 from ynab import TransactionDetail
 
-from tests.cli.process.builders import write_config
+from tests.cli.process.builders import ACCOUNT_ID, write_config
+from tests.factories import AccountFactory
 from tests.helpers.config import ConfigFiles
 from tests.helpers.ynab_api import YnabClientStub
 
@@ -19,7 +20,8 @@ def config_file(config: str, config_files: ConfigFiles) -> Path:
 
 @pytest.fixture
 def ynab(ynab_api: YnabClientStub) -> YnabClientStub:
-    """The YNAB stub answering with an empty budget."""
+    """The YNAB stub answering with an empty budget around the saved, open account."""
+    ynab_api.answer_accounts(AccountFactory(id=ACCOUNT_ID))
     api = ynab_api.api("transactions")
     api.get_transactions_by_account.return_value.data.transactions = []
     api.create_transaction.return_value.data.duplicate_import_ids = []

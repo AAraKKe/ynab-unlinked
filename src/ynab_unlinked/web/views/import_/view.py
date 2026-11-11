@@ -33,7 +33,7 @@ from ynab_unlinked.core.importing import (
 )
 from ynab_unlinked.entities.registry import loaders
 from ynab_unlinked.formatter import Formatter
-from ynab_unlinked.store import ExcludedRow
+from ynab_unlinked.store import ExcludedRow, StoredAccount
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import set_class
 from ynab_unlinked.web.components.dropzone import dropzone
@@ -54,6 +54,7 @@ from ynab_unlinked.web.views.import_.data import (
     account_label,
     chosen_accounts,
     excluded_row,
+    forget_gone_account,
     held_count,
     import_log,
     left_out_count,
@@ -81,6 +82,8 @@ class ImportFlow:
         self.reconciled = False
         self.next_key = 1
         self.account_names: dict[str, str] | None = None
+        self.accounts: list[StoredAccount] | None = None
+        """Every account of the budget, closed ones too; None until read, or if that failed."""
         self.stepper: list[ui.element] = []
         self.content: ui.element | None = None
         self.drop_area: ui.element | None = None
@@ -235,6 +238,7 @@ class ImportFlow:
             return
         # Loaded once: the names of the accounts on every row, and the choices when one is missing
         await self.account_choices()
+        forget_gone_account(item, self.accounts)
         if item.account_id is None:
             item.status = Status.ACCOUNT
             self.refresh(item)
@@ -278,14 +282,18 @@ class ImportFlow:
         self.refresh(item)
 
     async def account_choices(self) -> dict[str, str]:
-        """Accounts a file can go to: every open account of the budget."""
+        """Accounts a file can go to: every open account of the budget.
+
+        Read once per flow, from the budget copy (synced when a page opens and the copy is
+        older than `AUTO_SYNC_AFTER`), so saved accounts are checked without asking YNAB.
+        """
         if self.account_names is None:
             try:
-                accounts = await state().budget_accounts()
+                self.accounts = await state().budget_accounts()
             except Exception as error:
                 shell.notify(ynab_error_message(error), "warn")
-                accounts = []
-            self.account_names = {a.id: a.name for a in accounts if not a.closed}
+                self.accounts = None
+            self.account_names = {a.id: a.name for a in self.accounts or [] if not a.closed}
         return self.account_names
 
     def account_name(self, account_id: str) -> str:

@@ -7,6 +7,7 @@ import pytest
 from urllib3.exceptions import MaxRetryError, NewConnectionError, ReadTimeoutError
 from ynab import ApiException
 
+from tests.factories import AccountFactory
 from tests.helpers.types import CliRunner, LoadEntityCallback
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import update_config
@@ -66,6 +67,7 @@ def test_a_rejected_import_is_reported_without_a_traceback(
     yul: CliRunner, ynab_api: YnabClientStub, load_entity: LoadEntityCallback, today: dt.datetime
 ):
     update_config(lambda saved: saved.set_entity_account("test", str(uuid.UUID(int=10))))
+    ynab_api.answer_accounts(AccountFactory())
     load_entity(today)
     ynab_api.api("transactions").create_transaction.side_effect = ApiException(
         status=429, reason="Too Many Requests"

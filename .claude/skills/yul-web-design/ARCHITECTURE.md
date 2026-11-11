@@ -25,6 +25,7 @@ src/ynab_unlinked/
     __init__.py
     progress.py          Progress protocol (see 2.1)
     importing.py         build_import_plan / commit_import_plan (2.2)
+    accounts.py          account_state: is a bank's saved account still open (2.2)
     reconcile.py         reconciliation_overview / reconcile (2.3)
     detect.py            detect_loaders (2.4)
     balances.py          net worth, debt netting, adjustments (2.5)
@@ -168,6 +169,22 @@ def commit_import_plan(
     # before the next sync can still be named. A store that fails only warns on `progress`.
     # A plan with no new rows returns ImportResult(0, ()) without calling YNAB.
 ```
+
+```python
+# core/accounts.py
+class AccountState(StrEnum): OPEN, CLOSED, MISSING   # .reason: "is closed in YNAB", ...
+def account_state(account_id: str, accounts: Iterable[BudgetAccount]) -> AccountState
+    # `accounts` is the whole list of the budget, `ynab.Account` or `StoredAccount`; an
+    # account not in it, or flagged deleted, is MISSING.
+```
+
+YNAB takes transactions into a closed account and then shows them nowhere, so both frontends
+check the account saved for a bank before planning an import into it. `yul load` (one
+`client.accounts` per run, shared by every file of `load auto`) warns and asks for another
+account, saved as a first pick is; with `--yes` it stops with one line and exit code 1. The
+app checks against the account list its Import flow already reads (`state().budget_accounts()`,
+the budget copy) and asks on the row (`Status.ACCOUNT`, `forget_gone_account`); Settings ›
+Banks says so on the bank's card.
 
 The `NullProgress()` defaults are `core.progress.NO_PROGRESS` in the code. The CLI passes `cli.display.CliProgress`, a context manager that shows a
 spinner per step and stops it if the core call raises. `cli.utils.display_import_table` takes
@@ -1001,7 +1018,7 @@ web/
       view.py          the page (hero with count_up, spark_options, activity, banner)
     import_/           /import      Files -> Review -> Done on core.detect and core.importing
       data.py          Status, ImportFile, same_file, mark_repeated, take_candidate,
-                       account_label, problem_text, option_choices, read_file,
+                       forget_gone_account, account_label, problem_text, option_choices, read_file,
                        chosen_accounts, done_summary, import_log, left_out_count,
                        held_count, excluded_row, STATUS_LABELS, STATUS_MEANINGS,
                        statuses_shown, twin_note
@@ -1081,7 +1098,8 @@ web/
       common.py        current_config(), kv(key), all_accounts() (closed ones too), open_accounts() (open budget accounts, the
                        configured ones when YNAB cannot be reached)
       connection.py    token (reveal, check and save), budget dialog and switch
-      banks.py         bank cards, bank_summary(), shared_account_hint(), toggle_bank(),
+      banks.py         bank cards, BankAccounts (choices, gone), bank_accounts(),
+                       bank_summary(), shared_account_hint(), toggle_bank(),
                        bank_dialog(), option_control()
       accounts.py      AccountCards (the Accounts tab), BY_HAND_HINT
       networth.py      debt mappings (mapping_row), the goal (goal_section) and adjustment
@@ -1487,7 +1505,8 @@ Markers: `token-input`, `check-token`, `token-lost`, `wizard-message`, `wizard-n
 
 Markers: `tab-{slug}` (the tabs, a list down the side), `settings-panel`, `settings-title`
 (the open tab's name), Data & privacy's updates: `check-updates` (the switch),
-`update-status`, `check-now`, `settings-update` (only with a newer yul), `bank-shared-{key}`, `accounts-lede`, `account-card-{id}` (class `closed` on a closed
+`update-status`, `check-now`, `settings-update` (only with a newer yul), `bank-summary-{key}`
+(class `yul-warn` when the bank has no account or YNAB closed or deleted it), `bank-shared-{key}`, `accounts-lede`, `account-card-{id}` (class `closed` on a closed
 account, tagged `closed-{id}`), `bucket-section-{bucket}`,
 `account-{id}`, `bucket-{id}`, `bucket-{id}-{bucket}`, `by-hand-{id}`, `left-out` (the list
 of rows left out of imports), `left-out-{index}`, `include-again-{index}`, `left-out-empty`;
@@ -1509,4 +1528,6 @@ YNAB, left out; every one a pill), `leave-out-{file key}-{index}` on a new row,
 and `leave-out-{file key}-{index}`; they are counted in `held-{file key}` and `files-held`
 (Files), `review-held-{file key}` and `review-held` (Review). `status-legend` above the rows
 (Review: once, over the cards; Files: in a file's body) holds `legend-{RowStatus value}` for
-each status on screen.
+each status on screen. Files rows: `account-{file key}` (the saved account's pill),
+`account-select-{file key}` (the account to pick), `account-gone-{file key}` (why the saved
+account was dropped: closed or no longer in the budget).

@@ -1,8 +1,9 @@
+from collections.abc import Sequence
 from pathlib import Path
 
 import typer
 from rich.markup import escape
-from ynab import TransactionClearedStatus
+from ynab import Account, TransactionClearedStatus
 
 from ynab_unlinked.activity import log_import
 from ynab_unlinked.cli import display
@@ -10,6 +11,7 @@ from ynab_unlinked.cli.context_object import YnabUnlinkedContext
 from ynab_unlinked.cli.display import CliProgress, bullet_list, confirm, console, info, question
 from ynab_unlinked.cli.utils import display_import_table, display_transaction_table
 from ynab_unlinked.config import LatestConfig, update_config
+from ynab_unlinked.core.accounts import AccountState, account_state
 from ynab_unlinked.core.importing import (
     ImportPlan,
     RowStatus,
@@ -17,6 +19,7 @@ from ynab_unlinked.core.importing import (
     commit_import_plan,
 )
 from ynab_unlinked.entities import Entity
+from ynab_unlinked.entities.registry import loaders
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store, store_path
@@ -25,31 +28,50 @@ from ynab_unlinked.ynab_api.client import Client
 
 
 def get_or_prompt_account_id(
-    config: LatestConfig, entity_name: str, force_prompt: bool, interactive: bool = True
+    config: LatestConfig,
+    entity_name: str,
+    force_prompt: bool,
+    interactive: bool = True,
+    accounts: Sequence[Account] | None = None,
 ) -> str:
-    if (loader := config.entity(entity_name)) is not None and not force_prompt:
-        return loader.account_id
+    """The account the statements of `entity_name` go to: the saved one while it is open,
+    else the one the user picks (saved for next time unless `force_prompt`).
 
-    if not interactive:
+    `accounts` are the budget's accounts when the caller has them already; they are read from
+    YNAB otherwise. A saved account that was closed or deleted in YNAB is asked for again,
+    since YNAB takes transactions into a closed account and then shows them nowhere.
+    """
+    loader = config.entity(entity_name)
+    if (loader is None or force_prompt) and not interactive:
         display.error(
             f"No saved account for {entity_name}. Run this load once without --yes to select one."
         )
         raise typer.Exit(1)
 
-    display.info(f"Lets select the account for {entity_name.capitalize()}:")
-    client = Client(config.api_key)
-    budget_id = config.budget.id
+    if accounts is None:
+        accounts = Client(config.api_key).accounts(budget_id=config.budget.id)
 
-    accounts = [acc for acc in client.accounts(budget_id=budget_id) if not acc.closed]
+    if loader is not None and not force_prompt:
+        state = account_state(loader.account_id, accounts)
+        if state is AccountState.OPEN:
+            return loader.account_id
+        gone = f"The account saved for {_bank_title(entity_name)} {state.reason}."
+        if not interactive:
+            display.error(f"{gone} Run without --yes to pick another one.")
+            raise typer.Exit(1)
+        display.warning(gone)
 
-    console().print(bullet_list(f"{idx + 1:>2}: {acc.name}" for idx, acc in enumerate(accounts)))
+    display.info(f"Lets select the account for {_bank_title(entity_name)}:")
+    choices = [acc for acc in accounts if not acc.closed and not acc.deleted]
+
+    console().print(bullet_list(f"{idx + 1:>2}: {acc.name}" for idx, acc in enumerate(choices)))
 
     acc_num = question(
         "What account are the transactions going to be imported to? (By number)",
-        choices=[str(i) for i in range(1, len(accounts) + 1)],
+        choices=[str(i) for i in range(1, len(choices) + 1)],
         show_choices=False,
     )
-    account = accounts[int(acc_num) - 1]
+    account = choices[int(acc_num) - 1]
 
     info(f"Account selected: {account.name}")
 
@@ -60,6 +82,10 @@ def get_or_prompt_account_id(
         update_config(lambda saved: saved.set_entity_account(entity_name, account_id))
 
     return account_id
+
+
+def _bank_title(entity_name: str) -> str:
+    return next((spec.title for spec in loaders() if spec.name == entity_name), entity_name)
 
 
 def open_store(yes: bool) -> Store | None:

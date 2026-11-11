@@ -40,6 +40,39 @@ def test_a_known_entity_reuses_its_account_without_asking(
     question.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("saved", "reason"),
+    [
+        (AccountFactory(id=ACCOUNT_ID, closed=True), "is closed in YNAB"),
+        (AccountFactory(id=ACCOUNT_ID, deleted=True), "is no longer in the budget"),
+        (None, "is no longer in the budget"),
+    ],
+    ids=["closed", "deleted", "not in the budget"],
+)
+def test_a_saved_account_gone_from_ynab_is_asked_for_again_and_replaced(
+    config_file: Path,
+    yul: CliRunner,
+    load_entity: LoadEntityCallback,
+    accounts_in_ynab,
+    created_transactions,
+    mocker: MockerFixture,
+    saved,
+    reason: str,
+):
+    # YNAB takes transactions into a closed account and then shows them nowhere
+    accounts_in_ynab(*([saved] if saved else []), AccountFactory(id=OTHER_ACCOUNT_ID))
+    question = mocker.patch("ynab_unlinked.cli.process.question", return_value="1")
+    load_entity(TODAY, [TransactionFactory(date=THREE_DAYS_AGO)])
+
+    result = yul("load test", input="y\n")
+
+    assert result.exit_code == 0, result.output
+    assert f"The account saved for test {reason}." in result.output
+    assert question.call_args.kwargs["choices"] == ["1"]
+    assert {str(t.account_id) for t in created_transactions()} == {OTHER_ACCOUNT_ID}
+    assert saved_config(config_file).loaders["test"].account_id == OTHER_ACCOUNT_ID
+
+
 def test_an_unknown_entity_is_offered_only_the_open_accounts(
     config_file: Path, accounts_in_ynab, mocker: MockerFixture
 ):

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ynab_unlinked.config import LatestConfig, LoaderConfig
+from ynab_unlinked.core.accounts import AccountState, account_state
 from ynab_unlinked.core.detect import Candidate, Detection
 from ynab_unlinked.core.importing import (
     ImportPlan,
@@ -23,7 +24,7 @@ from ynab_unlinked.core.importing import (
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import Transaction, milliunits
-from ynab_unlinked.store import ExcludedRow
+from ynab_unlinked.store import ExcludedRow, StoredAccount
 from ynab_unlinked.text import import_message
 from ynab_unlinked.web.wording import plural
 
@@ -44,7 +45,8 @@ class Status(StrEnum):
     CHOOSE = "choose"
     """Several loaders read the file, the user picks one."""
     ACCOUNT = "account"
-    """The loader has no account yet, the user picks one."""
+    """The loader has no account yet, or YNAB closed or deleted its saved one: the user picks
+    one (`problem` says why when the saved one is gone)."""
     PLANNING = "planning"
     READY = "ready"
     ERROR = "error"
@@ -125,6 +127,28 @@ def take_candidate(item: ImportFile, candidate: Candidate, saved: LoaderConfig |
     if not item.account_chosen:
         item.account_id = saved.account_id if saved else None
     return True
+
+
+def forget_gone_account(item: ImportFile, accounts: Sequence[StoredAccount] | None) -> None:
+    """Drop the saved account of `item` when YNAB closed or deleted it, saying so in
+    `problem`: the file then asks for another one, since YNAB would take the rows into a
+    closed account and show them nowhere.
+
+    `accounts` are the budget's (closed ones included); None when they could not be read,
+    and the saved account is kept: the plan then fails on YNAB's own error. An account
+    picked on the row is never dropped, it was one of the open ones.
+    """
+    item.problem = None
+    if item.candidate is None or item.account_id is None or item.account_chosen:
+        return
+    if accounts is None:
+        return
+    if (gone := account_state(item.account_id, accounts)) is AccountState.OPEN:
+        return
+    item.account_id = None
+    item.problem = (
+        f"The account saved for {item.candidate.loader.title} {gone.reason}. Pick another one."
+    )
 
 
 def account_label(account_id: str, names: Mapping[str, str], config: LatestConfig) -> str:
