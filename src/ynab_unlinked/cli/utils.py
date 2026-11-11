@@ -23,6 +23,8 @@ IMPORT_HELP_MESSAGE = (
     " - The [gray37]dimmed[/] rows are already in YNAB and will not be sent again.\n"
     " - The [gray37]matched[/] rows were matched in YNAB with a transaction you had entered "
     "by hand: they are there too.\n"
+    " - The [yellow]may be in YNAB[/] rows have the same amount as a transaction you entered "
+    "by hand and matched in YNAB: they are not sent until you decide in `yul app`.\n"
     " - The [gray37 strike]crossed out[/] rows were left out of imports in `yul app` and are "
     "never sent.\n"
     "YNAB matches every imported transaction against the ones you entered yourself on the same "
@@ -33,6 +35,7 @@ _STATUS: dict[RowStatus, tuple[str, Style]] = {
     RowStatus.NEW: ("new", Style(color="green")),
     RowStatus.IN_YNAB: ("in YNAB", Style(color="gray37")),
     RowStatus.MATCHED: ("matched in YNAB", Style(color="gray37")),
+    RowStatus.MAYBE_IN_YNAB: ("may be in YNAB", Style(color="yellow")),
     RowStatus.EXCLUDED: ("left out", Style(color="gray37", strike=True)),
 }
 

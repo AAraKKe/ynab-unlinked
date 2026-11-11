@@ -11,7 +11,7 @@ from pytest_mock import MockerFixture
 from ynab import ApiException
 
 from tests.factories import AccountFactory, TransactionDetailFactory
-from tests.helpers.web import record_threads
+from tests.helpers.web import arrived, record_threads
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.store import Store
@@ -63,7 +63,7 @@ async def test_the_sidebar_navigates_between_views(user: User):
     user.find(marker="nav-reconcile").click()
 
     await user.should_see("Reconcile what the bank confirmed")
-    assert user.back_history[-1] == "/reconcile"
+    await arrived(user, "/reconcile")
 
 
 @pytest.mark.version("V4")

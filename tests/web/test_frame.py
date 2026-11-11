@@ -11,7 +11,7 @@ from nicegui.testing.user import User
 from pytest_mock import MockerFixture
 
 from tests.helpers.store import upsert
-from tests.helpers.web import WAIT_SECONDS, eventually
+from tests.helpers.web import WAIT_SECONDS, arrived, eventually
 from tests.web.views.test_cashflow_spending import (  # noqa: F401 (fixtures)
     GROCERIES,
     no_sync,
@@ -78,7 +78,7 @@ async def test_typing_narrows_the_palette_and_a_click_goes_there(user: User):
     await user.should_not_see(marker="palette-home")
     user.find(marker="palette-reconcile").click()
     await user.should_see("Reconcile what the bank confirmed")
-    assert user.back_history[-1] == "/reconcile"
+    await arrived(user, "/reconcile")
 
 
 async def test_enter_opens_the_result_the_arrows_moved_to(user: User):
@@ -94,7 +94,7 @@ async def test_enter_opens_the_result_the_arrows_moved_to(user: User):
     user.find(marker="palette-input").trigger("keydown.enter.prevent")
 
     await user.should_see(marker="tab-banks")
-    assert user.back_history[-1] == "/settings?tab=banks"
+    await arrived(user, "/settings?tab=banks")
 
 
 async def test_a_query_that_finds_nothing_says_so(user: User):

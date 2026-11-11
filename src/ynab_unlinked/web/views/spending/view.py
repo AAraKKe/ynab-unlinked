@@ -4,7 +4,8 @@ legend of the four words, and every category.
 Averages cover the complete months of the range. A group (its row, or the dropdown above the
 table) and a word of the legend filter the chart and the table; a filtered table lists every
 category that passes. A dot of the chart or a row of the table shows the category in the
-chart's place (`detail.category_detail`) until its back arrow; a new range updates it.
+chart's place (`detail.category_detail`) until its back arrow or a new filter; a new range
+updates it.
 """
 
 from __future__ import annotations
@@ -105,8 +106,9 @@ class SpendingView:
         self._filters_changed()
 
     def _filters_changed(self) -> None:
-        """Mark the chosen group and word, and redraw the chart (unless a category is in its
-        place) and the table; nothing else moves."""
+        """Mark the chosen group and word, and redraw the chart and the table; nothing else
+        moves. A category in the chart's place gives it back: the click asked for the dots of
+        the new filter."""
         for name, row in self.group_rows.items():
             on = name == self.group
             set_class(row, "on", on)
@@ -115,8 +117,8 @@ class SpendingView:
             set_class(item, "on", label == self.label)
         if self.group_select is not None and self.group_select.value != (self.group or ALL_GROUPS):
             self.group_select.value = self.group or ALL_GROUPS
-        if self.detail is None:
-            self._draw_side()
+        self.detail = None
+        self._draw_side()
         self._draw_table()
 
     def open_category(self, trend: CategoryTrend, *, scroll: bool = False) -> None:

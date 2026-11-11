@@ -18,6 +18,7 @@ from ynab_unlinked.core.importing import (
 )
 from ynab_unlinked.entities import Entity
 from ynab_unlinked.exceptions import ParsingError
+from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store, store_path
 from ynab_unlinked.text import plural
 from ynab_unlinked.ynab_api.client import Client
@@ -79,15 +80,27 @@ def open_store(yes: bool) -> Store | None:
         return None
 
 
-def plan_notes(plan: ImportPlan) -> None:
-    """Warn about matches this computer cannot resolve (`ImportPlan.unknown_matches`)."""
-    if plan.unknown_matches:
-        display.warning(
-            f"{plural(plan.unknown_matches, 'transaction')} of this account "
-            f"{'was' if plan.unknown_matches == 1 else 'were'} matched in YNAB with one this "
-            "computer has no copy of, so a row shown as new may already be there. Open "
-            "`yul app` to update the copy, or leave the row out there."
+def plan_notes(plan: ImportPlan, formatter: Formatter) -> None:
+    """Name the rows held back because they may be in YNAB (`RowStatus.MAYBE_IN_YNAB`)."""
+    if not (held := plan.with_status(RowStatus.MAYBE_IN_YNAB)):
+        return
+    display.warning(
+        f"{plural(len(held), 'row')} may already be in YNAB and "
+        f"{'is' if len(held) == 1 else 'are'} not sent. Import or leave "
+        f"{'it' if len(held) == 1 else 'them'} out in `yul app`:"
+    )
+    console().print(
+        bullet_list(
+            # Bank and YNAB text, never markup
+            escape(
+                f"{formatter.format_date(row.transaction.date)} {row.transaction.payee} "
+                f"{formatter.format_amount(row.transaction.amount)}: same amount as "
+                f"{row.twin.payee or 'a transaction'} on {formatter.format_date(row.twin.date)}"
+            )
+            for row in held
+            if row.twin is not None
         )
+    )
 
 
 def process_transactions(
@@ -148,7 +161,7 @@ def process_transactions(
         )
 
     display_import_table(plan.rows, context.formatter)
-    plan_notes(plan)
+    plan_notes(plan, context.formatter)
 
     if not plan.new_rows:
         info("🎉 All done! Nothing to do.")
@@ -157,6 +170,8 @@ def process_transactions(
     display.info(f"Transactions to import:       {len(plan.new_rows)}")
     if left_out := len(plan.with_status(RowStatus.EXCLUDED)):
         display.info(f"Left out:                     {left_out}")
+    if held := len(plan.with_status(RowStatus.MAYBE_IN_YNAB)):
+        display.info(f"May be in YNAB, not sent:     {held}")
 
     if not context.yes and not confirm("Do you want to continue and create the transactions?"):
         return
@@ -172,6 +187,7 @@ def process_transactions(
                 else TransactionClearedStatus.CLEARED
             ),
             progress=progress,
+            store=store,
         )
 
     if result.duplicate_import_ids:
@@ -190,6 +206,7 @@ def process_transactions(
         skipped=plan.already_imported_count,
         matched=len(plan.with_status(RowStatus.MATCHED)),
         excluded=left_out,
+        held=held,
     )
 
     created = result.created

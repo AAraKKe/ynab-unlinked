@@ -125,14 +125,22 @@ A three step flow with a horizontal stepper at the top. Steps advance on their o
    be removed. Every option of the bank (Sabadell year, Cobee language) is a small select
    on the row, prefilled with the saved default or the detected value, so the defaults
    from Settings can be changed per file. The step ends with "Review n files".
-2. **Review**. One card per file: header (loader, account, "n left out" when some are, new
-   / total), a transaction table with already imported rows dimmed and tagged ("already in
-   YNAB", or "matched in YNAB" for a row YNAB matched with a reconciled transaction entered
-   by hand), new rows with a green tag and a ghost "Leave out", and rows left out crossed
-   out with "Include again". Leaving a row out is saved on this computer at once (toast, no
-   dialog) and later imports of the same statement show it crossed out without asking. A
-   summary bar sticks to the bottom: "3 files · 41 transactions · 29 new" and the button
-   "Import 29 transactions". Options: import as cleared (default) or reconciled.
+2. **Review**. A legend first: each status tag on screen, as the rows show it, and one line
+   saying what it means (only the tags some row has). Then one card per file: header
+   (loader, account, "n to check" in amber and "n left out" when there are some, new /
+   total) and a transaction table where every row has its tag: already imported rows
+   dimmed with a grey "already in YNAB", or "matched in YNAB" for a row YNAB matched with a
+   reconciled transaction entered by hand; new rows with a green "new" and a ghost "Leave
+   out"; rows left out crossed out with "Include again". A row with the amount of a
+   transaction entered by hand that YNAB matched with an import nobody can name gets an
+   amber "may be in YNAB", a line under its payee naming that transaction ("Same amount as
+   Maya Mobile on 17/10/2026 in YNAB") and two ghost buttons, "Import anyway" and "Leave
+   out"; it is not sent until one is chosen. Leaving a row out is saved on this computer at
+   once (toast, no dialog) and later imports of the same statement show it crossed out
+   without asking. A summary bar sticks to the bottom: "29 new transactions in 3 accounts",
+   "1 to check" in amber, and the button "Import 29 transactions". Options: import as
+   cleared (default) or reconciled. The Files step shows the same legend and tags in a
+   file's body, and "n to check" on its row and in its footer.
 3. **Done**. Per file progress bars that fill as YNAB answers, then a success card:
    created count, anything YNAB rejected as duplicate, and two buttons: "Reconcile these
    accounts" and "Import more".
@@ -231,8 +239,8 @@ is about today's balances, leaves them out.
   month. When Other shows, a faint line under the chart says what it is.
 - **Period panel**, under the chart (no dialog): with no month selected it shows the whole
   range; a click anywhere in a month's column, or on its name, shows that month (the other
-  months fade); clicking the same month again, a click outside the chart, or the ghost
-  "× Whole range" in the panel goes back. The panel has no head of its own (the tiles and the
+  months fade); clicking the same month again, a click anywhere else on the page (the panel
+  of the month keeps it), or the ghost "× Whole range" in the panel goes back. The panel has no head of its own (the tiles and the
   chart already give the range and its change): a picked month is named next to "Where the
   change came from", with "× Whole range". Two columns: a vertical waterfall (Income up from zero in series 1, Spending
   hanging from its top in series 2, Assets in series 5, Other in text-3, each starting where the
@@ -305,7 +313,7 @@ asks for a longer range.
     "Each month" (bars, series 1, a dashed "Average" line, both in the legend); the numbers
     in a row (average, median, lowest month, highest month, spread); "How the months spread"
     (a histogram in six slices, whole unit labels slanted 45°, series 5). A new range updates
-    it in place; the back arrow brings the chart back.
+    it in place; the back arrow, or a click on a group or a word, brings the chart back.
   - **How it moves**: a card with the four words as tiles, each its pill and a sentence with
     examples and its threshold ("Moves under 25%."); a click shows only that kind (the tile
     accent bordered), again shows every kind. A faint line says how the number is worked out.

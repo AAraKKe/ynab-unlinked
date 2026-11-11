@@ -86,7 +86,13 @@ class RowStatus(StrEnum):
     NEW            # sent on commit
     IN_YNAB        # YNAB holds its import id (or the legacy id)
     MATCHED        # YNAB holds it only through a match onto a reconciled transaction
+    MAYBE_IN_YNAB  # has a `twin` and the user has not decided: not sent
     EXCLUDED       # in the store's registry of rows left out: never sent
+
+@dataclass(frozen=True)
+class Twin:                       # the hand entered transaction a row may already be
+    date: dt.date
+    payee: str
 
 @dataclass(frozen=True)
 class ImportRow:
@@ -95,8 +101,10 @@ class ImportRow:
     already_imported: bool        # IN_YNAB or MATCHED
     matched: bool = False
     excluded: bool = False
+    twin: Twin | None = None
+    anyway: bool = False          # sent although it has a twin, for this plan only
     @property
-    def status(self) -> RowStatus: ...    # already_imported wins over excluded
+    def status(self) -> RowStatus: ...    # already_imported, then excluded, then the twin
 
 @dataclass(frozen=True)
 class ImportPlan:
@@ -104,7 +112,6 @@ class ImportPlan:
     account_id: str
     input_file: Path
     rows: tuple[ImportRow, ...]
-    unknown_matches: int = 0      # survivors pointing at a transaction the copy lacks
 
     @property
     def new_rows(self) -> tuple[ImportRow, ...]: ...     # status NEW only
@@ -113,6 +120,7 @@ class ImportPlan:
     def with_status(self, status: RowStatus) -> tuple[ImportRow, ...]: ...
     def include(self, import_ids: Collection[str]) -> ImportPlan: ...  # excluded=False
     def exclude(self, import_ids: Collection[str]) -> ImportPlan: ...  # excluded=True
+    def send_anyway(self, import_ids: Collection[str]) -> ImportPlan: ...  # anyway=True
 
 @dataclass(frozen=True)
 class ImportResult:
@@ -120,6 +128,7 @@ class ImportResult:
     duplicate_import_ids: tuple[str, ...]
 
 IMPORT_BUFFER_DAYS = 15     # also the `yul load --buffer` default and YnabUnlinkedContext's
+MATCH_WINDOW_DAYS = 10      # how far apart YNAB matches an import with a hand entered one
 
 def build_import_plan(
     client: Client, budget_id: str, account_id: str, entity_name: str,
@@ -132,8 +141,12 @@ def build_import_plan(
     # import id has `matched_transaction_id` pointing at a transaction the copy holds with
     # the row's import id (YNAB writes no import id onto a reconciled transaction it matches,
     # and hides the imported one: 404, left out of listings, only the delta has it), and
-    # EXCLUDED for the rows in `store.excluded(budget_id, account_id)`. No amount or date
-    # heuristic: a row neither rule catches is left out by hand (the registry).
+    # EXCLUDED for the rows in `store.excluded(budget_id, account_id)`.
+    # A match whose imported transaction the copy does not hold (or with no copy) cannot be
+    # named: a row YNAB does not hold with the amount of that hand entered transaction, dated
+    # within MATCH_WINDOW_DAYS of it, gets it as its `twin` (MAYBE_IN_YNAB, not sent). One
+    # row per transaction, the closest in date. It is the only amount and date heuristic,
+    # and it never decides alone: the user sends the row anyway or leaves it out.
     # An empty `transactions` returns a plan with no rows without calling YNAB.
 
 def file_digest(input_file: Path) -> str            # SHA-256 of the bytes
@@ -145,9 +158,12 @@ def unique_files(files: Sequence[Path]) -> tuple[list[Path], list[tuple[Path, Pa
 
 def commit_import_plan(
     client: Client, budget_id: str, plan: ImportPlan, cleared: TransactionClearedStatus,
-    progress: Progress = NullProgress(),
+    progress: Progress = NullProgress(), store: Store | None = None,
 ) -> ImportResult
     # creates plan.new_rows, returns created count and the duplicates YNAB rejected.
+    # `Client.create_transactions` answers `Created(transactions, duplicate_import_ids)`;
+    # the transactions go to `store.save_transactions` at once, so a match made in YNAB
+    # before the next sync can still be named. A store that fails only warns on `progress`.
     # A plan with no new rows returns ImportResult(0, ()) without calling YNAB.
 ```
 
@@ -568,6 +584,8 @@ class Store:
     def last_activity(self, budget_id: str) -> dt.datetime | None   # when the newest entry was logged
     def import_ids(self, budget_id: str, transaction_ids: Iterable[str]) -> dict[str, str]
         # id -> import id of those transactions, deleted and ghost rows included
+    def save_transactions(self, budget_id: str, transactions: Sequence[TransactionDetail]) -> None
+        # what an import just created, ahead of the sync; the server knowledge does not move
     def exclude(self, budget_id: str, row: ExcludedRow) -> None      # replaces the same key
     def include(self, budget_id: str, account_id: str, import_id: str) -> bool  # False: not there
     def excluded(self, budget_id: str, account_id: str | None = None) -> list[ExcludedRow]
@@ -830,12 +848,13 @@ web/
       data.py          Status, ImportFile, same_file, mark_repeated, take_candidate,
                        account_label, problem_text, option_choices, read_file,
                        chosen_accounts, done_summary, import_log, left_out_count,
-                       unknown_matches_note, excluded_row, LEFT_OUT_NOTE
-      view.py          ImportFlow (lifecycle, detection, the three steps, leave out / include,
-                       commit and log) and the view
+                       held_count, excluded_row, STATUS_LABELS, STATUS_MEANINGS,
+                       statuses_shown, twin_note
+      view.py          ImportFlow (lifecycle, detection, the three steps, leave out / include /
+                       import anyway, commit and log) and the view
       rows.py          draw_row(flow, item): a file row of step Files and its body
-      tables.py        badge, plan_table(plan, formatter, key, actions=None), RowActions,
-                       transactions_table
+      tables.py        badge, status_legend(plans), plan_table(plan, formatter, key,
+                       actions=None), RowActions, transactions_table
       cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
     cashflow/          /cashflow    tiles, income and spending, savings rate, came in from
       data.py          DEFAULT_RANGE, CashFlowPage, load, percent, rate_change, runway,
@@ -1083,7 +1102,7 @@ that number in the message and shows `file` in mono.
 
 | kind | message | details |
 |---|---|---|
-| `import` | `Imported {plural(created, "transaction")} to {account_name} from {file}`, plus ` · {excluded} left out` when excluded > 0 (`text.import_message`) | `loader` (config key), `account_id`, `account_name`, `file`, `created`, `duplicates`, `skipped` (already in YNAB, matched included), `matched`, `excluded` |
+| `import` | `Imported {plural(created, "transaction")} to {account_name} from {file}`, plus ` · {excluded} left out` when excluded > 0 (`text.import_message`) | `loader` (config key), `account_id`, `account_name`, `file`, `created`, `duplicates`, `skipped` (already in YNAB, matched included), `matched`, `excluded`, `held` (may be in YNAB, not sent) |
 | `exclude` | `Left {payee} ({amount}, {date}) out of imports to {account_name}` | `account_id`, `account_name`, `import_id`, `date` (ISO), `amount` (milliunits), `payee` |
 | `include` | `Included {payee} ({amount}, {date}) in imports to {account_name} again` | as `exclude` |
 | `reconcile` | `Reconciled {count} transactions in {n} accounts` | `count`, `accounts: [{id, name, count}]` |
@@ -1187,7 +1206,10 @@ card), `month-pace`, `month-rate`, `month-runway`, `month-top` (where it went),
 
 Tabs: `nw-tabs`, `nw-tab-{overview|months|movers}`. Months: `tile-change`, `tile-saved`,
 `tile-assets`, `tile-months-up`, `months-chart` (its `componentClick` picks a month: a series
-point by `dataIndex`, or the x axis by `value`, the month as `YYYY-MM`), `other-note`. Period
+point by `dataIndex`, or the x axis by `value`, the month as `YYYY-MM`), `other-note`,
+`months-tab` (hears `theme.OUTSIDE_EVENT`: `theme.OUTSIDE_JS` sends it to every element with
+`OUTSIDE_PROP` for a click outside the elements with `KEEP_PROP`, here the chart and the
+panel, and the picked month goes back to the whole range). Period
 panel: `period-panel`, `period-title` and `period-clear` (a picked month only), `bridge`,
 `step-{income|spending|assets|other|net}`, `moved-{account_id}`, `came-in`, `spent-on`.
 Movers: `movers`, `mover-{account_id}`.
@@ -1244,6 +1266,12 @@ each category row with the marker, a dash and the category id.
 
 #### Import
 
-Review rows: `row-status-{file key}-{index}` (new, already in YNAB, matched in YNAB, left
-out), `leave-out-{file key}-{index}` on a new row, `include-{file key}-{index}` on a row left
-out, `review-left-out-{file key}` and `review-left-out` (footer) when rows are left out.
+Review rows: `row-status-{file key}-{index}` (new, may be in YNAB, already in YNAB, matched in
+YNAB, left out; every one a pill), `leave-out-{file key}-{index}` on a new row,
+`include-{file key}-{index}` on a row left out, `review-left-out-{file key}` and
+`review-left-out` (footer) when rows are left out. A row that may be in YNAB has
+`row-twin-{file key}-{index}` (the transaction it looks like), `import-anyway-{file key}-{index}`
+and `leave-out-{file key}-{index}`; they are counted in `held-{file key}` and `files-held`
+(Files), `review-held-{file key}` and `review-held` (Review). `status-legend` above the rows
+(Review: once, over the cards; Files: in a file's body) holds `legend-{RowStatus value}` for
+each status on screen.

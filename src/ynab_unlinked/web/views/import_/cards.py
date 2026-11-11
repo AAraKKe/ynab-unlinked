@@ -13,7 +13,12 @@ from ynab_unlinked.core.importing import ImportResult
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button, check, glass_card, pill, spinner
-from ynab_unlinked.web.views.import_.data import ImportFile, done_summary, left_out_count
+from ynab_unlinked.web.views.import_.data import (
+    ImportFile,
+    done_summary,
+    held_count,
+    left_out_count,
+)
 from ynab_unlinked.web.views.import_.tables import RowActions, badge, plan_table
 from ynab_unlinked.web.wording import plural
 
@@ -28,12 +33,15 @@ def files_footer(
     blocked = any(item.blocking for item in files)
     transactions = sum(len(item.plan.rows) for item in ready if item.plan)
     new = sum(len(item.plan.new_rows) for item in ready if item.plan)
+    held = sum(held_count(item.plan) for item in ready if item.plan)
     with ui.element("div").classes("yul-foot").mark("files-footer"):
         with ui.element("div").classes("yul-grow yul-foot-stat"):
             ui.label(plural(len(active), "file"))
             ui.label(plural(transactions, "transaction"))
             ui.label(f"{new} new").classes("yul-good")
-            ui.label(f"{transactions - new} already in YNAB").classes("yul-muted")
+            if held:
+                ui.label(f"{held} to check").classes("yul-warn").mark("files-held")
+            ui.label(f"{transactions - new - held} already in YNAB").classes("yul-muted")
             if unsupported := len(files) - len(active):
                 ui.label(f"{plural(unsupported, 'file')} skipped").classes("yul-faint")
         review = button(
@@ -54,12 +62,15 @@ def review_footer(
     """The sticky footer of Review: the totals, "import as reconciled", Back and Import."""
     new = sum(len(item.plan.new_rows) for item in ready if item.plan)
     left_out = sum(left_out_count(item.plan) for item in ready if item.plan)
+    held = sum(held_count(item.plan) for item in ready if item.plan)
     accounts = {item.account_id for item in ready if item.plan and item.plan.new_rows}
     with ui.element("div").classes("yul-foot").mark("review-footer"):
         with ui.element("div").classes("yul-grow yul-foot-stat"):
             ui.label(
                 f"{plural(new, 'new transaction')} in {plural(len(accounts), 'account')}"
             ).style("font-weight:600").mark("review-summary")
+            if held:
+                ui.label(f"{held} to check").classes("yul-warn").mark("review-held")
             if left_out:
                 ui.label(f"{left_out} left out").classes("yul-muted").mark("review-left-out")
             switch = ui.switch("import as reconciled", value=reconciled).mark("reconciled")
@@ -84,6 +95,8 @@ def review_card(
             pill(f"→ {account_name}")
             ui.label(item.name).classes("yul-faint yul-small")
             ui.element("span").classes("yul-grow")
+            if held := held_count(item.plan):
+                pill(f"{held} to check", "warn").mark(f"review-held-{item.key}")
             if left_out := left_out_count(item.plan):
                 pill(f"{left_out} left out").mark(f"review-left-out-{item.key}")
             pill(f"{len(item.plan.new_rows)} new / {len(item.plan.rows)}", "acc").mark(
@@ -153,15 +166,16 @@ def done_card(
     skipped: int,
     failed: int,
     left_out: int,
+    held: int,
     on_more: Callable[[], Any],
 ) -> None:
     """What the commit did, with Reconcile next and "Import more"."""
     with glass_card().classes("yul-imp-done").mark("done-card"):
         check(big=True)
         ui.label(f"{plural(created, 'transaction')} imported").classes("yul-h2").mark("done-title")
-        ui.label(done_summary(duplicates, skipped, failed, left_out)).classes("yul-lede").mark(
-            "done-summary"
-        )
+        ui.label(done_summary(duplicates, skipped, failed, left_out, held)).classes(
+            "yul-lede"
+        ).mark("done-summary")
         with ui.element("div").classes("yul-row").style("justify-content:center"):
             button(
                 "Reconcile these accounts",

@@ -12,6 +12,7 @@ from pytest_mock import MockerFixture
 from ynab import TransactionClearedStatus
 
 from tests.helpers.store import upsert
+from tests.helpers.web import arrived
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import Adjustments, DebtMapping, LatestConfig, TrackedAccount
@@ -291,7 +292,7 @@ async def test_the_reconcile_card_counts_transactions_and_opens_reconcile(
     user.find(marker="attention-unreconciled").click()
 
     await user.should_see(marker="reconcile", retries=20)
-    assert user.back_history[-1] == "/reconcile"
+    await arrived(user, "/reconcile")
 
 
 @pytest.mark.parametrize(
@@ -488,7 +489,7 @@ async def test_files_dropped_on_home_go_to_the_import_view(store: Store, user: U
     await upload.handle_uploads([statement])
 
     await user.should_see("movimientos.txt", marker="file-1", retries=20)
-    assert user.back_history[-1] == "/import"
+    await arrived(user, "/import")
 
 
 async def test_the_top_bar_import_button_opens_the_import_view(store: Store, user: User):
@@ -497,7 +498,7 @@ async def test_the_top_bar_import_button_opens_the_import_view(store: Store, use
     user.find(marker="top-import").click()
 
     await user.should_see("Files → Review → Done")
-    assert user.back_history[-1] == "/import"
+    await arrived(user, "/import")
 
 
 async def test_home_waits_for_the_first_sync_and_then_shows_the_budget(

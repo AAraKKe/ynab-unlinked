@@ -2,8 +2,8 @@
 
 Months: four tiles (the change, how much of it was saved, what assets did, months up), the
 monthly change chart and, under it, the period panel. With no month selected the panel shows
-the whole range; clicking a month shows that month, clicking it again (or outside the chart)
-goes back to the whole range.
+the whole range; clicking a month shows that month, clicking it again (or anywhere outside
+the chart and the panel) goes back to the whole range.
 Movers: every counted account's change over the range, what you put in or took out, what its
 assets did and its return.
 """
@@ -25,7 +25,7 @@ from ynab_unlinked.web.components.flow_chart import months_chart, months_options
 from ynab_unlinked.web.components.history_chart import set_options
 from ynab_unlinked.web.finances import RANGES
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.theme import Palette
+from ynab_unlinked.web.theme import KEEP_PROP, OUTSIDE_EVENT, OUTSIDE_PROP, Palette
 from ynab_unlinked.web.views.networth import flows as words
 from ynab_unlinked.web.views.networth.data import Snapshot, signed
 from ynab_unlinked.web.views.networth.period_panel import period_panel
@@ -67,18 +67,19 @@ class PeriodTabs:
         if tab != "months":
             movers_tab(period, words.account_names(snapshot), self._closed(), formatter)
             return
-        with ui.element("div").classes("yul-nwm-months") as months:
-            months.on("click.self", self.clear)
+        with ui.element("div").classes("yul-nwm-months").mark("months-tab") as months:
+            # A click anywhere but on the chart or the panel of the month goes back to the range
+            months.props(OUTSIDE_PROP).on(OUTSIDE_EVENT, self.clear)
             self.chart = months_tab(
                 period,
                 palette=palette,
                 currency_format=config.budget.currency_format,
                 formatter=formatter,
                 on_month=self.pick,
-                on_outside=self.clear,
                 selected=self.selected,
             )
-            self.panel = ui.element("div")
+            self.chart.props(KEEP_PROP)
+            self.panel = ui.element("div").props(KEEP_PROP)
         self._draw_panel()
 
     def _closed(self) -> set[str]:
@@ -156,7 +157,6 @@ def months_tab(
     currency_format: CurrencyFormat,
     formatter: Formatter,
     on_month: Callable[[int], Any],
-    on_outside: Callable[[], Any],
     selected: int | None = None,
 ) -> ui.echart:
     """Draw the tiles and the chart card; returns the chart, which the view restyles."""
@@ -186,13 +186,12 @@ def months_tab(
             if best is None or best[1].change <= 0
             else f"best {best[0].strftime('%b')} {signed(formatter, best[1].change)}",
         ).mark("tile-months-up")
-    with glass_card().classes("yul-nwm-card") as card:
-        card.on("click.self", on_outside)
+    with glass_card().classes("yul-nwm-card"):
         with ui.element("div").classes("yul-row"):
             ui.label("Monthly change").classes("yul-nwm-title yul-grow")
-            ui.label("click a month to see it, again to see the whole range").classes(
-                "yul-faint yul-small"
-            )
+            ui.label(
+                "click a month to see it; again, or anywhere else, for the whole range"
+            ).classes("yul-faint yul-small")
         chart = months_chart(period.months, palette, currency_format, on_month, selected)
         chart.mark("months-chart")
         if any(month.other + month.transfers for _, month in period.months):

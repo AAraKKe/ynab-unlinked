@@ -77,18 +77,69 @@ def test_a_row_matched_onto_a_reconciled_transaction_is_not_created_again(
     ynab.api("transactions").create_transaction.assert_not_called()
 
 
-def test_a_match_the_copy_cannot_resolve_is_pointed_out(
-    config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, existing_in_ynab
+def test_a_row_that_may_be_in_ynab_is_named_and_not_sent(
+    config_file: Path,
+    yul: CliRunner,
+    load_entity: LoadEntityCallback,
+    existing_in_ynab,
+    created_transactions,
+    store_file: Path,
 ):
+    # The copy never saw the import this transaction was matched with
     existing_in_ynab(
-        [TransactionDetailFactory(id="hand", amount=-12340, matched_transaction_id="unknown")]
+        [
+            TransactionDetailFactory(
+                id="hand",
+                var_date=YESTERDAY,
+                amount=-12340,
+                payee_name="Café",
+                matched_transaction_id="unknown",
+            )
+        ]
     )
-    load_entity(TODAY, [COFFEE])
+    load_entity(TODAY, [COFFEE, LUNCH])
 
-    result = yul("load test", input="n\n")
+    result = yul("load --yes test")
 
     assert result.exit_code == 0, result.output
-    assert "matched in YNAB with one this" in result.output
+    assert "1 row may already be in YNAB and is not sent" in result.output
+    assert f"Coffee Shop -12.34€: same amount as Café on {YESTERDAY:%d/%m/%Y}" in result.output
+    assert [t.payee_name for t in created_transactions()] == ["Lunch"]
+    [entry] = Store(store_file).activity(BUDGET_ID)
+    assert entry.details["held"] == 1
+
+
+def test_a_row_matched_in_ynab_before_any_sync_is_still_recognised(
+    config_file: Path,
+    yul: CliRunner,
+    load_entity: LoadEntityCallback,
+    ynab,
+    existing_in_ynab,
+):
+    load_entity(TODAY, [COFFEE])
+    ynab.api("transactions").create_transaction.return_value.data.transactions = [
+        TransactionDetailFactory(id="yul", amount=-12340, import_id=COFFEE_ID)
+    ]
+    assert yul("load --yes test").exit_code == 0
+    # Matched with a reconciled transaction entered by hand: YNAB lists only that one
+    existing_in_ynab(
+        [
+            TransactionDetailFactory(
+                id="hand",
+                var_date=THREE_DAYS_AGO,
+                amount=-12340,
+                cleared=TransactionClearedStatus.RECONCILED,
+                matched_transaction_id="yul",
+            )
+        ]
+    )
+
+    result = yul("load --yes test")
+
+    assert result.exit_code == 0, result.output
+    assert "matched in YNAB" in result.output
+    assert "may be in YNAB and" not in result.output
+    assert ynab.api("transactions").create_transaction.call_count == 1
 
 
 def test_yes_keeps_the_rows_left_out_and_notes_them_in_the_activity_log(
