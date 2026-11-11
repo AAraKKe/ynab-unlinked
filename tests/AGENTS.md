@@ -112,6 +112,10 @@ is almost always waiting for a fixed interval, not working. Measure before you a
   `await user.should_see(...)`. A passing check returns as soon as the page is right, so the
   long ceiling costs nothing; a short one is a guess of how fast a runner is, and flakes. Mark
   elements in the views with `.mark("name")` and find them by marker rather than by text.
+- After a click that goes to another page, check the address with `await arrived(user, path)`
+  (`tests/helpers/web.py`), never `assert user.back_history[-1] == path`: the page is on screen
+  one turn of the event loop before the browser has its address, so the assert fails now and
+  then on a slow runner.
 - Never `user.find(...)` an element you have not waited for: wait for that element, not for
   another one drawn before it. Views read what they need first and draw a page in one go, so
   a page is never half drawn around an `await`.
