@@ -6,6 +6,14 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.3.0 (2026-11-11)
+
+### Fresh Out of the Feature Oven
+* [[#146](https://github.com/AAraKKe/ynab-unlinked/issues/146)] New Plan page under Finances: net worth and your goal in the years ahead, starting from what your last months measured (income, spending, where your saving goes, what your assets return), with sliders to try another future against it. The budget copy now keeps what each category held in the last 36 months, so the first sync after the update asks YNAB for those months.
+
+### For the Builders: Dev Experience Upgrades
+* [[#145](https://github.com/AAraKKe/ynab-unlinked/issues/145)] The tag command in the release PR makes a signed, annotated tag on `origin/main`, and only once `origin/main` has the new version.
+
 ## ynab-unlinked 1.2.0 (2026-11-11)
 
 ### Fresh Out of the Feature Oven
