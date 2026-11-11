@@ -614,6 +614,21 @@ for series. The accent of a single series line (net worth, the Home sparkline) i
 palette's chart accent (`theme.palette()`), drawn on the server: a palette change shows on
 the next render, and Net worth restyles its charts within a second.
 
+### Amounts in a list
+
+Every list of transactions (the Import tables, the rows left out in Settings, Reconcile, an
+account's last transactions in Net worth) shows one signed amount, right aligned, through
+`components.amount`: money in reads "+12,99€" in `--good`, money out "-8,75€" in the row's
+own colour. Most rows are spending, and a column of `--bad` would read as errors next to the
+status tags, so only the exception is tinted; the `+` says the direction where the colour is
+not seen. In a row that steps back (already in YNAB, left out, uncleared) the green fades
+with it (`--good` mixed half with `--text-3`). One column rather than Outflow and Inflow: the
+review table has a status and an action column already, the Reconcile rows and the drawer
+are narrow, and a second money column pushed the status off a phone. Balances, totals and
+changes are figures, not transactions, and keep their own treatment. The terminal follows
+the same rule: `yul load` and `yul reconcile` print one Amount column, money in with a `+`
+in green, and colour only the status tag of a row, never the whole row.
+
 ### Cards with a switch
 
 A card that can be switched on or off (Settings Banks and Accounts) shows its state with the

@@ -11,7 +11,7 @@ from nicegui import ui
 from ynab_unlinked.core.importing import ImportPlan, ImportRow, RowStatus
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import Transaction
-from ynab_unlinked.web.components import PillKind, button, pill, set_class
+from ynab_unlinked.web.components import PillKind, amount, button, pill, set_class
 from ynab_unlinked.web.views.import_.data import (
     STATUS_LABELS,
     STATUS_MEANINGS,
@@ -72,7 +72,7 @@ def plan_table(
                 note = None
                 if status is RowStatus.MAYBE_IN_YNAB and row.twin is not None:
                     note = (twin_note(row.twin, formatter), f"row-twin-{key}-{index}")
-                _cells(row.transaction, formatter, note)
+                _cells(row.transaction, formatter, note).mark(f"row-amount-{key}-{index}")
                 with ui.element("td").classes("r"):
                     _status(status).mark(f"row-status-{key}-{index}")
                 if actions is not None:
@@ -133,8 +133,8 @@ def _header(actions: bool = False) -> None:
 
 def _cells(
     transaction: Transaction, formatter: Formatter, note: tuple[str, str] | None = None
-) -> None:
-    """The date, payee and amount; `note` is a line under the payee and its marker."""
+) -> ui.label:
+    """The date, payee and amount (returned); `note` is a line under the payee and its marker."""
     with ui.element("td").classes("num"):
         ui.label(formatter.format_date(transaction.date))
     with ui.element("td"):
@@ -143,4 +143,4 @@ def _cells(
             text, marker = note
             ui.label(text).classes("yul-imp-twin").mark(marker)
     with ui.element("td").classes("r num"):
-        ui.label(formatter.format_amount(transaction.amount))
+        return amount(transaction.amount, formatter)

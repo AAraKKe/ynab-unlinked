@@ -3,7 +3,9 @@ from __future__ import annotations
 import datetime as dt
 from unittest.mock import MagicMock
 
-from tests.cli.utils.builders import column, only_table, styles
+import pytest
+
+from tests.cli.utils.builders import cell_styles, column, only_table, styles
 from tests.factories import ImportRowFactory
 from ynab_unlinked.cli.utils import display_import_table
 from ynab_unlinked.core.importing import Twin
@@ -40,22 +42,32 @@ def test_import_table_tells_each_row_status_apart(printed: MagicMock, formatter:
         "left out",
         "may be in YNAB",
     ]
-    assert styles(table) == ["gray37", "green", "gray37", "strike gray37", "yellow"]
+    # Only the tag carries the colour of its status, as in the app: a green row would hide
+    # the green of an inflow. Rows that need nothing from the user step back.
+    assert cell_styles(table, "Status") == ["gray37", "green", "gray37", "gray37", "yellow"]
+    assert styles(table) == ["gray37", "None", "gray37", "strike gray37", "None"]
 
 
-def test_import_table_splits_the_amount_into_inflow_and_outflow(
-    printed: MagicMock, formatter: Formatter
+@pytest.mark.parametrize(
+    "already_imported, inflow_style",
+    [
+        pytest.param(False, "green", id="new-row"),
+        pytest.param(True, "dim green", id="dimmed-row"),
+    ],
+)
+def test_import_table_shows_money_in_with_a_plus_in_green(
+    printed: MagicMock, formatter: Formatter, already_imported: bool, inflow_style: str
 ):
     rows = [
-        ImportRowFactory(payee="Salary", amount=1500.0),
-        ImportRowFactory(payee="Coffee", amount=-12.34),
+        ImportRowFactory(payee="Salary", amount=1500.0, already_imported=already_imported),
+        ImportRowFactory(payee="Coffee", amount=-12.34, already_imported=already_imported),
     ]
 
     display_import_table(rows, formatter)
 
     table = only_table(printed)
-    assert column(table, "Inflow") == ["1,500.00€", ""]
-    assert column(table, "Outflow") == ["", "-12.34€"]
+    assert column(table, "Amount") == ["+1,500.00€", "-12.34€"]
+    assert cell_styles(table, "Amount") == [inflow_style, ""]
 
 
 def test_import_table_is_not_printed_when_there_is_nothing_to_import(

@@ -9,7 +9,7 @@ from nicegui import run, ui
 
 from ynab_unlinked.store import ExcludedRow, Store
 from ynab_unlinked.web import shell
-from ynab_unlinked.web.components import button, section_title
+from ynab_unlinked.web.components import amount, button, section_title
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.wording import left_out_entry
 
@@ -70,7 +70,7 @@ def draw(page: Settings, rows: list[ExcludedRow], names: dict[str, str]) -> None
                     with ui.element("td"):
                         ui.label(account_name)
                     with ui.element("td").classes("r num"):
-                        ui.label(formatter.format_amount_milli(row.amount))
+                        amount(row.amount / 1000, formatter).mark(f"left-out-amount-{index}")
                     with ui.element("td").classes("r"):
                         button(
                             "Include again",

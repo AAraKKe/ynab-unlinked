@@ -414,6 +414,24 @@ def test_the_log_line_of_an_import_counts_in_words(created: int, message: str):
     assert logged == message
 
 
+async def test_the_review_shows_money_in_with_a_plus_in_the_good_tone(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User
+):
+    await drop(user, SABADELL)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    await user.should_see(marker="row-amount-1-2", retries=20)
+
+    shown = [user.find(marker=f"row-amount-1-{index}").elements.pop() for index in range(3)]
+    assert [
+        (label.text, "in" in label.classes) for label in shown if isinstance(label, ui.label)
+    ] == [
+        ("-48.00€", False),
+        ("+12.50€", True),
+        ("-1,212.16€", False),
+    ]
+
+
 @pytest.fixture
 def sabadell_first_left_out(store_file: Path) -> str:
     """The first Sabadell row, left out of imports to Oro in an earlier run. Before `user`."""

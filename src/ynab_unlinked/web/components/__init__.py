@@ -17,6 +17,7 @@ from nicegui import ui
 from ynab import PlanSummary
 
 from ynab_unlinked.config.models.v2 import CurrencyFormat
+from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.text import YNAB_TOKEN_URL
 from ynab_unlinked.web.components.history_chart import money_js
 from ynab_unlinked.web.theme import STATIC_ROUTE
@@ -156,6 +157,20 @@ def pill(text: str, kind: PillKind = "default") -> ui.label:
     element = ui.label(text).classes("yul-pill")
     if kind != "default":
         element.classes(kind)
+    return element
+
+
+def amount(value: float, formatter: Formatter) -> ui.label:
+    """The amount of one transaction in a list, `value` in currency units (not milliunits).
+
+    Money in reads "+12,99€" in the good tone (`yul-amt in`), money out "-8,75€" in the
+    row's own colour: most rows are spending, and a column of red would read as errors.
+    A dimmed row softens the tone of its inflow (`yul.css`). Balances and totals are not
+    transactions and keep their own figures.
+    """
+    element = ui.label(formatter.format_flow(value)).classes("yul-amt yul-num")
+    if value > 0:
+        element.classes("in")
     return element
 
 

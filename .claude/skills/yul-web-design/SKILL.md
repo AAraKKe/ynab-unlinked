@@ -62,7 +62,8 @@ same change. Never update a document to describe something you did not build.
 - `components`: `button(text, kind=primary|ghost|danger|danger-primary, small, icon_name)`,
   `icon(name)` from `ICONS`, `pill(text, kind)`, `glass_card(hover, flush)`, `stat_tile`,
   `segmented_bar`, `share_bar`, `empty_state`, `spinner`, `check`, `bank_logo`,
-  `count_up(label, milliunits, currency_format)` (the one count up).
+  `count_up(label, milliunits, currency_format)` (the one count up), `amount(value, formatter)`
+  (the amount of a transaction in a list: "+" and the good tone on money in).
 - `components` helpers instead of hand rolled NiceGUI: `set_class(el, name, on)`,
   `clickable(el, handler, role=...)` (Tab, click and Enter), `loading(text)` /
   `show_state(box, "loading" | "error" | "ok", text)`, `section_title(text, swatch=)`,

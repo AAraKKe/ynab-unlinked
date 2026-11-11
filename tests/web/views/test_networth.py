@@ -643,6 +643,22 @@ async def test_the_account_drawer_lists_its_transactions(seeded: Store, no_sync,
     assert drawer_series[0]["data"][-1] == [today().isoformat(), 46_300.0]
 
 
+async def test_the_account_drawer_shows_money_in_with_a_plus_in_the_good_tone(
+    seeded: Store, no_sync, user: User
+):
+    await open_networth(user)
+
+    user.find(marker=f"name-{CHECKING}").click()
+
+    await user.should_see(marker="drawer-amount", retries=20)
+    shown = {
+        (label.text, "in" in label.classes)
+        for label in user.find(marker="drawer-amount").elements
+        if isinstance(label, ui.label)
+    }
+    assert shown == {("+2,500.00€", True), ("-500.00€", False)}
+
+
 async def test_the_first_sync_fills_the_view_when_it_lands(
     tracked: LatestConfig, ynab_api: YnabClientStub, fast_tick: None, user: User
 ):
