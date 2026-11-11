@@ -6,6 +6,11 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.3.1 (2026-11-11)
+
+### Bugs Squashed, Peace Restored
+* [[#148](https://github.com/AAraKKe/ynab-unlinked/issues/148)] Updating from the app works right after a release: an update started within ten minutes of installing or upgrading yul said "already at latest version" and kept the old one, because pip was reading a list of releases it had saved before the new one came out.
+
 ## ynab-unlinked 1.3.0 (2026-11-11)
 
 ### Fresh Out of the Feature Oven
