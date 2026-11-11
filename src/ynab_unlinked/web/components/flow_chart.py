@@ -1,6 +1,7 @@
 """The monthly change chart of Net worth › Months: one bar per month, split by where it came from.
 
-Each bar stacks what was saved (income minus spending), what assets did and everything else
+Each bar stacks what was saved (income minus spending), growth (what accounts did on their
+own: markets, interest) and everything else
 (money set aside, starting balances, transfers with accounts not counted; only when there is
 some), positives up and negatives down from zero; a line joins the months' net changes. Same
 axis, grid, tooltip and compact ticks as `history_chart`. A transparent column behind each
@@ -8,6 +9,9 @@ month takes the clicks, so the whole height of a month picks it, not only its th
 
 `bridge_chart` is the period panel's waterfall: income up from zero, each next step from where
 the one before ended, joined by dashed lines, and the net change as a bar from zero.
+
+`story_options` is the chart of the Return explainer: what a made-up account holds after each
+step as bars, what was put in as a line, the steps not reached yet empty.
 """
 
 from __future__ import annotations
@@ -137,7 +141,7 @@ def months_options(
             ],
         }
 
-    legend = ["Saved", "Assets", *(["Other"] if any(others) else []), "Net"]
+    legend = ["Saved", "Growth", *(["Other"] if any(others) else []), "Net"]
     return {
         "animationDuration": 500,
         "textStyle": {"fontFamily": "Inter, system-ui, sans-serif"},
@@ -198,7 +202,7 @@ def months_options(
                 "data": [[index] for index in range(len(months))],
             },
             bars("Saved", palette.series[SAVED_SLOT], 0),
-            bars("Assets", palette.series[ASSETS_SLOT], 1),
+            bars("Growth", palette.series[ASSETS_SLOT], 1),
             *([bars("Other", palette.text_3, 2)] if len(stacked) > 2 else []),
             {
                 "type": "line",
@@ -351,3 +355,85 @@ def bridge_chart(
     return ui.echart(bridge_options(steps, labels, palette, currency_format), renderer="svg").style(
         f"height:{BRIDGE_HEIGHT}px;width:100%"
     )
+
+
+STORY_HEIGHT = 200
+HELD = "In the account"
+PUT_IN = "Put in"
+
+
+def story_options(
+    labels: Sequence[str],
+    held: Sequence[int],
+    put_in: Sequence[int],
+    upto: int,
+    palette: Palette,
+    currency_format: CurrencyFormat,
+) -> dict[str, Any]:
+    """The steps up to `upto` (an index) drawn; the next ones grow in as the user steps on."""
+    axis_label = {"color": palette.text_3, "fontSize": 11, "fontFamily": "Inter, system-ui"}
+
+    def shown(values: Sequence[int]) -> list[float | None]:
+        return [value / 1000 if index <= upto else None for index, value in enumerate(values)]
+
+    # Fixed, so the axis does not jump as the steps come in
+    top = max(*held, *put_in) / 1000
+
+    return {
+        "animationDuration": 500,
+        "animationDurationUpdate": 500,
+        "textStyle": {"fontFamily": "Inter, system-ui, sans-serif"},
+        "grid": {"left": 4, "right": 8, "top": 30, "bottom": 4, "containLabel": True},
+        "legend": {
+            "show": True,
+            "data": [HELD, PUT_IN],
+            "top": 0,
+            "left": 0,
+            "icon": "roundRect",
+            "itemWidth": 10,
+            "itemHeight": 10,
+            "itemGap": 16,
+            "selectedMode": False,
+            "textStyle": {"color": palette.text_2, "fontSize": 12},
+        },
+        "tooltip": {"show": False},
+        "xAxis": {
+            "type": "category",
+            "data": list(labels),
+            "axisLine": {"show": False},
+            "axisTick": {"show": False},
+            "axisLabel": axis_label,
+        },
+        "yAxis": {
+            "type": "value",
+            "max": top,
+            "interval": top / 4,
+            "axisLine": {"show": False},
+            "axisTick": {"show": False},
+            "splitLine": {"show": True, "lineStyle": {"color": palette.hair, "width": 1}},
+            "axisLabel": {**axis_label, ":formatter": compact_js(currency_format)},
+        },
+        "series": [
+            {
+                "type": "bar",
+                "name": HELD,
+                "color": palette.series[SAVED_SLOT],
+                "barMaxWidth": 36,
+                "itemStyle": {"borderRadius": [3, 3, 0, 0]},
+                "emphasis": {"disabled": True},
+                "data": shown(held),
+            },
+            {
+                "type": "line",
+                "name": PUT_IN,
+                "color": palette.text_2,
+                # What is put in arrives at its step, it does not slope towards it
+                "step": "end",
+                "symbol": "circle",
+                "symbolSize": 6,
+                "lineStyle": {"type": "dashed", "width": 1.5},
+                "emphasis": {"disabled": True},
+                "data": shown(put_in),
+            },
+        ],
+    }

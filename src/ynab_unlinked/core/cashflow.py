@@ -190,8 +190,12 @@ class FlowMonth:
     """Positive milliunits."""
     complete: bool
     """False for the month still running."""
-    label: str | None = None
-    """What made it unusual: the user's note in YNAB, else the payee or category that stood out."""
+    note: str | None = None
+    """The first line of the user's note on the month in YNAB."""
+    income_label: str | None = None
+    """In a month that earned far above the usual: the payee that brought most over its usual."""
+    spending_label: str | None = None
+    """In a month that spent far above the usual: the category that spent most over its usual."""
 
     @property
     def saved(self) -> int:
@@ -337,14 +341,22 @@ def _short(text: str) -> str:
     return first if len(first) <= LABEL_LENGTH else first[: LABEL_LENGTH - 1].rstrip() + "…"
 
 
+@dataclass(frozen=True)
+class _Labels:
+    note: str | None = None
+    income: str | None = None
+    spending: str | None = None
+
+
 def _labels(
     months: Sequence[FlowMonth],
     by_month: Mapping[dt.date, list[Line]],
     rules: Rules,
     trends: Sequence[CategoryTrend],
     notes: Mapping[dt.date, str],
-) -> list[str | None]:
-    """A month's note in YNAB, else what stood out in a month far above the usual."""
+) -> list[_Labels]:
+    """A month's note in YNAB, and what stood out in its income and in its spending when each
+    is far above the usual. The two are told apart: a month can be both."""
     complete = [m for m in months if m.complete]
     usual_income = statistics.median(m.income for m in complete) if complete else 0
     usual_spending = statistics.median(m.spending for m in complete) if complete else 0
@@ -362,31 +374,35 @@ def _labels(
         name: statistics.median(earned[month.month].get(name, 0) for month in complete)
         for name in payees
     }
-    labels: list[str | None] = []
-    for month in months:
-        if (note := notes.get(month.month)) and _short(note):
-            labels.append(_short(note))
-            continue
-        label = None
-        lines = by_month.get(month.month, [])
-        if month.complete and usual_income > 0 and month.income > usual_income * UNUSUAL_ABOVE:
-            this = earned[month.month]
-            if this:
-                label = max(this, key=lambda name: this[name] - usual_payee.get(name, 0))
-        elif (
-            month.complete
-            and usual_spending > 0
-            and month.spending > usual_spending * UNUSUAL_ABOVE
-        ):
-            spent: dict[str | None, int] = {}
-            for line in lines:
-                if rules.kind(line) == "spending":
-                    spent[line.category_id] = spent.get(line.category_id, 0) - line.amount
-            if spent:
-                over = max(spent, key=lambda key: spent[key] - means.get(key, 0))
-                label = names.get(over)
-        labels.append(_short(label) if label else None)
-    return labels
+
+    def income(month: FlowMonth) -> str | None:
+        this = earned[month.month]
+        if not this or usual_income <= 0 or month.income <= usual_income * UNUSUAL_ABOVE:
+            return None
+        return max(this, key=lambda name: this[name] - usual_payee.get(name, 0))
+
+    def spending(month: FlowMonth) -> str | None:
+        if usual_spending <= 0 or month.spending <= usual_spending * UNUSUAL_ABOVE:
+            return None
+        spent: dict[str | None, int] = {}
+        for line in by_month.get(month.month, []):
+            if rules.kind(line) == "spending":
+                spent[line.category_id] = spent.get(line.category_id, 0) - line.amount
+        if not spent:
+            return None
+        return names.get(max(spent, key=lambda key: spent[key] - means.get(key, 0)))
+
+    def short(text: str | None) -> str | None:
+        return (_short(text) or None) if text else None
+
+    return [
+        _Labels(
+            note=short(notes.get(month.month)),
+            income=short(income(month)) if month.complete else None,
+            spending=short(spending(month)) if month.complete else None,
+        )
+        for month in months
+    ]
 
 
 def cash_flow(
@@ -434,7 +450,15 @@ def cash_flow(
     trends = _spent_by_category(known, rules, complete, history, categories)
     labels = _labels(months, by_month, rules, trends, notes or {})
     months = [
-        FlowMonth(m.month, m.income, m.spending, m.complete, label)
+        FlowMonth(
+            m.month,
+            m.income,
+            m.spending,
+            m.complete,
+            note=label.note,
+            income_label=label.income,
+            spending_label=label.spending,
+        )
         for m, label in zip(months, labels, strict=True)
     ]
     return CashFlow(

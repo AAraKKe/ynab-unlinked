@@ -532,7 +532,7 @@ shell.command(
     "Net worth › Months",
     f"{shell.NETWORTH_PATH}?tab=months",
     icon="networth",
-    keywords="monthly change saved assets waterfall",
+    keywords="monthly change saved growth assets waterfall",
 )
 shell.command(
     "networth-movers",

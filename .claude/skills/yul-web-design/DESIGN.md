@@ -234,18 +234,19 @@ work in whole calendar months: 1M is this month, 3M the last three with this one
 January, All from the first transaction. Every line of a counted account is read the same way
 (Settings › Categories explains it to the user): money in to a budget account is income,
 whatever its category, refunds too; money out is spending, unless its category is marked "not
-spending" (set aside); **Assets** is what changed an asset outside transfers, whatever the
+spending" (set aside); **Growth** is what changed an asset outside transfers, whatever the
 reason (market moves, interest, a sale recorded as an adjustment): every line of a tracking
 account, and the balance adjustments of the budget accounts whose return is followed;
 transfers between counted accounts move nothing. So the parts always add up to the change.
+The screen calls it Growth, never Assets: Assets is the bucket of net worth.
 Closed accounts count for the past (they held money then), in the history of Overview and
 Home too, and show a faint "closed" pill wherever they are listed; the Accounts table, which
 is about today's balances, leaves them out.
 
 - **Months**: a title with the range ("Jun 2026 – Nov 2026") and the pills, four stat tiles
   (Change "+11,616.69€ · from 159,453.88€"; From saving, income minus spending, with "80% of
-  the change" only when it is a part of it; From assets; Months up "6 of 6 · best Nov
-  +3,695.85€"), then a card "Monthly change" with one bar per month: Saved (series 1), Assets
+  the change" only when it is a part of it; From growth; Months up "6 of 6 · best Nov
+  +3,695.85€"), then a card "Monthly change" with one bar per month: Saved (series 1), Growth
   (series 5) and, only when there is some, Other (text-3), stacked up and down from zero.
   Segments meet square and only the two ends of a month's bar are rounded, so it reads as one
   bar split into parts. A line with dots (text colour) joins the net changes, one tooltip per
@@ -256,7 +257,7 @@ is about today's balances, leaves them out.
   of the month keeps it), or the ghost "× Whole range" in the panel goes back. The panel has no head of its own (the tiles and the
   chart already give the range and its change): a picked month is named next to "Where the
   change came from", with "× Whole range". Two columns: a vertical waterfall (Income up from zero in series 1, Spending
-  hanging from its top in series 2, Assets in series 5, Other in text-3, each starting where the
+  hanging from its top in series 2, Growth in series 5, Other in text-3, each starting where the
   one before ended and joined to the next by a dashed line, then Net as a text-2 bar from zero;
   each bar's value over it, and the values as text for screen readers) and "Accounts that moved most"
   (five, each with why: "income +4,850.00€ · spending -3,650.00€ · transfers -1,520.00€");
@@ -264,11 +265,23 @@ is about today's balances, leaves them out.
   One column under 860px. A sync that changes nothing does not redraw the tab.
 - **Movers**: one row per counted account (closed ones that held money in the range too),
   largest change first: name, a bar around a centre line (series 1 up, series 2 down) with
-  the change, "Your money" (what went in or out: income, spending, transfers), "Assets" (good
-  or bad) and "Return", the money weighted return of the asset changes, per year over a range
-  longer than one ("+6.1%", "−8.9%/yr", "—" for an account whose return is not followed). A
-  faint line under the card explains the three columns. Under 860px the two middle columns
-  hide.
+  the change, "Your money" (what went in or out: income, spending, transfers), "Growth" (good
+  or bad) and "Return", how much the money in the account grew or shrank on its own, day by
+  day (each day's gain on what it held, compounded), per year when it covers more than a year
+  ("+6.1%", "−8.9%/yr", "—" for an account whose return is not followed). It leaves out the
+  days the account held nothing; a return that covers less than the range is marked
+  "+32.8%*", its hover says "Held money on 205 of the 315 days of the range", and a second
+  faint line explains the mark. A faint line under the card explains the three columns.
+  Under 860px the two middle columns hide.
+- **How Return is measured**: the "i" next to Return opens a dialog (`dialog_box`, wider:
+  560px) that tells a made-up account in four steps, Back (ghost) and Next (primary; Done on
+  the last): 1,000 put in, it grows 50%, 8,500 more put in, it falls 20%. A chart shows what
+  the account holds after each step as bars (series 1) and what was put in as a dashed step
+  line (text-2), the steps not reached yet empty; the axis is fixed, so going on only grows
+  the next bar in with the charts' own transition (no new motion). Under it "3 of 4", the
+  step's sentence and two tiles, Return and Growth, that end at "+20.0%" and "-1,500.00€".
+  The last step adds why: Return is how the account did (the time weighted return), Growth
+  what it made you, so selling does not make an account look worse.
 
 ### Cash flow and Spending
 
@@ -284,10 +297,13 @@ asks for a longer range.
   back that far), Cash runway (cash and savings after debt over core spending, "27.8
   months"), and a faint line "Averages over 11 complete months, not this one.". Then
   "Income and spending": income (series 1) and spending (series 2) side by side per month,
-  top corners rounded, one tooltip per month with what was saved. A month with a label carries
-  it over its taller bar: the note written on that month in YNAB (first line), else, for a
-  month far above its median (1.25×), the payee that brought more than usual or the category
-  that spent more than usual. "Savings rate": its own line chart (never a second axis), the
+  top corners rounded, one tooltip per month with what was saved and what stood out. The note
+  written on that month in YNAB (first line) sits over its taller bar. Otherwise each bar far
+  above its median (1.25×) carries what pushed it there: the income bar the payee that brought
+  more than usual, the spending bar the category that spent more than usual. A month with both
+  sends them apart, income to the left and spending to the right, each tied to its bar by a
+  thin angled line. A label that would cover another one is hidden; the tooltip always lists
+  them ("Datadog brought more than usual", "🏝 Vacation spent more than usual"). "Savings rate": its own line chart (never a second axis), the
   average dashed with "average 60.2%". "Came in from": the top six payees of the range as
   bars.
 - **Spending**: three tiles (Spending a month, Core, One-offs), then side by side "By group"
