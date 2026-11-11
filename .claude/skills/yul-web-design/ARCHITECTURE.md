@@ -792,6 +792,10 @@ def restart_command(arguments) -> list[str]           # [sys.executable, "-m", "
   with pip is `<sys.executable> -m pip install --upgrade 'ynab-unlinked[web]'` (the extra
   only with `web=True`); anything else is `UNKNOWN` with a pip line to run by hand.
   `automatic` needs `RESTARTS` and, for uv and pipx, the tool on the PATH.
+- `run_upgrade` runs the command with `FRESH_INDEX` in its environment (`PIP_NO_CACHE_DIR`,
+  `UV_NO_CACHE`): pip keeps a package's list of releases for ten minutes, so an upgrade soon
+  after an install would not see the release yul found. In the environment, not as flags:
+  pipx passes the environment on to pip or uv, records flags, and refuses most under uv.
 - `run_upgrade` raises `UpdateError` with the last `OUTPUT_LINES` lines the command printed
   when it fails, and when it worked but the version on disk is not newer than `current` (an
   install pinned to a version): the app never restarts into the same yul.
