@@ -56,7 +56,9 @@ def test_pr_body_carries_the_notes_and_the_tag_to_push():
     body = release.pr_body("1.1.0", "- Something new (#130)")
 
     assert "- Something new (#130)" in body
-    assert "git tag yul-1.1.0 && git push origin yul-1.1.0" in body
+    assert "grep -qx 'version = \"1.1.0\"'" in body
+    assert 'git tag -s yul-1.1.0 -m "Release 1.1.0" origin/main' in body
+    assert "git push origin yul-1.1.0" in body
 
 
 class FakeGit:

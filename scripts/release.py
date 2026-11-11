@@ -74,15 +74,19 @@ def pr_body(version: str, notes: str) -> str:
 
 Keep the changelog build the last change of this branch: a fragment added after it makes \
 the release workflow refuse the tag (run `uv run poe tc-build` again). After the merge, tag \
-the merge commit and push it:
+the merge commit on `origin/main` with a signed, annotated tag and push it:
 
 ```sh
-git switch main && git pull
-git tag yul-{version} && git push origin yul-{version}
+git fetch origin main
+git show origin/main:pyproject.toml | grep -qx 'version = "{version}"' && \\
+  git tag -s yul-{version} -m "Release {version}" origin/main && \\
+  git push origin yul-{version}
 ```
 
-`release.yml` checks the tag against `uv version`, runs the checks and the tests, then \
-builds, publishes to PyPI and creates the GitHub release from this section.
+The tag goes on `origin/main`, not on the local checkout, and only once the merge is there: \
+the `grep` stops it while `origin/main` still has the previous version. `release.yml` \
+checks the tag against `uv version`, runs the checks and the tests, then builds, publishes \
+to PyPI and creates the GitHub release from this section.
 """
 
 
