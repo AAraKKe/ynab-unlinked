@@ -10,8 +10,10 @@ from nicegui.testing.general import prepare_simulation
 
 from tests.helpers.web import BASE_URL, PORT, TOKEN, User, fresh_nicegui
 from tests.helpers.ynab_api import YnabClientStub
+from ynab_unlinked.__about__ import __version__
 from ynab_unlinked.web import app as web_app
 from ynab_unlinked.web import state as web_state
+from ynab_unlinked.web import update as web_update
 from ynab_unlinked.web.security import cookie_name
 from ynab_unlinked.web.state import state
 
@@ -34,6 +36,14 @@ def slow_io(monkeypatch: pytest.MonkeyPatch) -> None:
         return await io_bound(callback, *args, **kwargs)
 
     monkeypatch.setattr(run, "io_bound", slowly)
+
+
+@pytest.fixture(autouse=True)
+def no_newer_yul(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PyPI is never asked: every test starts on a fresh `Updates` that finds the running yul
+    to be the latest. A test about an update patches `web_update.latest_version` again."""
+    monkeypatch.setattr(web_update, "_updates", None)
+    monkeypatch.setattr(web_update, "latest_version", lambda: __version__)
 
 
 @pytest.fixture

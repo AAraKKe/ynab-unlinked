@@ -37,7 +37,9 @@ package, see the [wiki](https://github.com/AAraKKe/ynab-unlinked/wiki).
    uv tool install ynab-unlinked          # the command line only
    ```
 
-   `pip install 'ynab-unlinked[web]'` works too. Upgrade with `uv tool upgrade ynab-unlinked`.
+   `pip install 'ynab-unlinked[web]'` works too. Upgrade with `uv tool upgrade ynab-unlinked`,
+   or from the app: when a newer version is out an **Update** button shows next to the version
+   in the sidebar, and a click updates yul and restarts it.
 
 2. **Create a YNAB token.** Open
    [app.ynab.com/settings/developer](https://app.ynab.com/settings/developer) (in YNAB:
@@ -159,8 +161,9 @@ choose "Import anyway" or "Leave out"; `yul load` names those rows and does not 
 
 ## Privacy
 
-Everything runs on your computer and the only service it talks to is YNAB's API. There is no
-telemetry. The copy of your budget stays on your computer. Your token lives in the system
+Everything runs on your computer and your data only goes to YNAB's API. The app also asks
+PyPI once a day whether a newer yul is out, which sends nothing about you and can be turned
+off in Settings › Data & privacy. There is no telemetry. The copy of your budget stays on your computer. Your token lives in the system
 keychain (macOS Keychain, Windows Credential Manager, Secret Service or KWallet on Linux).
 `yul privacy` lists what is stored and where, `yul config reset` deletes all of it, and the
 [privacy notice](./PRIVACY.md) has the details.

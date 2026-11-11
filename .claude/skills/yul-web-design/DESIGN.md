@@ -46,6 +46,17 @@ set by hand gone stale (a small disc on the icon in the rail). Under 960px the s
 the rail; under 640px it is a bar of icons along the bottom of the window, and the top bar
 keeps the title, search, the sync dot and the theme toggle.
 
+The sidebar ends with the version ("yul 1.1.0"). When a newer yul is out an accent
+**Update** pill sits next to it (an up arrow alone in the rail; not on a phone, where
+Settings › Data & privacy has it). A click opens a dialog: "Update to yul 1.2.0", one
+line ("The new version will be downloaded and this page refreshed once any ongoing operation
+is done."), "See what changed", then Cancel and the primary **Update and restart**. It does
+not say how yul updates itself: the command only shows where the user has to run it. While it runs the dialog cannot be dismissed and says "Updating
+yul…"; then "yul 1.2.0 is installed. Starting it again…" and the page reloads by itself on
+the new version: no new tab. A failure keeps the running yul, says so, shows what the
+command printed and the line to run by hand. An install yul cannot update (from source, no
+tool at hand) gets only that line and Close.
+
 The top bar holds the page title, a **search** button that looks like a field ("Search",
 ⌘K or Ctrl K), the budget chip (a click opens Settings › Connection), a sync indicator
 ("synced 2 min ago", spinning while syncing, click to sync now), a theme toggle and a
@@ -329,9 +340,12 @@ The tabs are a list down the left of the page, each with its icon, the open one 
 row that scrolls sideways under 960px. The panel opens with the tab's name. Tabs:
 **Connection** (masked token with reveal and change, budget change, config version
 and path), **Banks**, **Accounts**, **Net worth** (debt -> accounts mapping with a visual
-picker, the goal), **Categories**, **Appearance** (the palette), **Data & privacy** (what is stored where, store size, last sync, the rows left
-out of imports with "Include again" on each, "Resync from scratch", "Reset all data" with
-confirmation).
+picker, the goal), **Categories**, **Appearance** (the palette), **Data & privacy** (what is stored where, store size, last sync,
+"Updates": the "Look for new versions" switch, on by default, one line saying what is asked
+and that nothing about the user is sent, what is known ("yul 1.1.0 is the latest version.",
+"yul 1.2.0 is out. You have 1.1.0.") with "Check now" and, with a newer yul, "Update"; the
+rows left out of imports with "Include again" on each, "Resync from scratch", "Reset all
+data" with confirmation).
 
 - **Banks**: a grid of cards, one per bank: its logo, a switch in the header and a
   "Settings" cog in the footer that opens the account and default options in a dialog (the

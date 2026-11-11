@@ -1,10 +1,18 @@
+import os
+from pathlib import Path
 from typing import Any
 
 import pytest
 from nicegui.testing.user import User
 
 from tests.helpers.web import PORT, TOKEN
-from ynab_unlinked.web.security import TokenGuard, cookie_name
+from ynab_unlinked.web.security import (
+    HANDOVER_ENV,
+    TokenGuard,
+    cookie_name,
+    hand_over,
+    inherited_token,
+)
 
 COOKIE_NAME = cookie_name(PORT)
 HOST = f"127.0.0.1:{PORT}".encode()
@@ -184,3 +192,38 @@ async def test_a_cookie_of_another_run_does_not_open_the_app(guest: User):
     response = await guest.http_client.get("/settings")
 
     assert response.status_code == 403
+
+
+def test_a_run_started_by_hand_inherits_no_token(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(HANDOVER_ENV, raising=False)
+
+    assert inherited_token() is None
+
+
+def test_a_token_handed_over_is_read_once_by_the_run_that_follows(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv(HANDOVER_ENV, raising=False)
+
+    hand_over(TOKEN)
+
+    # The token is in a pipe, not in the environment the next run starts with
+    assert TOKEN not in os.environ[HANDOVER_ENV]
+    assert inherited_token() == TOKEN
+    assert HANDOVER_ENV not in os.environ
+    assert inherited_token() is None
+
+
+@pytest.mark.parametrize("value", ["a-file", "not-a-number", "999999"], ids=str)
+def test_a_stray_handover_that_is_not_a_pipe_is_ignored(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, value: str
+):
+    path = tmp_path / "token"
+    path.write_text("a token left in a file")
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        monkeypatch.setenv(HANDOVER_ENV, str(descriptor) if value == "a-file" else value)
+
+        assert inherited_token() is None
+    finally:
+        os.close(descriptor)

@@ -1,5 +1,5 @@
-"""Settings › Data & privacy: what yul keeps on this computer, the rows left out of imports,
-resync, and reset everything."""
+"""Settings › Data & privacy: what yul keeps on this computer, whether it looks for new
+versions, the rows left out of imports, resync, and reset everything."""
 
 from __future__ import annotations
 
@@ -9,19 +9,31 @@ from typing import TYPE_CHECKING
 from nicegui import ui
 
 from ynab_unlinked import keychain
+from ynab_unlinked.__about__ import __version__
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.local_data import local_data_paths
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button
+from ynab_unlinked.web.components.controls import switch
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.update import Updates, updates
+from ynab_unlinked.web.update_dialog import out_line, update_dialog
 from ynab_unlinked.web.views.settings import left_out
-from ynab_unlinked.web.views.settings.common import kv
+from ynab_unlinked.web.views.settings.common import current_config, kv
 from ynab_unlinked.web.wording import human_size, ynab_error_message
 
 if TYPE_CHECKING:
     from ynab_unlinked.web.views.settings import Settings
 
-SERVER_DESCRIPTION = "On this computer only. Nothing is sent anywhere but YNAB."
+SERVER_DESCRIPTION = "On this computer only. Your budget is sent nowhere but YNAB."
+LOOK_FOR_UPDATES = "Look for new versions"
+UPDATES_HINT = (
+    "Once a day yul asks pypi.org, where it is published, for its latest version. Nothing "
+    "about you or your budget is sent."
+)
+LOOKING = "yul looks for new versions"
+NOT_LOOKING = "yul no longer looks for new versions"
+UNREACHABLE = "pypi.org could not be reached."
 
 
 def token_wording() -> str:
@@ -29,6 +41,45 @@ def token_wording() -> str:
     if (name := keychain.backend_name()) is not None:
         return f"In your {name}, as the item “{keychain.service_name()}”. Not in any file."
     return "In the settings file, since no keychain was found on this computer."
+
+
+def update_line(status: Updates) -> str:
+    """What is known about a newer yul, for the line next to "Check now"."""
+    if (version := status.available) is not None:
+        return f"{out_line(version)}. You have {__version__}."
+    if status.failed:
+        return UNREACHABLE
+    if status.latest is None:
+        return f"You have yul {__version__}."
+    return f"yul {__version__} is the latest version."
+
+
+def _updates(page: Settings) -> None:
+    """The switch of the daily look for a newer yul, what it found, and a look right now."""
+    status = updates()
+
+    async def save(on: bool) -> None:
+        def change(config: LatestConfig) -> None:
+            config.check_for_updates = on
+
+        if not await shell.save_config(change, LOOKING if on else NOT_LOOKING):
+            await page.rerender()
+
+    async def check_now() -> None:
+        check.disable()
+        await status.check()
+        await page.rerender()
+
+    with ui.element("div").classes("yul-updates"):
+        switch(LOOK_FOR_UPDATES, current_config().check_for_updates, save).mark("check-updates")
+        ui.label(UPDATES_HINT).classes("yul-muted yul-small")
+        with ui.element("div").classes("yul-row"):
+            ui.label(update_line(status)).mark("update-status")
+            check = button("Check now", small=True, on_click=check_now).mark("check-now")
+            if status.available is not None:
+                button("Update", small=True, icon_name="upload", on_click=update_dialog).mark(
+                    "settings-update"
+                )
 
 
 async def render(page: Settings) -> None:
@@ -49,6 +100,8 @@ async def render(page: Settings) -> None:
         ui.label(str(LatestConfig.path())).classes("yul-mono").style("word-break:break-all")
         kv("YNAB token")
         ui.label(token_wording()).mark("token-location")
+        kv("Updates")
+        _updates(page)
         kv("What is kept")
         with ui.element("div").classes("yul-muted yul-small"):
             ui.label("The budget, banks, account settings and adjustment settings.")
@@ -57,7 +110,10 @@ async def render(page: Settings) -> None:
                 "a log of what yul did."
             )
             ui.label("The rows of your statements you left out of imports.")
-            ui.label("Nothing leaves this computer except calls to api.ynab.com.")
+            ui.label(
+                "Nothing leaves this computer except calls to api.ynab.com and, while yul "
+                "looks for new versions, the question to pypi.org."
+            )
 
     left_out.draw(page, rows, names)
 

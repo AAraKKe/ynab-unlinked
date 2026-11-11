@@ -289,8 +289,20 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .yul-side-spacer { flex: 1; }
 .yul-nav.collapse { color: var(--text-3); margin-top: 2px; }
 .yul-nav.collapse:hover { color: var(--text); }
-.yul-side-foot { font-size: 11px; color: var(--text-3); padding: 6px 10px 0; white-space: nowrap; }
-.rail .yul-brand-name, .rail .yul-nav-label, .rail .yul-side-foot { display: none; }
+.yul-side-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 11px; color: var(--text-3); padding: 6px 10px 0; white-space: nowrap;
+}
+/* A newer yul is out (update_dialog.py): the one accent in the sidebar's foot */
+.yul-update {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px;
+  border: 1px solid var(--pill-acc-border); background: var(--pill-acc-bg); color: var(--pill-acc-text);
+  font: inherit; font-weight: 600; cursor: pointer; transition: all .15s;
+}
+.yul-update:hover, .yul-update:focus-visible { border-color: var(--accent-solid); outline: none; }
+.rail .yul-brand-name, .rail .yul-nav-label, .rail .yul-side-version, .rail .yul-update-label { display: none; }
+.rail .yul-side-foot { justify-content: center; padding: 6px 0 0; }
+.rail .yul-update { padding: 7px; }
 .yul-nav-group {
   font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase;
   letter-spacing: .06em; padding: 14px 12px 4px;
@@ -650,7 +662,9 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
 .yul-catpick-item:hover, .yul-catpick-item:focus-visible { background: var(--surface-2); }
 .yul-catpick-none { padding: 8px; }
 
-/* ---- data & privacy: the rows left out of imports (views/settings/left_out.py) ---- */
+/* ---- data & privacy: updates, the rows left out of imports (views/settings/privacy.py, left_out.py) ---- */
+.yul-updates { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.yul-updates .yul-row { flex-wrap: wrap; }
 .yul-left-out { margin-top: 22px; }
 .yul-left-out .yul-imp-table { margin-top: 8px; }
 
@@ -698,6 +712,13 @@ body.body--dark .q-field__native, body.body--dark .q-field__input { color: var(-
 .q-dialog__backdrop { background: rgba(5, 8, 14, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .yul-dialog { width: min(480px, 92vw); background: var(--surface-solid) !important; padding: 22px 24px; }
 .yul-change-list { margin: 10px 0 18px; padding-left: 18px; color: var(--text-2); display: flex; flex-direction: column; gap: 4px; }
+/* The update dialog (update_dialog.py): the line that runs, and what it printed when it failed */
+.yul-update-cmd {
+  margin: 10px 0 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); font-family: var(--mono); font-size: 12px; word-break: break-all; user-select: all;
+}
+.yul-update-link { display: inline-block; margin-bottom: 16px; }
+.yul-update-out { white-space: pre-wrap; user-select: text; color: var(--text-2); max-height: 160px; overflow: auto; }
 /* Toasts drop in under the top bar, centered over the content, on a solid card */
 .q-notification.yul-toast, .q-notification.yul-toast.text-white {
   --toast-accent: var(--accent-2);
@@ -1279,7 +1300,9 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
     border-bottom: 1px solid var(--border); margin-bottom: 16px; padding-bottom: 6px;
   }
   .yul-frame, .yul-frame.rail { grid-template-columns: 64px minmax(0, 1fr); }
-  .yul-frame .yul-brand-name, .yul-frame .yul-nav-label, .yul-frame .yul-side-foot { display: none; }
+  .yul-frame .yul-brand-name, .yul-frame .yul-nav-label, .yul-frame .yul-side-version, .yul-frame .yul-update-label { display: none; }
+  .yul-frame .yul-side-foot { justify-content: center; padding: 6px 0 0; }
+  .yul-frame .yul-update { padding: 7px; }
   .yul-frame .yul-nav-group { visibility: hidden; height: 10px; padding: 0; overflow: hidden; }
   .yul-frame .yul-nav.collapse { display: none; }
   .yul-frame .yul-nav-badge {
@@ -1297,7 +1320,7 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--border);
     background: color-mix(in oklab, var(--bg) 82%, transparent);
   }
-  .yul-side .yul-brand, .yul-side .yul-nav-group, .yul-side .yul-side-spacer { display: none; }
+  .yul-side .yul-brand, .yul-side .yul-nav-group, .yul-side .yul-side-spacer, .yul-side .yul-side-foot { display: none; }
   .yul-side .yul-nav { padding: 9px 10px; }
   .yul-side .yul-nav.on::before { left: 10px; right: 10px; top: -7px; bottom: auto; width: auto; height: 3px; }
   .yul-side .yul-nav:hover { transform: none; }

@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import os
 import secrets
+import sys
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 from nicegui import app, ui
+from nicegui import run as workers
 from nicegui.storage import Storage
 
+from ynab_unlinked.core.update import restart_command
 from ynab_unlinked.web import frame, shell, storage_dir, theme
 from ynab_unlinked.web.security import (
     HOST,
@@ -19,11 +22,16 @@ from ynab_unlinked.web.security import (
     TokenGuard,
     entry_url,
     free_port,
+    hand_over,
+    inherited_token,
     new_token,
 )
 from ynab_unlinked.web.state import state
+from ynab_unlinked.web.update import updates
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+RESTART_FAILED = "yul was updated but could not start again. Run `yul app` once more."
 
 FAVICON = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
@@ -79,13 +87,46 @@ def _storage_secret(directory: Path) -> str:
     return secret
 
 
+def _finish_work() -> None:
+    """Wait for what still runs off the event loop, as a normal exit would.
+
+    The server is down, but a worker (`run.io_bound`) may be in the middle of a write to
+    YNAB or to the budget copy: replacing the process now would cut it. Every such call has
+    a timeout of its own, so this ends.
+    """
+    workers.thread_pool.shutdown(wait=True)
+
+
+def _restart(token: str, port: int, announce: Callable[[str], None] | None) -> None:
+    """Become the yul on disk, on the same port and with the same session token.
+
+    The tabs left open find the new server at the address they know, with the cookie they
+    hold, and reload. Nothing opens a new tab.
+    """
+    _finish_work()
+    if announce is not None:
+        announce("yul was updated. Starting it again.")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    command = restart_command(["app", "--port", str(port), "--no-browser"])
+    hand_over(token)
+    try:
+        os.execv(command[0], command)
+    except OSError:
+        if announce is not None:
+            announce(RESTART_FAILED)
+
+
 def run(
     port: int | None = None,
     open_browser: bool = True,
     announce: Callable[[str], None] | None = None,
 ) -> None:
-    """Serve the app on 127.0.0.1 until interrupted, opening the browser once it is up."""
-    token = new_token()
+    """Serve the app on 127.0.0.1 until interrupted, opening the browser once it is up.
+
+    A run that an update restarted keeps the session token of the one before it.
+    """
+    token = inherited_token() or new_token()
     port = port or free_port()
 
     directory = storage_dir()
@@ -118,3 +159,5 @@ def run(
         show_welcome_message=False,
         uvicorn_logging_level="warning",
     )
+    if updates().restarting:
+        _restart(token, port, announce)

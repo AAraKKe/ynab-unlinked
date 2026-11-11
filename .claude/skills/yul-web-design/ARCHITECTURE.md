@@ -31,6 +31,7 @@ src/ynab_unlinked/
     history.py           balance and net worth series from the store (2.7)
     finance.py           where a period's money came from and went: Flows, Rules, period() (2.8)
     cashflow.py          income and spending by month, category trends and volatility (2.9)
+    update.py            a newer yul on PyPI and how this install gets it (2.10)
   entities/              parsers, now with sniff() and a LoaderSpec per package (2.4)
   config/                V1..V4, migrations (2.6)
   store/                 SQLite transaction store and sync (2.7)
@@ -466,6 +467,8 @@ class ConfigV4(BaseModel):
     adjustments: Adjustments = Adjustments()
     debt_mappings: list[DebtMapping] = []
     finances: Finances = Finances()
+    check_for_updates: bool = True              # the app asks PyPI for a newer yul; added
+                                                # after V4 shipped, default only: no migration
     version_number: str = Field(default="V4", alias="version")
 
     # Config protocol
@@ -744,6 +747,43 @@ def cash_flow(store, budget_id, rules, start, end, *, categories=None, notes=Non
     # above the median
 ```
 
+### 2.10 Updates (`core/update.py`)
+
+```python
+PACKAGE = "ynab-unlinked"; PYPI_URL; CHANGELOG_URL
+RESTARTS: bool                     # os.execv replaces the process: POSIX only
+
+class UpdateError(Exception)
+class Install(StrEnum): UV_TOOL, PIPX, PIP, SOURCE, UNKNOWN
+
+@dataclass(frozen=True)
+class Upgrade:
+    install: Install
+    command: tuple[str, ...] | None    # None for SOURCE
+    automatic: bool                    # yul can run it and restart itself
+    shown -> str | None                # the command as one line to read or paste
+
+def is_newer(candidate: str, current: str) -> bool   # final releases only, numbers compared
+def latest_version(timeout=CHECK_TIMEOUT) -> str      # GET PYPI_URL; UpdateError
+def upgrade_plan(*, web: bool) -> Upgrade
+def installed_version() -> str                        # asked to a new interpreter
+def run_upgrade(upgrade, current, timeout=UPGRADE_TIMEOUT) -> str   # the version installed
+def restart_command(arguments) -> list[str]           # [sys.executable, "-m", "ynab_unlinked", ...]
+```
+
+- The check sends nothing about the user: one GET of a public document, no body, no
+  identifying header. Only the web app asks, and only while `config.check_for_updates`.
+- `upgrade_plan` reads the running environment, in this order: a `direct_url.json` in yul's
+  metadata is `SOURCE` (a checkout, a local wheel, a repository: never upgraded);
+  `uv-receipt.toml` in `sys.prefix` is `uv tool upgrade ynab-unlinked`; `pipx_metadata.json`
+  is `pipx upgrade ynab-unlinked` (both tools remember the extras); a virtual environment
+  with pip is `<sys.executable> -m pip install --upgrade 'ynab-unlinked[web]'` (the extra
+  only with `web=True`); anything else is `UNKNOWN` with a pip line to run by hand.
+  `automatic` needs `RESTARTS` and, for uv and pipx, the tool on the PATH.
+- `run_upgrade` raises `UpdateError` with the last `OUTPUT_LINES` lines the command printed
+  when it fails, and when it worked but the version on disk is not newer than `current` (an
+  install pinned to a version): the app never restarts into the same yul.
+
 ## 3. Web app (`web/`, extra `web`)
 
 ```
@@ -751,7 +791,13 @@ web/
   __init__.py          nothing heavy: available() (find_spec, never imports NiceGUI),
                        storage_dir() (user data dir / "web": browser prefs and their secret)
   app.py               build(token, port) -> root page (guard, static files, CSS, views, /onboarding);
-                       run(port: int | None, open_browser: bool, announce=None)
+                       run(port: int | None, open_browser: bool, announce=None), which becomes
+                       the upgraded yul once an update stopped the server (3.1)
+  update.py            Updates / updates(): latest, available, failed, updating, restarting,
+                       due(now=None), check() (shared, never raises), update(upgrade) ->
+                       version installed, restart(); CHECK_EVERY (24 h), RETRY_AFTER (1 h)
+  update_dialog.py     update_button() (the sidebar's, each tab looks every LOOK_SECONDS and
+                       runs a due check), update_dialog(), out_line(version)
   state.py             AppState / state(): config, client, store, formatter, loaders, last_sync,
                        data_version (goes up when a sync changed the copy), sync_if_stale()
                        (a copy older than AUTO_SYNC_AFTER, 10 min, syncs on its own)
@@ -790,13 +836,15 @@ web/
                        set_header, refresh_view / on_refresh, toasts, confirm dialog, drop
                        handoff, save_config(); re-exports the paths (views use
                        shell.<NAME>_PATH) and sync_label / sync_message
-  frame.py             root(): the sidebar (entries, badges), the top bar (search, budget and
-                       sync chips, theme, Import), the content column, the tab's tick
+  frame.py             root(): the sidebar (entries, badges, the version and the update
+                       button), the top bar (search, budget and sync chips, theme, Import),
+                       the content column, the tab's tick
   sync_chip.py         sync_chip(notify, refresh_view) -> the sync it runs on a click: the top
                        bar's sync chip, sync_label, sync_message
   theme.py             THEMES (the palettes), the palette choice and dark/light per browser,
                        chart palettes, page_setup(), install() of static/yul.css
-  security.py          per run token, TokenGuard middleware, free_port(), entry_url()
+  security.py          per run token, TokenGuard middleware, free_port(), entry_url(),
+                       hand_over(token) / inherited_token() (the token across a restart)
   static/              yul.css: the only stylesheet (tokens, base, shared classes, one section
                        per view, motion, then every media query), fonts/InterVariable.woff2.
                        No CSS lives in Python.
@@ -912,7 +960,8 @@ web/
       categories.py    Categories: RULES (how income and spending are read), "not spending"
                        chips and their picker; each change saves at once
       appearance.py    Appearance: a card per palette with its preview; a click saves and applies
-      privacy.py       Data & privacy: what is kept where, resync, reset; token_wording()
+      privacy.py       Data & privacy: what is kept where, the look for new versions (switch,
+                       "Check now", update_line(status)), resync, reset; token_wording()
       left_out.py      the rows left out of imports under Data & privacy, "Include again"
 ```
 
@@ -941,6 +990,20 @@ web/
   loopback port is "same site", so SameSite does not stop it). Every HTTP response, refused
   ones included, carries `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors
   'none'` and `X-Content-Type-Options: nosniff` (`FRAME_HEADERS`).
+
+- **Updates.** Each tab's `update_button()` asks `updates().due()` and runs `check()`; the
+  button shows while `available` is set. `update_dialog()` shows `upgrade_plan(web=True)`:
+  one line (`CONFIRM`) and "Update and restart" when `automatic`, otherwise the command to
+  run by hand. The command never shows on the confirmation, only where the user must run it.
+  `Updates.update()` runs `run_upgrade` off the event loop; on success `restart()` sets
+  `restarting` and calls `app.shutdown()`. `run()` then, after `ui.run` returned, waits for
+  NiceGUI's worker pool (a write to YNAB in flight ends first), calls
+  `security.hand_over(token)` and `os.execv`s `restart_command(["app", "--port", <port>,
+  "--no-browser"])`. The new run takes the token with `inherited_token()`, so the cookie the
+  open tabs hold is still good; NiceGUI reloads a tab that reconnects to a server that does
+  not know it. The token crosses in a pipe whose reading end survives the exec, named by
+  `YUL_SESSION_FD`: never in the command line, the environment or a file. `inherited_token`
+  only reads a pipe.
 
 ### 3.2 Shell contract for views
 
@@ -1202,6 +1265,13 @@ card), `month-pace`, `month-rate`, `month-runway`, `month-top` (where it went),
 
 ### 3.5 Markers of the other views
 
+#### Updates
+
+Sidebar: `version`, `update` (the button, hidden until a newer yul is known). Dialog:
+`update-dialog`, `update-confirm`, `update-command` (by hand or after a failure only), `update-changes`, `update-by-hand` (an install yul cannot
+update), `update-cancel`, `update-run`, `update-running`, `update-done`, `update-failed`,
+`update-output` (what the command printed), `update-close`.
+
 #### Net worth
 
 Tabs: `nw-tabs`, `nw-tab-{overview|months|movers}`. Months: `tile-change`, `tile-saved`,
@@ -1252,7 +1322,8 @@ Markers: `token-input`, `check-token`, `token-lost`, `wizard-message`, `wizard-n
 #### Settings
 
 Markers: `tab-{slug}` (the tabs, a list down the side), `settings-panel`, `settings-title`
-(the open tab's name), `bank-shared-{key}`, `accounts-lede`, `account-card-{id}` (class `closed` on a closed
+(the open tab's name), Data & privacy's updates: `check-updates` (the switch),
+`update-status`, `check-now`, `settings-update` (only with a newer yul), `bank-shared-{key}`, `accounts-lede`, `account-card-{id}` (class `closed` on a closed
 account, tagged `closed-{id}`), `bucket-section-{bucket}`,
 `account-{id}`, `bucket-{id}`, `bucket-{id}-{bucket}`, `by-hand-{id}`, `left-out` (the list
 of rows left out of imports), `left-out-{index}`, `include-again-{index}`, `left-out-empty`;

@@ -1,8 +1,8 @@
 # Privacy Notice — YNAB Unlinked
 
-_Last updated: 2026-11-03_
+_Last updated: 2026-11-11_
 
-YNAB Unlinked runs entirely on your computer. The only network calls it makes are to YNAB's API at `https://api.ynab.com`, authenticated with the YNAB Personal Access Token you provide. Nothing is sent to any third party. There is no telemetry.
+YNAB Unlinked runs entirely on your computer. Your data only travels to YNAB's API at `https://api.ynab.com`, authenticated with the YNAB Personal Access Token you provide. The one other network call is the web app asking PyPI whether a newer version exists: it carries nothing about you and can be turned off. None of your data is sent to any third party. There is no telemetry.
 
 ## Scope
 
@@ -27,7 +27,11 @@ It also writes data back to YNAB on your behalf:
 
 ## What leaves your computer
 
-Only HTTPS requests to `https://api.ynab.com`, made by the official `ynab` Python SDK and authenticated with your Personal Access Token.
+HTTPS requests to `https://api.ynab.com`, made by the official `ynab` Python SDK and authenticated with your Personal Access Token. Nothing else carries your data.
+
+The web app (`yul app`) also looks for new versions of itself. When you open it, and once a day while it stays open, it reads `https://pypi.org/pypi/ynab-unlinked/json`, a public document on PyPI, where yul is published. The request carries no token, no identifier and nothing about you or your budget; like any web request, PyPI sees the IP address it comes from. Turn it off in Settings › Data & privacy ("Look for new versions"). The command line never makes this call.
+
+When a newer version is out the app offers to update. If you accept, it runs the upgrade command of the tool yul was installed with (`uv tool upgrade`, `pipx upgrade` or `pip install --upgrade`), which downloads the new version from PyPI exactly as installing it did, and then restarts. Nothing is downloaded or installed unless you ask for it.
 
 There is no analytics, telemetry, crash reporting, or any other outbound traffic.
 
@@ -48,6 +52,7 @@ Besides the token, YNAB Unlinked stores a single JSON configuration file contain
 - Debt mappings and balance adjustment settings (memo, payee, cleared status)
 - How the finance pages read your budget: the categories that are not spending, the accounts whose return to follow, and the category your goal is in
 - The date of your last reconciliation
+- Whether the web app looks for new versions
 
 The file is **plaintext** and **not encrypted**. Where it lives depends on your operating system (resolved via [`platformdirs`](https://pypi.org/project/platformdirs/)):
 
@@ -65,7 +70,7 @@ YNAB Unlinked also keeps a local copy of your budget's transactions (split lines
 
 ### Local web app
 
-`yul app` runs a small web server on your computer and opens it in your browser. It listens on `127.0.0.1` only, so other machines on your network cannot reach it. Each run creates a random session token, carried by the link it prints; the browser trades it for an HttpOnly, SameSite=Strict cookie, and every request without it is refused. Requests addressed to any other host name, and changes or live connections coming from a web page of another origin (another server on `127.0.0.1` included), are refused too, and no web page may show the app inside a frame. The app loads no fonts, scripts or images from the internet and has no telemetry; like the CLI, it only talks to `https://api.ynab.com`.
+`yul app` runs a small web server on your computer and opens it in your browser. It listens on `127.0.0.1` only, so other machines on your network cannot reach it. Each run creates a random session token, carried by the link it prints; the browser trades it for an HttpOnly, SameSite=Strict cookie, and every request without it is refused. Requests addressed to any other host name, and changes or live connections coming from a web page of another origin (another server on `127.0.0.1` included), are refused too, and no web page may show the app inside a frame. The app loads no fonts, scripts or images from the internet and has no telemetry. It talks to `https://api.ynab.com` and, unless you turn it off, asks `https://pypi.org` for the latest version of yul (see "What leaves your computer"). When an update restarts the app, the new run keeps the session token of the one before it, handed from one to the other without ever being in a file or a command line, so the tabs you left open keep working.
 
 Per browser preferences (theme, collapsed sidebar) and the secret that signs them are kept in a `web` directory inside your user data directory (next to `store.sqlite`), readable by your user only. `yul config reset` and the app's "Reset all data" delete it.
 
@@ -95,7 +100,7 @@ None. The tool does not collect or transmit any usage data, analytics, or crash 
 
 ## Third parties
 
-The tool does not share any data with any third party. The only external service it talks to is YNAB itself.
+The tool does not share any data with any third party. The only external services it talks to are YNAB itself and, for the version check described above, PyPI.
 
 ## Deleting your data
 

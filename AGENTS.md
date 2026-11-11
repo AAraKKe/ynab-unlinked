@@ -23,7 +23,8 @@ src/ynab_unlinked/
     choices.py       `Choice`, the selectable rows of `yul reconcile`.
   core/              UI independent services shared by the CLI and the web app: importing,
                      reconcile, loader detection, balances and net worth, history, finance
-                     (where a period's money came from: income, spending, assets).
+                     (where a period's money came from: income, spending, assets), update
+                     (a newer yul on PyPI, and how this install is upgraded).
                      Never imports typer, rich, textual or nicegui.
   entities/          One package per bank (bbva, cobee, sabadell). `registry.py` discovers
                      their `LoaderSpec`s; `_sniff.py` has helpers for `sniff()`.
@@ -120,6 +121,11 @@ helpers. Its section 5 lists the frozen rules; the project skill
 the building blocks, the test routine and how to look at the app on a scratch home
 (`YUL_HOME=/tmp/... uv run yul app`, never the real config; with `YUL_HOME` set the
 token goes to a keychain item named after that folder, never the real one).
+
+The app looks for a newer yul on PyPI (`core/update.py`, `web/update.py`; the only call that
+is not to YNAB, off with `check_for_updates` in the config) and updates itself with the tool
+that installed it, then restarts in place on the same port and session. From a checkout it
+never offers to: the install is from source.
 
 ## Conventions
 

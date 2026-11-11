@@ -80,6 +80,9 @@ class ConfigV4(BaseModel):
     adjustments: Adjustments = Field(default_factory=Adjustments)
     debt_mappings: list[DebtMapping] = Field(default_factory=list[DebtMapping])
     finances: Finances = Field(default_factory=Finances)
+    check_for_updates: bool = True
+    """The web app asks PyPI once a day whether a newer yul exists. New after V4 shipped: a
+    file without it loads with the check on, so no migration is needed."""
     version_number: str = Field(default="V4", alias="version")
 
     # A validation error must not print the token, which the input of the error would show
