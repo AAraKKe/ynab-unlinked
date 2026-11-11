@@ -72,7 +72,7 @@ class SpendingView:
     async def render(self) -> None:
         config, _ = state().require()
         flow = await run.io_bound(data.load, state().store, config, self.range, dt.date.today())
-        if flow is None or self.body.is_deleted:
+        if self.body.is_deleted:
             return
         self.flow = flow
         groups = {trend.group for trend in flow.categories}

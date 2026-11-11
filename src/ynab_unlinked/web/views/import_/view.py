@@ -182,9 +182,6 @@ class ImportFlow:
             item.problem = f"Could not be read: {error}"
             self.refresh(item)
             return
-        if not detections:
-            return  # the app is shutting down
-
         [detection] = detections
 
         item.detection = detection
@@ -271,7 +268,7 @@ class ImportFlow:
             item.problem = ynab_error_message(error)
             self.refresh(item)
             return
-        if plan is None or version != item.version:
+        if version != item.version:
             return
         item.plan = plan
         item.status = Status.READY
@@ -508,9 +505,6 @@ class ImportFlow:
                 card.failed(message)
                 shell.notify(f"{item.name}: {message}", "error")
                 continue
-            if result is None:
-                return  # the app is shutting down
-
             created += result.created
             duplicates += len(result.duplicate_import_ids)
             card.created(result)

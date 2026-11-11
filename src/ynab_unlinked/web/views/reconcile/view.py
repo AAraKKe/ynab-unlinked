@@ -78,9 +78,7 @@ class ReconcileView:
         return self.formatter.format_amount_milli(milliunits)
 
     async def load(self) -> None:
-        data = await run.io_bound(ReconcileData.read, state().store, self.budget_id)
-        if data is not None:
-            self.data = data
+        self.data = await run.io_bound(ReconcileData.read, state().store, self.budget_id)
 
     async def ensure_fresh(self) -> bool:
         """Sync the budget copy with YNAB before showing it, whatever its age.

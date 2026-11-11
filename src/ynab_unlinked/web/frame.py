@@ -195,8 +195,6 @@ async def _refresh_badges(layout: Layout) -> None:
     if current.config is None or current.last_sync is None:
         return
     found = await run.io_bound(attention.waiting, current.store, current.config, dt.date.today())
-    if found is None:  # the app is shutting down
-        return
     _set_badge(layout, "reconcile", found.unreconciled, "Transactions to reconcile")
     _set_badge(layout, "networth", len(found.stale), "Balances set by hand to update")
 
