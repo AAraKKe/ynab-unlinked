@@ -28,10 +28,15 @@ from tests.helpers.web import eventually
 from tests.helpers.ynab_api import YnabClientStub
 from tests.web.views.test_networth import texts
 from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.core.cashflow import CashFlow, CategoryTrend, FlowMonth, Volatility
 from ynab_unlinked.store import Store
 from ynab_unlinked.web import theme
-from ynab_unlinked.web.components.cashflow_chart import WORD_OPACITY, word_color
+from ynab_unlinked.web.components.cashflow_chart import (
+    WORD_OPACITY,
+    income_spending_options,
+    word_color,
+)
 from ynab_unlinked.web.state import AppState
 from ynab_unlinked.web.views.cashflow import data as cashflow
 from ynab_unlinked.web.views.spending import data as spending
@@ -139,7 +144,7 @@ async def test_cash_flow_averages_the_complete_months(synced: Store, no_sync, us
     # 11 complete months: 11 × 3,000 in, 11 × 1,300 + 2,000 out
     assert texts(user, "cf-rate").startswith("Savings rate 50.6%")
     chart = user.find(marker="cf-chart").elements.pop()
-    # A label sits over the taller bar of its month
+    # A note sits over the taller bar of its month, what stood out over its own bar
     income, spent = (chart.options["series"][i]["data"] for i in (0, 1))
     labels = [
         next((p["label"]["formatter"] for p in pair if p["label"]["show"]), None)
@@ -179,6 +184,59 @@ def flow(
 
 def trend(mean: float, label: str | None) -> CategoryTrend:
     return CategoryTrend("c", "C", "G", (int(mean),) * 3, Volatility(mean, 0.1, label, 3))
+
+
+FORMAT = CurrencyFormat(
+    iso_code="EUR",
+    decimal_digits=2,
+    decimal_separator=".",
+    symbol_first=False,
+    group_separator=",",
+    currency_symbol="€",
+    display_symbol=True,
+)
+
+
+def test_each_label_sits_over_its_own_bar_and_the_tooltip_says_them_all():
+    months = [
+        FlowMonth(dt.date(2026, 1, 1), 9_000_000, 3_000_000, True, income_label="Bonus"),
+        FlowMonth(dt.date(2026, 2, 1), 3_000_000, 9_000_000, True, spending_label="<Trip>"),
+        FlowMonth(
+            dt.date(2026, 3, 1),
+            9_000_000,
+            12_000_000,
+            True,
+            income_label="Bonus",
+            spending_label="<Trip>",
+        ),
+        FlowMonth(
+            dt.date(2026, 4, 1), 9_000_000, 12_000_000, True, note="Moved", income_label="Bonus"
+        ),
+    ]
+    options = income_spending_options(months, theme.DARK_PALETTE, FORMAT)
+
+    income, spent = (options["series"][i]["data"] for i in (0, 1))
+    shown = [
+        tuple(bar["label"]["formatter"] if bar["label"]["show"] else None for bar in pair)
+        for pair in zip(income, spent, strict=True)
+    ]
+    # A note is the month's, over its taller bar; what stood out is over the bar it is about
+    assert shown == [
+        ("Bonus", None),
+        (None, "<Trip>"),
+        ("Bonus", "<Trip>"),
+        (None, "Moved"),
+    ]
+    # Only a month with both sends them apart, tied to their bars
+    lines = [
+        (i["labelLine"]["show"], s["labelLine"]["show"])
+        for i, s in zip(income, spent, strict=False)
+    ]
+    assert lines == [(False, False), (False, False), (True, True), (False, False)]
+    tooltip = options["tooltip"][":formatter"]
+    assert "Bonus brought more than usual" in tooltip
+    assert "&lt;Trip&gt; spent more than usual" in tooltip
+    assert "<Trip>" not in tooltip
 
 
 def test_runway_is_cash_and_savings_over_core_spending():
