@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import subprocess
 import sys
 import urllib.error
@@ -251,4 +252,5 @@ def test_the_restart_command_runs_the_yul_on_disk_through_its_interpreter():
     )
 
     assert result.returncode == 0, result.stderr
-    assert "Usage: yul" in result.stdout
+    # Typer colours the help wherever GITHUB_ACTIONS is set, a pipe included
+    assert "Usage: yul" in re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
