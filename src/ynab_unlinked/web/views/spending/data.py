@@ -44,13 +44,14 @@ WORDS = {
     "spiky": Word(
         "▲ spiky",
         "warn",
-        "Quiet months and big ones: holidays, repairs. Moves over 75%: plan for these.",
+        "It keeps coming, and some months are far bigger than the rest: gifts, clothes. "
+        "Moves over 75%: plan for the big ones.",
     ),
     "lumpy": Word(
         "◆ lumpy",
         "acc",
-        "Big charges every so often, each about the same: a yearly subscription, insurance. "
-        "Swingy by the numbers, but predictable.",
+        "Nothing most months, then an expense: a yearly subscription, insurance, a repair, "
+        "a holiday. Moves over 75%, with an expense in fewer than 2 months of 5.",
     ),
 }
 
@@ -217,8 +218,9 @@ def stats(spent: Sequence[int]) -> Stats:
 @dataclass(frozen=True)
 class Story:
     """A category's detail in words and numbers. What "how much" means depends on what the
-    category is: a month for one spent every month, a charge for a lumpy one, the biggest
-    month for a spiky one, the one purchase for one bought once."""
+    category is: a month for one spent every month, a charge for a lumpy one whose charges
+    are about the same, the biggest month for any other lumpy one and for a spiky one, the
+    one purchase for one bought once."""
 
     figure: str
     """The headline: `288.94€ a month`, `170.99€ a charge`, `up to 6,753.00€ a month`."""
@@ -261,7 +263,7 @@ def story(trend: CategoryTrend, flow: CashFlow, money: Callable[[int], str]) -> 
     )
     month_figure = f"{money(round(numbers.mean))} a month"
 
-    if label == "lumpy" and beat.every and beat.set_aside:
+    if label == "lumpy" and beat.alike and beat.every and beat.set_aside:
         aside = money(round(beat.set_aside))
         return Story(
             figure=f"{money(round(beat.charge))} a charge",
@@ -283,7 +285,7 @@ def story(trend: CategoryTrend, flow: CashFlow, money: Callable[[int], str]) -> 
             ),
             histogram=False,
         )
-    if label == "spiky" and since.spent:
+    if label in ("lumpy", "spiky") and since.spent:
         months, total = len(since.spent), sum(since.spent)
         aside = total / months
         return Story(

@@ -11,9 +11,13 @@ between the first and the last month it spent in:
 
 - **steady** under `STEADY_BELOW` (rent, a gym);
 - **variable** under `VARIABLE_BELOW` (groceries, eating out);
-- **spiky** above it (holidays, repairs);
-- **lumpy** when it spends in at most half of the months, each time about the same amount
-  (a yearly subscription, an insurance): volatile by the numbers but predictable.
+- above it the money sits in a few months, and how often it spends says which kind it is
+  (`presence`):
+  - **lumpy** with an expense in less than `LUMPY_BELOW` of its months: nothing most
+    months, then an expense, whatever its size (a yearly subscription, an insurance, a
+    repair, a holiday);
+  - **spiky** with one more often than that: it keeps coming, and some months are far
+    bigger than the rest (gifts, clothes).
 
 What a category is does not depend on the range on screen: it is told from its history, the
 complete months of the last `HISTORY_MONTHS` (or the range, when that is longer). A yearly
@@ -41,8 +45,14 @@ from ynab_unlinked.store import Line, Store
 
 STEADY_BELOW = 0.25
 VARIABLE_BELOW = 0.75
-LUMPY_SAME_BELOW = 0.25
-"""How alike the months a lumpy category spends in must be (their own variation)."""
+LUMPY_BELOW = 0.4
+"""A category that moves over `VARIABLE_BELOW` is lumpy with an expense in less than this
+share of its months, spiky from it. Over a third, so that a charge every three months is
+lumpy: counted from its first charge to its last, five of them show in 5 months of 13."""
+EXPENSE_FROM = 0.25
+"""The share of the average month from which a month counts as one with an expense."""
+ALIKE_BELOW = 0.25
+"""Charges are about the same when they vary less than this (their own variation)."""
 MIN_MONTHS = 6
 HISTORY_MONTHS = 36
 """How far back a category's label looks: long enough for three yearly charges, short enough
@@ -68,6 +78,19 @@ class Volatility:
     """Months it spent in."""
 
 
+def presence(spent: Sequence[int]) -> float:
+    """The share of `spent`'s months with an expense.
+
+    A month counts in full from `EXPENSE_FROM` of the average month and in proportion below
+    it: a fee of a few euros next to a yearly charge does not make it an expense of every
+    month.
+    """
+    mean = statistics.fmean(spent) if spent else 0
+    if mean <= 0:
+        return 0
+    return statistics.fmean(min(1.0, value / (EXPENSE_FROM * mean)) for value in spent)
+
+
 def volatility(spent: Sequence[int], months: int | None = None) -> Volatility:
     """How `spent` (one positive amount per month, zero when nothing) moves around its mean.
 
@@ -84,15 +107,12 @@ def volatility(spent: Sequence[int], months: int | None = None) -> Volatility:
     label: Label | None = None
     enough = (len(spent) if months is None else months) >= MIN_MONTHS
     if enough and len(spent) >= MIN_LIFETIME and len(active) >= 2:
-        alike = statistics.pstdev(active) / statistics.fmean(active)
-        if len(active) <= len(spent) / 2 and alike < LUMPY_SAME_BELOW:
-            label = "lumpy"
-        elif len(active) >= MIN_MONTHS or len(active) > len(spent) / 2:
-            label = (
-                "steady" if cv < STEADY_BELOW else "variable" if cv < VARIABLE_BELOW else "spiky"
-            )
+        if cv < STEADY_BELOW:
+            label = "steady"
+        elif cv < VARIABLE_BELOW:
+            label = "variable"
         else:
-            label = "spiky"
+            label = "lumpy" if presence(spent) < LUMPY_BELOW else "spiky"
     return Volatility(mean, cv, label, len(active))
 
 
@@ -106,6 +126,8 @@ class Rhythm:
     charges: int
     every: float | None
     """Months from one charge to the next, on average; None with fewer than two."""
+    alike: bool = False
+    """Its charges are about the same amount: "a charge" says what the next one costs."""
 
     @property
     def set_aside(self) -> float | None:
@@ -119,10 +141,13 @@ def rhythm(spent: Sequence[int]) -> Rhythm:
     if not active:
         return Rhythm(0, 0, None)
     gaps = [later - earlier for earlier, later in zip(active, active[1:], strict=False)]
+    amounts = [spent[index] for index in active]
+    charge = statistics.fmean(amounts)
     return Rhythm(
-        charge=statistics.fmean(spent[index] for index in active),
+        charge=charge,
         charges=len(active),
         every=statistics.fmean(gaps) if gaps else None,
+        alike=statistics.pstdev(amounts) / charge < ALIKE_BELOW,
     )
 
 

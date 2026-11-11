@@ -5,8 +5,9 @@ It slides in over the chart from the right; the back arrow brings the chart back
 is over the category's life in the range (its first month of spending to its last); the range
 itself is the page's, so changing it updates the detail in place. What it says depends on
 what the category is (`data.story`): a month for one spent every month, a charge for a lumpy
-one, the biggest month for a spiky one, each with what to set aside for it; the last two over
-their history, since the quiet months are part of how they spend.
+one whose charges are about the same, the biggest month for any other lumpy one and for a
+spiky one, each with what to set aside for it; lumpy and spiky over their history, since the
+quiet months are part of how they spend.
 """
 
 from __future__ import annotations

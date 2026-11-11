@@ -646,6 +646,20 @@ def test_a_lumpy_category_is_a_charge_over_its_history():
     assert not story.histogram
 
 
+def test_a_lumpy_category_of_unlike_purchases_is_not_told_as_a_charge():
+    # A subscription once a year and one small purchase: "a charge" would be neither price
+    past = [40_990, *[0] * 6, 11_190, *[0] * 4, 40_990, *[0] * 11, 40_990, 0, 0]
+    story = told("lumpy", past[-6:], past)
+
+    assert story.figure == "up to 40.99€ a month"
+    assert story.guide == (
+        "Spent in 4 of the last 27 months.",
+        "Set aside 4.97€ a month",
+        "to cover months like these.",
+    )
+    assert (story.line, story.histogram) == ("Set aside a month", False)
+
+
 def test_a_spiky_category_is_its_biggest_month_and_what_covers_months_like_it():
     # Nothing for a while, a small month, a big one, then quiet again
     past = [0, 0, 129_000, 0, 0, 0, 6_753_000, 0, 0, 0]
