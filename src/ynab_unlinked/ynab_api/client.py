@@ -1,5 +1,6 @@
 import datetime as dt
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any, Literal, Protocol, TypedDict, overload
 from uuid import UUID
 
@@ -43,6 +44,16 @@ one year ago when none is given."""
 REQUEST_TIMEOUT: tuple[float, float] = (10, 60)
 """Seconds to connect to YNAB and to wait for each part of its answer. Without one, a stalled
 connection would hang `yul load` and the app's sync forever."""
+
+
+@dataclass(frozen=True)
+class Created:
+    """YNAB's answer to `Client.create_transactions`."""
+
+    transactions: tuple[TransactionDetail, ...] = ()
+    """The transactions it created, with their ids."""
+    duplicate_import_ids: tuple[str, ...] = ()
+    """The import ids it already had: those rows were not created."""
 
 
 class _TimedApiClient(ApiClient):
@@ -189,10 +200,10 @@ class Client:
         account_id: str,
         transactions: list[PendingImport],
         cleared: TransactionClearedStatus = TransactionClearedStatus.CLEARED,
-    ) -> list[str]:
-        """Import the transactions and return the import ids YNAB rejected as duplicates."""
+    ) -> Created:
+        """Import the transactions: the ones YNAB created and the import ids it rejected."""
         if not transactions:
-            return []
+            return Created()
 
         api = self.api("transactions")
 
@@ -215,7 +226,10 @@ class Client:
             data=PostTransactionsWrapper(transactions=transactions_to_create),
         )
 
-        return response.data.duplicate_import_ids or []
+        return Created(
+            transactions=tuple(response.data.transactions or ()),
+            duplicate_import_ids=tuple(response.data.duplicate_import_ids or ()),
+        )
 
     def update_transactions(
         self, budget_id: str, transaction_ids: Sequence[str], cleared: TransactionClearedStatus

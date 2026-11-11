@@ -9,13 +9,13 @@ from uuid import UUID
 import pytest
 from ynab import ApiException, TransactionClearedStatus
 
-from tests.factories import PendingImportFactory
+from tests.factories import PendingImportFactory, TransactionDetailFactory
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.cli.cli_errors import ynab_error_message
 from ynab_unlinked.web.wording import YNAB_TIMED_OUT
 from ynab_unlinked.web.wording import ynab_error_message as web_error_message
 from ynab_unlinked.ynab_api import client as client_module
-from ynab_unlinked.ynab_api.client import Client
+from ynab_unlinked.ynab_api.client import Client, Created
 from ynab_unlinked.ynab_api.errors import YNAB_ERRORS, timed_out
 
 BUDGET_ID = "00000000-0000-0000-0000-000000000001"
@@ -139,7 +139,7 @@ def test_create_transactions_does_not_reach_ynab_with_nothing_to_create(
 ):
     assert (
         client.create_transactions(budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[])
-        == []
+        == Created()
     )
     assert ynab_api.registry == {}
 
@@ -238,11 +238,33 @@ def test_create_transactions_returns_the_import_ids_ynab_rejected(
     api = ynab_api.api("transactions")
     api.create_transaction.return_value.data.duplicate_import_ids = answer
 
-    duplicates = client.create_transactions(
+    created = client.create_transactions(
         budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[PendingImportFactory()]
     )
 
-    assert duplicates == expected
+    assert list(created.duplicate_import_ids) == expected
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        pytest.param([TransactionDetailFactory(id="new", import_id="YNAB:-1:x:1")], id="created"),
+        pytest.param(None, id="a response that omits the field"),
+    ],
+)
+def test_create_transactions_returns_the_transactions_ynab_created(
+    client: Client, ynab_api: YnabClientStub, answer: list | None
+):
+    api = ynab_api.api("transactions")
+    api.create_transaction.return_value.data.transactions = answer
+
+    created = client.create_transactions(
+        budget_id=BUDGET_ID, account_id=ACCOUNT_ID, transactions=[PendingImportFactory()]
+    )
+
+    assert [(t.id, t.import_id) for t in created.transactions] == [
+        (t.id, t.import_id) for t in answer or []
+    ]
 
 
 def test_update_transactions_does_not_reach_ynab_with_nothing_to_update(

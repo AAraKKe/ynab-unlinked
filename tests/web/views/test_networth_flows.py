@@ -177,6 +177,22 @@ async def test_clicking_a_month_shows_it_and_clicking_it_again_shows_the_range(
     await user.should_not_see(marker="period-title")
 
 
+async def test_a_click_anywhere_else_goes_back_to_the_whole_range(
+    synced: Store, no_sync, user: User
+):
+    await open_months(user)
+    chart = user.find(marker="months-chart")
+    chart.trigger("componentClick", {"componentType": "series", "dataIndex": 0})
+    await user.should_see(marker="period-clear", retries=20)
+    # The page reports the clicks that land outside the chart and the month's panel
+    assert theme.KEEP_PROP in chart.elements.copy().pop().props
+
+    user.find(marker="months-tab").trigger(theme.OUTSIDE_EVENT)
+
+    await user.should_not_see(marker="period-clear", retries=20)
+    await user.should_not_see(marker="period-title")
+
+
 async def test_the_movers_tab_splits_each_account_into_your_money_and_assets(
     synced: Store, no_sync, user: User
 ):

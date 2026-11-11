@@ -499,6 +499,120 @@ async def test_a_row_matched_onto_a_reconciled_transaction_is_shown_as_in_ynab(
     await user.should_see("matched in YNAB", marker="row-status-1-0")
 
 
+@pytest.fixture
+def first_row_matched_by_hand(ynab: YnabClientStub) -> str:
+    """The first Sabadell row was imported and matched in YNAB with a reconciled transaction
+    entered by hand, before the budget copy saw it: YNAB lists only that one. Before `user`."""
+    first = import_ids("sabadell", SABADELL)[0]
+    _, amount, date, _ = first.split(":")
+    ynab.api("transactions").get_transactions_by_account.return_value.data.transactions = [
+        TransactionDetailFactory(
+            id="hand",
+            var_date=dt.date.fromisoformat(date) + dt.timedelta(days=1),
+            amount=int(amount),
+            payee_name="Japan trip",
+            cleared=TransactionClearedStatus.RECONCILED,
+            matched_transaction_id="never-seen",
+        )
+    ]
+    return first
+
+
+async def test_a_row_that_may_be_in_ynab_is_pointed_out_and_not_sent(
+    accounts: LatestConfig, ynab: YnabClientStub, first_row_matched_by_hand: str, user: User
+):
+    await drop(user, SABADELL)
+
+    await user.should_see("2 new / 3", marker="count-1", retries=30)
+    await user.should_see("1 to check", marker="held-1")
+    await user.should_see("1 to check", marker="files-held")
+    user.find(marker="review").click()
+    await user.should_see("may be in YNAB", marker="row-status-1-0")
+    await user.should_see("Same amount as Japan trip on", marker="row-twin-1-0")
+    await user.should_see("1 to check", marker="review-held")
+    await user.should_see("1 to check", marker="review-held-1")
+    await user.should_see("Not sent unless you choose Import anyway", marker="status-legend")
+
+    user.find(marker="import").click()
+
+    await user.should_see("2 transactions imported", retries=30)
+    await user.should_see("1 may be in YNAB and was not sent.", marker="done-summary")
+    assert first_row_matched_by_hand not in [t.import_id for t in created(ynab)[ORO]]
+    [logged] = state().store.activity(BUDGET_ID, kind="import")
+    assert logged.details["held"] == 1
+
+
+@pytest.mark.parametrize(
+    ("button", "status", "summary", "sent"),
+    [
+        pytest.param("import-anyway-1-0", "new", "3 new transactions in 1 account", 3, id="sent"),
+        pytest.param("leave-out-1-0", "left out", "2 new transactions in 1 account", 2, id="out"),
+    ],
+)
+async def test_a_row_that_may_be_in_ynab_is_imported_anyway_or_left_out(
+    accounts: LatestConfig,
+    ynab: YnabClientStub,
+    first_row_matched_by_hand: str,
+    user: User,
+    button: str,
+    status: str,
+    summary: str,
+    sent: int,
+):
+    await drop(user, SABADELL)
+    await user.should_see("2 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    await user.should_see("may be in YNAB", marker="row-status-1-0")
+
+    user.find(marker=button).click()
+
+    await user.should_see(status, marker="row-status-1-0", retries=20)
+    await user.should_see(summary, marker="review-summary")
+    await user.should_not_see(marker="review-held")
+    await user.should_not_see(marker="legend-maybe_in_ynab")
+    left_out = [row.import_id for row in state().store.excluded(BUDGET_ID, ORO)]
+    assert left_out == ([first_row_matched_by_hand] if status == "left out" else [])
+    user.find(marker="import").click()
+    await user.should_see(f"{sent} transactions imported", retries=30)
+    assert len(created(ynab)[ORO]) == sent
+
+
+async def test_the_legend_explains_only_the_tags_on_screen(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User
+):
+    ynab.api("transactions").get_transactions_by_account.return_value.data.transactions = [
+        TransactionDetailFactory(import_id=import_ids("sabadell", SABADELL)[0])
+    ]
+    await drop(user, SABADELL)
+    await user.should_see("2 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+
+    await user.should_see("Sent to YNAB when you import.", marker="legend-new")
+    await user.should_see("Imported before. Never sent twice.", marker="legend-in_ynab")
+    await user.should_not_see(marker="legend-excluded")
+
+    user.find(marker="leave-out-1-1").click()
+
+    await user.should_see("You left it out.", marker="legend-excluded", retries=20)
+
+
+async def test_what_an_import_created_is_kept_in_the_budget_copy_at_once(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User
+):
+    first = import_ids("sabadell", SABADELL)[0]
+    ynab.api("transactions").create_transaction.return_value.data.transactions = [
+        TransactionDetailFactory(id="created-by-yul", import_id=first)
+    ]
+    await drop(user, SABADELL)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+
+    user.find(marker="import").click()
+
+    await user.should_see("3 transactions imported", retries=30)
+    assert state().store.import_ids(BUDGET_ID, ["created-by-yul"]) == {"created-by-yul": first}
+
+
 def test_the_log_line_of_an_import_says_how_many_rows_were_left_out():
     plan = ImportPlan(
         entity_name="sabadell",

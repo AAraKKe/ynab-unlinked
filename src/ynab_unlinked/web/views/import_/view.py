@@ -54,6 +54,7 @@ from ynab_unlinked.web.views.import_.data import (
     account_label,
     chosen_accounts,
     excluded_row,
+    held_count,
     import_log,
     left_out_count,
     mark_repeated,
@@ -62,7 +63,7 @@ from ynab_unlinked.web.views.import_.data import (
     take_candidate,
 )
 from ynab_unlinked.web.views.import_.rows import draw_row
-from ynab_unlinked.web.views.import_.tables import RowActions
+from ynab_unlinked.web.views.import_.tables import RowActions, status_legend
 from ynab_unlinked.web.wording import IMPORT_FAILED, left_out_entry, plural, ynab_error_message
 
 _FLOW_KEY = "yul.import_flow"
@@ -86,6 +87,7 @@ class ImportFlow:
         self.file_list: ui.element | None = None
         self.footer: ui.element | None = None
         self.review_boxes: dict[int, ui.element] = {}
+        self.legend: ui.element | None = None
 
     # ---- lifecycle -----------------------------------------------------------------------
 
@@ -377,13 +379,28 @@ class ImportFlow:
         self.content.clear()
         self.review_boxes = {}
         with self.content, ui.element("div").classes("yul-stagger"):
+            self.legend = ui.element("div")
             for item in ready:
                 self.review_boxes[item.key] = ui.element("div")
         with self.content:
             self.footer = ui.element("div")
         for item in ready:
             self.draw_review_card(item)
+        self.draw_review_legend()
         self.draw_review_footer()
+
+    def redraw_review(self, item: ImportFile) -> None:
+        """After a row of `item` changed: its card, and the legend and footer that count it."""
+        self.draw_review_card(item)
+        self.draw_review_legend()
+        self.draw_review_footer()
+
+    def draw_review_legend(self) -> None:
+        if self.legend is None or self.step != 1:
+            return
+        self.legend.clear()
+        with self.legend:
+            status_legend([item.plan for item in self.ready if item.plan is not None])
 
     def draw_review_card(self, item: ImportFile) -> None:
         if (box := self.review_boxes.get(item.key)) is None or item.plan is None:
@@ -392,6 +409,7 @@ class ImportFlow:
         actions = RowActions(
             leave_out=lambda row: self.leave_out(item, row),
             include=lambda row: self.include(item, row),
+            send_anyway=lambda row: self.send_anyway(item, row),
         )
         with box:
             review_card(item, self.account_name(item.plan.account_id), self.formatter(), actions)
@@ -417,8 +435,7 @@ class ImportFlow:
         if not await self.note_left_out("exclude", excluded):
             return
         item.plan = item.plan.exclude({row.import_id})
-        self.draw_review_card(item)
-        self.draw_review_footer()
+        self.redraw_review(item)
         shell.notify(f"{row.transaction.payee} left out of imports")
 
     async def include(self, item: ImportFile, row: ImportRow) -> None:
@@ -428,9 +445,17 @@ class ImportFlow:
         if not await self.note_left_out("include", excluded_row(item.plan.account_id, row)):
             return
         item.plan = item.plan.include({row.import_id})
-        self.draw_review_card(item)
-        self.draw_review_footer()
+        self.redraw_review(item)
         shell.notify(f"{row.transaction.payee} included in imports again")
+
+    async def send_anyway(self, item: ImportFile, row: ImportRow) -> None:
+        """Send a row that may be in YNAB with this import. Nothing to remember: once sent,
+        YNAB holds it."""
+        if item.plan is None or self.committing:
+            return
+        item.plan = item.plan.send_anyway({row.import_id})
+        self.redraw_review(item)
+        shell.notify(f"{row.transaction.payee} will be imported")
 
     async def note_left_out(self, kind: Literal["exclude", "include"], row: ExcludedRow) -> bool:
         """Save the choice on this computer and log it. False, after a toast, when it failed."""
@@ -487,20 +512,22 @@ class ImportFlow:
                 progress[item.key] = progress_card(item, self.account_name(item.plan.account_id))
             done_area = ui.element("div")
 
-        created = duplicates = skipped = failed = left_out = 0
+        store = state().store
+        created = duplicates = skipped = failed = left_out = held = 0
         for item in ready:
             assert item.plan is not None and item.candidate is not None
             plan = item.plan
             card = progress[item.key]
             skipped += plan.already_imported_count
             left_out += left_out_count(plan)
+            held += held_count(plan)
             if not plan.new_rows:
                 card.nothing_new()
                 continue
             card.running()
             try:
                 result = await run.io_bound(
-                    commit_import_plan, client, config.budget.id, plan, cleared
+                    commit_import_plan, client, config.budget.id, plan, cleared, store=store
                 )
             except Exception as error:
                 failed += 1
@@ -518,7 +545,7 @@ class ImportFlow:
 
         self.close()
         with done_area:
-            done_card(created, duplicates, skipped, failed, left_out, self.reset)
+            done_card(created, duplicates, skipped, failed, left_out, held, self.reset)
         if created:
             # Reconcile and Net worth sync before showing the store again
             state().invalidate()

@@ -16,8 +16,13 @@ from nicegui import ui
 from ynab_unlinked.core.detect import Candidate, Detection
 from ynab_unlinked.entities.registry import LoaderOption
 from ynab_unlinked.web.components import bank_logo, button, loading, pill, set_class, spinner
-from ynab_unlinked.web.views.import_.data import ImportFile, Status, option_choices
-from ynab_unlinked.web.views.import_.tables import badge, plan_table, transactions_table
+from ynab_unlinked.web.views.import_.data import ImportFile, Status, held_count, option_choices
+from ynab_unlinked.web.views.import_.tables import (
+    badge,
+    plan_table,
+    status_legend,
+    transactions_table,
+)
 from ynab_unlinked.web.wording import human_size
 
 if TYPE_CHECKING:
@@ -82,6 +87,8 @@ def draw_detection(flow: ImportFlow, item: ImportFile) -> None:
             spinner()
         case Status.READY if item.plan is not None:
             total = len(item.plan.rows)
+            if held := held_count(item.plan):
+                pill(f"{held} to check", "warn").mark(f"held-{item.key}")
             pill(f"{len(item.plan.new_rows)} new / {total}", "acc").mark(f"count-{item.key}")
         case Status.ERROR:
             error = ui.label(item.problem or "Error").classes("yul-imp-reason yul-bad")
@@ -152,6 +159,7 @@ def draw_body(flow: ImportFlow, item: ImportFile) -> None:
         return
     ui.label(f"Matched because: {candidate.reason}.").classes("yul-imp-note")
     if item.plan is not None:
+        status_legend([item.plan])
         plan_table(item.plan, flow.formatter(), item.key)
     elif candidate.transactions is not None:
         transactions_table(candidate.transactions, flow.formatter())

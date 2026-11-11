@@ -18,8 +18,10 @@ from ynab_unlinked.core.importing import (
     ImportResult,
     ImportRow,
     RowStatus,
+    Twin,
 )
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
+from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import Transaction, milliunits
 from ynab_unlinked.store import ExcludedRow
 from ynab_unlinked.text import import_message
@@ -174,10 +176,37 @@ def chosen_accounts(items: Sequence[ImportFile]) -> list[tuple[str, str]]:
     ]
 
 
-LEFT_OUT_NOTE = (
-    "Rows you leave out are remembered on this computer and stay out of later imports until "
-    "you include them again, here or in Settings › Data & privacy."
-)
+STATUS_LABELS = {
+    RowStatus.NEW: "new",
+    RowStatus.MAYBE_IN_YNAB: "may be in YNAB",
+    RowStatus.IN_YNAB: "already in YNAB",
+    RowStatus.MATCHED: "matched in YNAB",
+    RowStatus.EXCLUDED: "left out",
+}
+"""The tag of a row, in the order the legend lists them."""
+
+STATUS_MEANINGS = {
+    RowStatus.NEW: "Sent to YNAB when you import.",
+    RowStatus.MAYBE_IN_YNAB: (
+        "Has the same amount as a transaction you entered by hand and matched in YNAB, so it "
+        "is probably there already. Not sent unless you choose Import anyway."
+    ),
+    RowStatus.IN_YNAB: "Imported before. Never sent twice.",
+    RowStatus.MATCHED: (
+        "YNAB matched it with a transaction you entered by hand. It is there, and never sent again."
+    ),
+    RowStatus.EXCLUDED: (
+        "You left it out. Remembered on this computer until you include it again, here or in "
+        "Settings › Data & privacy."
+    ),
+}
+"""What each tag means, as the legend above the rows says it."""
+
+
+def statuses_shown(plans: Sequence[ImportPlan]) -> list[RowStatus]:
+    """The statuses the rows of these plans have, in the legend's order."""
+    present = {row.status for plan in plans for row in plan.rows}
+    return [status for status in STATUS_LABELS if status in present]
 
 
 def left_out_count(plan: ImportPlan) -> int:
@@ -185,14 +214,16 @@ def left_out_count(plan: ImportPlan) -> int:
     return len(plan.with_status(RowStatus.EXCLUDED))
 
 
-def unknown_matches_note(plan: ImportPlan) -> str | None:
-    """Why a row shown as new may already be in YNAB (`ImportPlan.unknown_matches`)."""
-    if not (count := plan.unknown_matches):
-        return None
+def held_count(plan: ImportPlan) -> int:
+    """Rows not sent because they may be in YNAB, until the user decides."""
+    return len(plan.with_status(RowStatus.MAYBE_IN_YNAB))
+
+
+def twin_note(twin: Twin, formatter: Formatter) -> str:
+    """Why a row may be in YNAB: the transaction there it looks like."""
     return (
-        f"{plural(count, 'transaction')} of this account {'was' if count == 1 else 'were'} "
-        "matched in YNAB with one the budget copy does not have yet, so a row shown as new may "
-        "already be there. Sync and import again, or leave the row out."
+        f"Same amount as {twin.payee or 'a transaction'} on {formatter.format_date(twin.date)} "
+        "in YNAB"
     )
 
 
@@ -207,9 +238,11 @@ def excluded_row(account_id: str, row: ImportRow) -> ExcludedRow:
     )
 
 
-def done_summary(duplicates: int, skipped: int, failed: int, left_out: int = 0) -> str:
-    """The line under the Done title: duplicates YNAB rejected, rows skipped and left out,
-    files failed."""
+def done_summary(
+    duplicates: int, skipped: int, failed: int, left_out: int = 0, held: int = 0
+) -> str:
+    """The line under the Done title: duplicates YNAB rejected, rows skipped, left out and
+    held back, files failed."""
     lede = (
         f"YNAB rejected {duplicates} as duplicate{'' if duplicates == 1 else 's'}. "
         f"{skipped} {'was' if skipped == 1 else 'were'} already there and "
@@ -217,6 +250,8 @@ def done_summary(duplicates: int, skipped: int, failed: int, left_out: int = 0) 
     )
     if left_out:
         lede += f" {left_out} {'was' if left_out == 1 else 'were'} left out."
+    if held:
+        lede += f" {held} may be in YNAB and {'was' if held == 1 else 'were'} not sent."
     if failed:
         lede += f" {plural(failed, 'file')} failed, see above."
     return lede
@@ -236,6 +271,7 @@ def import_log(
         "skipped": plan.already_imported_count,
         "matched": len(plan.with_status(RowStatus.MATCHED)),
         "excluded": left_out_count(plan),
+        "held": held_count(plan),
     }
     message = import_message(result.created, account_name, file, details["excluded"])
     return message, details

@@ -1,6 +1,7 @@
 import datetime as dt
 from collections.abc import Callable
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from ynab import TransactionClearedStatus, TransactionDetail
@@ -18,6 +19,7 @@ from ynab_unlinked.core.importing import (
     ImportPlan,
     ImportResult,
     RowStatus,
+    Twin,
     build_import_plan,
     commit_import_plan,
     unique_files,
@@ -267,62 +269,54 @@ YUL_MAYA = TransactionDetailFactory(
 
 
 @pytest.mark.parametrize(
-    ("in_ynab", "in_copy", "expected", "expected_unknown"),
+    ("in_ynab", "in_copy", "expected"),
     [
         pytest.param(
             [survivor()],
             [YUL_MAYA],
             RowStatus.MATCHED,
-            0,
             id="the-issue-case-a-reconciled-survivor-points-at-yuls-hidden-transaction",
         ),
         pytest.param(
             [survivor()],
             [YUL_MAYA.model_copy(update={"deleted": True})],
             RowStatus.MATCHED,
-            0,
             id="the-ghost-repair-already-turned-it-into-a-tombstone",
         ),
         pytest.param(
             [survivor(import_id=MAYA_ID)],
             [],
             RowStatus.IN_YNAB,
-            0,
             id="a-survivor-that-took-the-import-id-needs-no-copy",
         ),
         pytest.param(
             [survivor()],
             [YUL_MAYA.model_copy(update={"import_id": "YNAB:-18380:2025-05-12:2"})],
             RowStatus.NEW,
-            0,
             id="the-transaction-it-points-at-carries-another-row-id",
         ),
         pytest.param(
             [survivor()],
             [],
-            RowStatus.NEW,
-            1,
-            id="the-copy-does-not-have-it-yet",
+            RowStatus.MAYBE_IN_YNAB,
+            id="the-copy-never-saw-the-import-it-was-matched-with",
         ),
         pytest.param(
             [survivor(), YUL_MAYA],
             [],
             RowStatus.IN_YNAB,
-            0,
             id="a-match-waiting-for-approval-still-lists-yuls-transaction",
         ),
         pytest.param(
             [survivor(deleted=True)],
             [YUL_MAYA],
             RowStatus.NEW,
-            0,
             id="the-survivor-was-deleted",
         ),
         pytest.param(
             [survivor(matched_transaction_id=None)],
             [YUL_MAYA],
             RowStatus.NEW,
-            0,
             id="a-transaction-entered-by-hand-without-a-match-is-not-enough",
         ),
     ],
@@ -334,7 +328,6 @@ def test_a_row_matched_in_ynab_with_a_reconciled_transaction_is_in_ynab(
     in_ynab: list[TransactionDetail],
     in_copy: list[TransactionDetail],
     expected: RowStatus,
-    expected_unknown: int,
 ):
     ynab_answers(ynab_api, in_ynab)
     copied(store, *in_copy)
@@ -342,18 +335,152 @@ def test_a_row_matched_in_ynab_with_a_reconciled_transaction_is_in_ynab(
     plan = build_import_plan(client, BUDGET_ID, ACCOUNT_ID, "test", EXPORT, [MAYA], store=store)
 
     assert [row.status for row in plan.rows] == [expected]
-    assert plan.unknown_matches == expected_unknown
-    assert plan.already_imported_count == (expected is not RowStatus.NEW)
+    assert plan.already_imported_count == (expected in (RowStatus.MATCHED, RowStatus.IN_YNAB))
 
 
-def test_without_the_copy_a_match_onto_a_reconciled_transaction_shows_as_new(
+def test_without_the_copy_a_match_onto_a_reconciled_transaction_is_held_back(
     client: Client, ynab_api: YnabClientStub
 ):
-    ynab_answers(ynab_api, [survivor()])
+    ynab_answers(ynab_api, [survivor(payee_name="Maya Mobile")])
 
     plan = build_import_plan(client, BUDGET_ID, ACCOUNT_ID, "test", EXPORT, [MAYA])
 
-    assert [row.status for row in plan.rows] == [RowStatus.NEW]
+    [row] = plan.rows
+    assert row.status is RowStatus.MAYBE_IN_YNAB
+    assert row.twin == Twin(date=dt.date(2025, 5, 12), payee="Maya Mobile")
+    assert plan.new_rows == ()
+
+
+def maya(day: int) -> Transaction:
+    return TransactionFactory(date=dt.date(2025, 5, day), payee="Maya mobile ltd", amount=-18.38)
+
+
+@pytest.mark.parametrize(
+    ("export", "in_ynab", "expected"),
+    [
+        pytest.param(
+            [maya(22)],
+            [survivor()],
+            [RowStatus.MAYBE_IN_YNAB],
+            id="ten-days-apart-ynab-still-matches-them",
+        ),
+        pytest.param([maya(23)], [survivor()], [RowStatus.NEW], id="eleven-days-apart-is-too-far"),
+        pytest.param(
+            [maya(12)], [survivor(amount=-18390)], [RowStatus.NEW], id="one-cent-off-is-not-it"
+        ),
+        pytest.param(
+            [maya(10), maya(13), maya(20)],
+            [survivor()],
+            [RowStatus.NEW, RowStatus.MAYBE_IN_YNAB, RowStatus.NEW],
+            id="of-several-rows-of-the-amount-only-the-closest-in-date",
+        ),
+        pytest.param(
+            [maya(12), maya(12)],
+            [survivor()],
+            [RowStatus.MAYBE_IN_YNAB, RowStatus.NEW],
+            id="one-match-holds-back-one-of-two-equal-rows",
+        ),
+        pytest.param(
+            [maya(12), maya(14)],
+            [survivor(), survivor(id="hand-2", matched_transaction_id="yul-2")],
+            [RowStatus.MAYBE_IN_YNAB, RowStatus.MAYBE_IN_YNAB],
+            id="two-matches-hold-back-two-rows",
+        ),
+        pytest.param(
+            [maya(12), maya(12)],
+            [survivor(), TransactionDetailFactory(id="x", import_id=MAYA_ID)],
+            [RowStatus.IN_YNAB, RowStatus.MAYBE_IN_YNAB],
+            id="a-row-ynab-holds-leaves-the-match-to-the-other-one",
+        ),
+    ],
+)
+def test_a_match_nobody_can_name_holds_back_the_row_it_most_likely_took(
+    client: Client,
+    ynab_api: YnabClientStub,
+    store: Store,
+    export: list[Transaction],
+    in_ynab: list[TransactionDetail],
+    expected: list[RowStatus],
+):
+    ynab_answers(ynab_api, in_ynab)
+
+    plan = build_import_plan(client, BUDGET_ID, ACCOUNT_ID, "test", EXPORT, export, store=store)
+
+    assert [row.status for row in plan.rows] == expected
+
+
+def test_a_row_that_may_be_in_ynab_is_sent_only_once_the_user_says_so(
+    client: Client, ynab_api: YnabClientStub, store: Store
+):
+    ynab_answers(ynab_api, [survivor()])
+    ynab_rejects(ynab_api, [])
+    plan = build_import_plan(
+        client, BUDGET_ID, ACCOUNT_ID, "test", EXPORT, [MAYA, BAKERY], store=store
+    )
+
+    commit_import_plan(client, BUDGET_ID, plan, TransactionClearedStatus.CLEARED)
+    commit_import_plan(
+        client, BUDGET_ID, plan.send_anyway({MAYA_ID}), TransactionClearedStatus.CLEARED
+    )
+
+    held, anyway = (
+        [t.import_id for t in call.kwargs["data"].transactions]
+        for call in ynab_api.api("transactions").create_transaction.call_args_list
+    )
+    assert held == ["YNAB:-5000:2025-05-14:1"]
+    assert anyway == [MAYA_ID, "YNAB:-5000:2025-05-14:1"]
+
+
+def test_a_row_that_may_be_in_ynab_can_be_left_out_and_comes_back_held(
+    client: Client, ynab_api: YnabClientStub, store: Store
+):
+    ynab_answers(ynab_api, [survivor()])
+    left_out(store, MAYA_ID)
+
+    plan = build_import_plan(client, BUDGET_ID, ACCOUNT_ID, "test", EXPORT, [MAYA], store=store)
+
+    assert [row.status for row in plan.rows] == [RowStatus.EXCLUDED]
+    assert [row.status for row in plan.include({MAYA_ID}).rows] == [RowStatus.MAYBE_IN_YNAB]
+
+
+def test_an_import_matched_before_any_sync_is_recognised_from_what_the_commit_saved(
+    client: Client, ynab_api: YnabClientStub, store: Store
+):
+    ynab_holds(ynab_api, [])
+    api = ynab_api.api("transactions")
+    api.create_transaction.return_value.data.duplicate_import_ids = []
+    api.create_transaction.return_value.data.transactions = [YUL_MAYA]
+    plan = build_import_plan(client, BUDGET_ID, ACCOUNT_ID, "test", EXPORT, [MAYA], store=store)
+    commit_import_plan(client, BUDGET_ID, plan, TransactionClearedStatus.CLEARED, store=store)
+    # Matched in YNAB before a sync: YNAB hides yul's transaction from now on
+    ynab_answers(ynab_api, [survivor()])
+
+    again = build_import_plan(client, BUDGET_ID, ACCOUNT_ID, "test", EXPORT, [MAYA], store=store)
+
+    assert [row.status for row in again.rows] == [RowStatus.MATCHED]
+
+
+def test_a_copy_that_cannot_be_written_does_not_fail_an_import_ynab_took(
+    client: Client, ynab_api: YnabClientStub, tmp_path: Path
+):
+    api = ynab_api.api("transactions")
+    api.create_transaction.return_value.data.duplicate_import_ids = []
+    api.create_transaction.return_value.data.transactions = [YUL_MAYA]
+    store = Store(tmp_path / "store.sqlite")
+    store.path.write_text("this is not a database")
+    progress = MagicMock()
+
+    result = commit_import_plan(
+        client,
+        BUDGET_ID,
+        plan_of(ImportRowFactory(import_id=MAYA_ID)),
+        TransactionClearedStatus.CLEARED,
+        progress=progress,
+        store=store,
+    )
+
+    assert result == ImportResult(created=1, duplicate_import_ids=())
+    assert "could not be saved on this computer" in progress.warn.call_args.args[0]
 
 
 def left_out(store: Store, import_id: str, account_id: str = ACCOUNT_ID) -> None:

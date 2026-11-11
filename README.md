@@ -153,6 +153,10 @@ own file import does, by date, amount and how many times that pair repeats, with
 Two banks feeding one account can then take a row of the same day and amount, imported in
 separate runs, for one already in YNAB and skip it.
 
+A row tagged "may be in YNAB" is held back: it has the amount of a transaction you entered by
+hand and matched in YNAB with an earlier import yul can no longer name. In the app's review
+choose "Import anyway" or "Leave out"; `yul load` names those rows and does not send them.
+
 ## Privacy
 
 Everything runs on your computer and the only service it talks to is YNAB's API. There is no

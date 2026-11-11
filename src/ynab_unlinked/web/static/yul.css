@@ -941,7 +941,13 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-imp-table tr.dim td { color: var(--text-3); }
 .yul-imp-table tr.out td { color: var(--text-3); }
 .yul-imp-table tr.out td:not(:last-child) { text-decoration: line-through; }
-.yul-imp-notes { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.yul-imp-table .yul-imp-twin { color: var(--warn); font-size: 12px; }
+.yul-imp-acts { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+/* What each status tag means: the tag, then its line */
+.yul-imp-legend {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; align-items: center;
+  justify-items: start; margin: 2px 2px 14px; color: var(--text-2); font-size: 12.5px;
+}
 .yul-imp-note { color: var(--text-2); font-size: 12.5px; margin-bottom: 8px; }
 .yul-imp-card { margin-bottom: 10px; padding: 14px 16px; }
 .yul-imp-done { text-align: center; padding: 28px; }

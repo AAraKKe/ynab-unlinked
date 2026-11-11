@@ -207,7 +207,7 @@ def install() -> None:
         f'<link rel="stylesheet" href="{STATIC_ROUTE}/yul.css">',
         shared=True,
     )
-    ui.add_body_html(f"<script>{DRAG_JS}{KEYS_JS}</script>", shared=True)
+    ui.add_body_html(f"<script>{DRAG_JS}{KEYS_JS}{OUTSIDE_JS}</script>", shared=True)
 
 
 # Counts dragenter/dragleave on the document so the overlay shows while files are over the
@@ -229,6 +229,20 @@ DRAG_JS = """
     if (!document.querySelector(".yul-drop-upload")) e.preventDefault();
   }, true);
 })();
+"""
+
+# A click anywhere else drops a selection: the element that holds one carries `OUTSIDE_PROP` and
+# hears `OUTSIDE_EVENT` for every click that did not land in a `KEEP_PROP` element (what was
+# picked and what shows it).
+OUTSIDE_EVENT = "yul-outside"
+OUTSIDE_PROP = "data-yul-outside"
+KEEP_PROP = "data-yul-keep"
+OUTSIDE_JS = f"""
+document.addEventListener("click", (e) => {{
+  if (!(e.target instanceof Element) || e.target.closest("[{KEEP_PROP}]")) return;
+  document.querySelectorAll("[{OUTSIDE_PROP}]").forEach(
+    (el) => el.dispatchEvent(new CustomEvent("{OUTSIDE_EVENT}")));
+}});
 """
 
 # ⌘K on a Mac, Ctrl+K elsewhere, or "/" outside a field: ask the shell for the command palette.

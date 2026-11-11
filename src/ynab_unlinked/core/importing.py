@@ -9,16 +9,20 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
-from ynab import TransactionClearedStatus
+from ynab import TransactionClearedStatus, TransactionDetail
 
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
-from ynab_unlinked.models import PendingImport, Transaction, assign_import_ids
+from ynab_unlinked.models import PendingImport, Transaction, assign_import_ids, milliunits
 from ynab_unlinked.store import Store
 from ynab_unlinked.ynab_api.client import Client
 
 IMPORT_BUFFER_DAYS = 15
 """Days before the earliest transaction of a file that YNAB is read from to spot the rows it
 already has (`yul load --buffer`, the app's import)."""
+
+MATCH_WINDOW_DAYS = 10
+"""How far apart YNAB still matches an imported transaction with one entered by hand of the
+same amount."""
 
 
 class RowStatus(StrEnum):
@@ -29,8 +33,24 @@ class RowStatus(StrEnum):
     MATCHED = "matched"
     """Matched in YNAB with a transaction entered by hand that did not take the import id (a
     reconciled one): in YNAB too, never sent again."""
+    MAYBE_IN_YNAB = "maybe_in_ynab"
+    """Probably the import behind a match the budget copy has no record of (`ImportRow.twin`):
+    held back until the user sends it anyway or leaves it out."""
     EXCLUDED = "excluded"
     """Left out by the user, saved in the store so later runs leave it out too."""
+
+
+@dataclass(frozen=True)
+class Twin:
+    """A transaction entered by hand that YNAB matched with an imported one nobody can name.
+
+    YNAB hides the imported transaction and the budget copy never saw it (it was matched
+    before a sync brought it), so its import id is lost. A row of the same amount around
+    this date is most likely that import.
+    """
+
+    date: dt.date
+    payee: str
 
 
 @dataclass(frozen=True)
@@ -42,12 +62,21 @@ class ImportRow:
     """YNAB holds it only through a match (`RowStatus.MATCHED`); `already_imported` is True."""
     excluded: bool = False
     """In the store's registry of rows left out of imports."""
+    twin: Twin | None = None
+    """The transaction in YNAB this row may already be (`RowStatus.MAYBE_IN_YNAB`)."""
+    anyway: bool = False
+    """The user sends it although it has a `twin`. Only for this plan: once sent, YNAB holds
+    its import id."""
 
     @property
     def status(self) -> RowStatus:
         if self.already_imported:
             return RowStatus.MATCHED if self.matched else RowStatus.IN_YNAB
-        return RowStatus.EXCLUDED if self.excluded else RowStatus.NEW
+        if self.excluded:
+            return RowStatus.EXCLUDED
+        if self.twin is not None and not self.anyway:
+            return RowStatus.MAYBE_IN_YNAB
+        return RowStatus.NEW
 
 
 @dataclass(frozen=True)
@@ -56,10 +85,6 @@ class ImportPlan:
     account_id: str
     input_file: Path
     rows: tuple[ImportRow, ...]
-    unknown_matches: int = 0
-    """Transactions of the account matched in YNAB to one this computer has no copy of (the
-    budget copy is not synced, or older than the match). A row of the file they took may
-    show as new although YNAB holds it; the registry is the way out."""
 
     @property
     def new_rows(self) -> tuple[ImportRow, ...]:
@@ -80,12 +105,15 @@ class ImportPlan:
         """The plan with these rows left out of the commit."""
         return self._change(import_ids, excluded=True)
 
-    def _change(self, import_ids: Collection[str], *, excluded: bool) -> ImportPlan:
+    def send_anyway(self, import_ids: Collection[str]) -> ImportPlan:
+        """The plan with these rows sent on commit although they may be in YNAB."""
+        return self._change(import_ids, anyway=True)
+
+    def _change(self, import_ids: Collection[str], **fields: bool) -> ImportPlan:
         return replace(
             self,
             rows=tuple(
-                replace(row, excluded=excluded) if row.import_id in import_ids else row
-                for row in self.rows
+                replace(row, **fields) if row.import_id in import_ids else row for row in self.rows
             ),
         )
 
@@ -146,6 +174,12 @@ def build_import_plan(
       hides from the listing and answers 404 for. Only the copy, filled by the delta, still
       holds that transaction and its import id, so a row with that id is in YNAB.
     - The rows the user left out of imports to the account (`RowStatus.EXCLUDED`).
+
+    A match the copy cannot name (it never saw the imported transaction, or there is no
+    copy) leaves only the transaction entered by hand. A row YNAB does not hold with the
+    same amount, dated within `MATCH_WINDOW_DAYS` of it, gets it as its `twin` and is held
+    back (`RowStatus.MAYBE_IN_YNAB`); each such transaction is the twin of one row, the
+    closest in date.
     """
     pending = assign_import_ids(transactions)
     if not pending:
@@ -174,15 +208,15 @@ def build_import_plan(
         matched_ids = store.import_ids(budget_id, pointers)
         excluded = frozenset(row.import_id for row in store.excluded(budget_id, account_id))
 
-    rows = _rows(pending, known_ids, frozenset(matched_ids.values()))
-    plan = ImportPlan(
-        entity_name,
-        account_id,
-        input_file,
-        rows,
-        unknown_matches=len(pointers - matched_ids.keys()),
-    )
-    return plan.exclude(excluded)
+    unnamed = [
+        t
+        for t in ynab_transactions
+        if not t.deleted
+        and t.import_id is None
+        and t.matched_transaction_id in pointers - matched_ids.keys()
+    ]
+    rows = _with_twins(_rows(pending, known_ids, frozenset(matched_ids.values())), unnamed)
+    return ImportPlan(entity_name, account_id, input_file, rows).exclude(excluded)
 
 
 def _rows(
@@ -203,20 +237,55 @@ def _rows(
     return tuple(rows)
 
 
+def _with_twins(
+    rows: tuple[ImportRow, ...], unnamed: Sequence[TransactionDetail]
+) -> tuple[ImportRow, ...]:
+    """The rows, each one YNAB does not hold paired with the transaction of `unnamed` it may be.
+
+    Closest dates first, each side once: of two rows of the same amount only one is the
+    import a transaction was matched with.
+    """
+    pairs = sorted(
+        (abs((survivor.var_date - row.transaction.date).days), index, position)
+        for index, row in enumerate(rows)
+        if not row.already_imported
+        for position, survivor in enumerate(unnamed)
+        if survivor.amount == milliunits(row.transaction.amount)
+        and abs((survivor.var_date - row.transaction.date).days) <= MATCH_WINDOW_DAYS
+    )
+    twins: dict[int, Twin] = {}
+    taken: set[int] = set()
+    for _, index, position in pairs:
+        if index in twins or position in taken:
+            continue
+        taken.add(position)
+        survivor = unnamed[position]
+        twins[index] = Twin(date=survivor.var_date, payee=survivor.payee_name or "")
+    return tuple(
+        replace(row, twin=twins[index]) if index in twins else row for index, row in enumerate(rows)
+    )
+
+
 def commit_import_plan(
     client: Client,
     budget_id: str,
     plan: ImportPlan,
     cleared: TransactionClearedStatus,
     progress: Progress = NO_PROGRESS,
+    store: Store | None = None,
 ) -> ImportResult:
-    """Create the rows YNAB does not hold yet and report the ones it rejected anyway."""
+    """Create the rows YNAB does not hold yet and report the ones it rejected anyway.
+
+    The transactions YNAB created go into `store`, the budget copy, at once. A match made in
+    YNAB before the next sync hides the imported transaction from every later answer: saved
+    here, the copy can still name it (`build_import_plan`) the next time the row is in a file.
+    """
     to_create = plan.new_rows
     if not to_create:
         return ImportResult(created=0, duplicate_import_ids=())
 
     progress.start("Creating transactions...")
-    duplicates = client.create_transactions(
+    created = client.create_transactions(
         budget_id=budget_id,
         account_id=plan.account_id,
         # The legacy id only matters to recognise old imports, which the plan already did
@@ -225,6 +294,14 @@ def commit_import_plan(
     )
     progress.done()
 
+    if store is not None:
+        try:
+            store.save_transactions(budget_id, created.transactions)
+        except Exception as error:
+            # YNAB has them: the next sync brings them, unless they are matched before it
+            progress.warn(f"The new transactions could not be saved on this computer: {error}")
+
+    duplicates = created.duplicate_import_ids
     return ImportResult(
         created=len(to_create) - len(duplicates), duplicate_import_ids=tuple(duplicates)
     )
