@@ -6,6 +6,11 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.3.2 (2026-11-11)
+
+### Bugs Squashed, Peace Restored
+* [[#150](https://github.com/AAraKKe/ynab-unlinked/issues/150)] After an update the app could draw new pages with the stylesheet of the version before, which the browser kept for up to an hour (the Plan page of 1.3.0 looked unstyled). The browser no longer keeps a copy of the app's files.
+
 ## ynab-unlinked 1.3.1 (2026-11-11)
 
 ### Bugs Squashed, Peace Restored
