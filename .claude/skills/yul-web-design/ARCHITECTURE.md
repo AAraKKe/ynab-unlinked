@@ -699,7 +699,8 @@ class Rules:
 @dataclass(frozen=True)
 class AccountMove:
     account_id: str; start_balance: int; end_balance: int; flows: Flows
-    rate: float | None       # modified Dietz return over the period, for followed accounts
+    rate: float | None       # time weighted return, for followed accounts whose assets moved
+    rate_days: int = 0       # the days it is measured over: those the account held money
     change, own_money (change minus assets)
 
 @dataclass(frozen=True)
@@ -714,7 +715,10 @@ def period(store, budget_id, rules, start, end, names=None) -> Period   # blocki
 def flows_by_account(lines, rules) -> dict[str, Flows]
 def spending_by_category(lines, rules, names=None) -> list[CategorySpend]
 def income_by_payee(lines, rules) -> list[PayeeIncome]
-def period_return(start_balance, flows, gain, start, end) -> float | None
+class Return: rate (not annualised); days
+def period_return(start_balance, flows, gains, start, end) -> Return | None
+    # each day's gain on what the account held that morning (after the day's money came in
+    # when it held nothing), compounded; days it held nothing left out
 def annualised(rate, days) -> float          # unchanged for a year or less
 def months_between(start, end) -> list[dt.date]; month_start(day); month_end(day)
 ```
@@ -958,6 +962,8 @@ web/
                        stacked bars, net line, a transparent column per month for clicks
                        bridge_options(steps, labels, palette, currency_format) / bridge_chart:
                        the period panel's waterfall
+                       story_options(labels, held, put_in, upto, palette, currency_format):
+                       the Return explainer's bars and put in line, the steps after upto empty
     cashflow_chart.py  income_spending_options, rate_options, volatility_options,
                        category_months_options (bars and a dashed Average line),
                        histogram_options (slanted whole unit slices), chart(): the charts of
@@ -1044,11 +1050,17 @@ web/
                        entry), plain_amount, Drafts, read_drafts, diff_label, changed_count,
                        save_label (the "Update balances" fields, their changes and footer)
       flows.py         pure: TABS, RANGE_MONTHS, months_range (whole months), rules, load_period,
-                       period_title, Step / bridge, why, moved, rate_text, months_up,
-                       best_month, month_bounds, share_of_change, spread
+                       period_title, Step / bridge, why, moved, rate_text, partial,
+                       rate_title, PART_NOTE, months_up, best_month, month_bounds,
+                       share_of_change, spread, StoryStep / return_story, RETURN_TITLE,
+                       RETURN_LEDE, RETURN_END, percent_text
       view.py          NetWorthView (tabs, hero, ranges, chips, buckets, drawer loading) and the view
       periods.py       PeriodTabs (draws Months or Movers, the selected month and its panel,
                        restyles), months_tab, movers_tab
+      return_story.py  show_return_story(formatter, currency_format, palette): the dialog
+                       behind the "i" of Return (markers return-info, return-story, story-chart,
+                       story-count, story-text, story-return, story-growth, story-end,
+                       story-back, story-next, story-done)
       period_panel.py  period_panel(period, names, closed, formatter, *, selected, on_clear):
                        the bridge, accounts, came in from, spent most on
       table.py         AccountsTable: the accounts card, its inline balance editor and the
@@ -1186,7 +1198,8 @@ async def networth_view(args: PageArguments) -> None:  # the parameter is option
   the frame's timer); `warn` and `error` are toasts at the top, centered, 6s. Outside the
   shell (onboarding) every kind is a toast.
 - `components.info_button(title, lines, marker=)`: an "i" opening a note (`<marker>-note`)
-  for what a figure means. `wording.VERSUS_YNAB` (why income and spending can differ from
+  for what a figure means. `components.explain_button(title, on_click, marker=)` is the same
+  "i" for an explanation too long for a note: it calls `on_click`, which opens a dialog. `wording.VERSUS_YNAB` (why income and spending can differ from
   YNAB's reports) sits next to the month on Home (`month-info`) and the period title of
   Cash flow (`cf-info`) and Spending (`sp-info`).
 - `await shell.confirm(title, lines, action_label, danger=False) -> bool`: the one

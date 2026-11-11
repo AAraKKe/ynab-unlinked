@@ -1,5 +1,6 @@
 import datetime as dt
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -132,11 +133,11 @@ async def test_the_months_tab_splits_the_change_into_saving_and_assets(
 
     assert texts(user, "tile-change").startswith("Change +1,700.00€")
     assert texts(user, "tile-saved").startswith("From saving +2,100.00€")
-    assert texts(user, "tile-assets").startswith("From assets -400.00€")
+    assert texts(user, "tile-assets").startswith("From growth -400.00€")
     chart = user.find(marker="months-chart").elements.pop()
     names = [series["name"] for series in chart.options["series"]]
     # The transfer from the closed account moves nothing, so there is no Other
-    assert names == ["month", "Saved", "Assets", "Net"]
+    assert names == ["month", "Saved", "Growth", "Net"]
     assert sum(point["value"] for point in chart.options["series"][3]["data"]) == pytest.approx(
         1_700
     )
@@ -150,7 +151,7 @@ async def test_the_panel_shows_the_whole_range_until_a_month_is_picked(
     assert texts(user, "step-income") == "+3,000.00€"
     assert texts(user, "step-spending") == "-900.00€"
     assert texts(user, "step-net") == "+1,700.00€"
-    assert "assets -400.00€" in texts(user, f"moved-{FUND}")
+    assert "growth -400.00€" in texts(user, f"moved-{FUND}")
     assert texts(user, f"moved-{OLD}").startswith("💰 Old savings closed")
     assert texts(user, "came-in") == "Employer 3,000.00€"
     await user.should_not_see(marker="period-clear")
@@ -210,6 +211,9 @@ async def test_the_movers_tab_splits_each_account_into_your_money_and_assets(
     fund = texts(user, f"mover-{FUND}").split()
     assert fund[:5] == ["📈", "Fund", "+600.00€", "+1,000.00€", "-400.00€"]
     assert fund[5].startswith("−")
+    # It held money the whole range: no mark, no note about one
+    assert not fund[5].endswith("*")
+    await user.should_not_see(marker="part-note")
     assert texts(user, f"mover-{OLD}").split()[:5] == [
         "💰",
         "Old",
@@ -217,6 +221,46 @@ async def test_the_movers_tab_splits_each_account_into_your_money_and_assets(
         "closed",
         "-5,000.00€",
     ]
+
+
+async def test_the_i_of_return_tells_how_it_and_growth_can_point_different_ways(
+    synced: Store, no_sync, user: User
+):
+    await user.open("/networth?tab=movers")
+    await user.should_see(marker="movers", retries=20)
+
+    user.find(marker="return-info").click()
+    await user.should_see(marker="return-story", retries=20)
+    assert texts(user, "story-count") == "1 of 4"
+    assert texts(user, "story-text") == "You put 1,000.00€ into an account."
+    chart = user.find(marker="story-chart").elements.pop()
+    # Only the steps reached are drawn
+    assert chart.options["series"][0]["data"] == [1000.0, None, None, None]
+
+    for _ in range(3):
+        user.find(marker="story-next").click()
+    await user.should_see(marker="story-end", retries=20)
+    assert texts(user, "story-count") == "4 of 4"
+    assert texts(user, "story-return") == "Return +20.0%"
+    assert texts(user, "story-growth") == "Growth -1,500.00€"
+    assert chart.options["series"][0]["data"] == [1000.0, 1500.0, 10000.0, 8000.0]
+    assert chart.options["series"][1]["data"] == [1000.0, 1000.0, 9500.0, 9500.0]
+
+    user.find(marker="story-back").click()
+    await user.should_see("3 of 4", retries=20)
+    await user.should_not_see(marker="story-end")
+    user.find(marker="story-next").click()
+    await user.should_see(marker="story-done", retries=20)
+    user.find(marker="story-done").click()
+    await user.should_not_see(marker="return-story", retries=20)
+
+
+def test_the_story_of_return_adds_up():
+    steps = flows.return_story(FORMATTER)
+
+    # Each step's Return compounds the ones before; what was put in is never a gain
+    assert [step.rate for step in steps] == [0, 0.5, 0.5, pytest.approx(1.5 * 0.8 - 1)]
+    assert [step.growth for step in steps] == [0, 500_000, 500_000, -1_500_000]
 
 
 async def test_tabs_switch_without_leaving_the_page(synced: Store, no_sync, user: User):
@@ -281,11 +325,22 @@ def test_share_of_change_only_when_it_reads_as_a_part(part, change, expected):
 
 
 def test_a_return_is_per_year_only_over_more_than_a_year():
-    move = AccountMove("fund", 100, 121, Flows(assets=21), rate=0.21)
+    move = AccountMove("fund", 100, 121, Flows(assets=21), rate=0.21, rate_days=200)
+    longer = AccountMove("fund", 100, 121, Flows(assets=21), rate=0.21, rate_days=730)
 
     assert flows.rate_text(move, 200) == "+21.0%"
-    assert flows.rate_text(move, 730) == "+10.0%/yr"
+    assert flows.rate_text(longer, 730) == "+10.0%/yr"
     assert flows.rate_text(AccountMove("chk", 0, 5, Flows(income=5), None), 30) == "—"
+    assert flows.rate_title(move, 200) is None
+
+
+def test_a_return_over_part_of_the_range_is_marked_and_says_how_much():
+    move = AccountMove("rsu", 1_000, 3_000, Flows(assets=6), rate=0.328, rate_days=205)
+
+    assert flows.rate_text(move, 315) == "+32.8%*"
+    assert flows.rate_title(move, 315) == "Held money on 205 of the 315 days of the range"
+    # Per year over the days it is measured on, not the range's
+    assert flows.rate_text(replace(move, rate=0.21, rate_days=730), 1_000) == "+10.0%/yr*"
 
 
 def test_the_drawer_lists_only_accounts_that_moved():
