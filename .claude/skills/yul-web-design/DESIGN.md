@@ -297,10 +297,13 @@ asks for a longer range.
   back that far), Cash runway (cash and savings after debt over core spending, "27.8
   months"), and a faint line "Averages over 11 complete months, not this one.". Then
   "Income and spending": income (series 1) and spending (series 2) side by side per month,
-  top corners rounded, one tooltip per month with what was saved. A month with a label carries
-  it over its taller bar: the note written on that month in YNAB (first line), else, for a
-  month far above its median (1.25×), the payee that brought more than usual or the category
-  that spent more than usual. "Savings rate": its own line chart (never a second axis), the
+  top corners rounded, one tooltip per month with what was saved and what stood out. The note
+  written on that month in YNAB (first line) sits over its taller bar. Otherwise each bar far
+  above its median (1.25×) carries what pushed it there: the income bar the payee that brought
+  more than usual, the spending bar the category that spent more than usual. A month with both
+  sends them apart, income to the left and spending to the right, each tied to its bar by a
+  thin angled line. A label that would cover another one is hidden; the tooltip always lists
+  them ("Datadog brought more than usual", "🏝 Vacation spent more than usual"). "Savings rate": its own line chart (never a second axis), the
   average dashed with "average 60.2%". "Came in from": the top six payees of the range as
   bars.
 - **Spending**: three tiles (Spending a month, Core, One-offs), then side by side "By group"
