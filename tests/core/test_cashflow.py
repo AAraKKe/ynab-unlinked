@@ -20,8 +20,15 @@ RULES = Rules(on_budget={CHECKING: True})
         ([950] * 12, "steady"),
         ([300, 280, 320, 310, 290, 300, 330, 270, 300, 310, 290, 300], "steady"),
         ([500, 250, 800, 400, 700, 300, 600, 350, 750, 300, 450, 650], "variable"),
-        ([0, 0, 2000, 0, 50, 0, 0, 1600, 0, 0, 100, 0], "spiky"),
+        ([30, 40, 25, 35, 30, 300, 30, 45, 20, 35, 30, 400], "spiky"),
+        ([50, 0, 50, 0, 48, 0, 50, 50, 0, 48, 0, 50], "spiky"),
+        ([0, 0, 2000, 0, 50, 0, 0, 1600, 0, 0, 100, 0], "lumpy"),
         ([0, 0, 120, 0, 0, 0, 0, 0, 120, 0, 0, 0], "lumpy"),
+        ([300, 0, 0, 310, 0, 0, 290, 0, 0, 300, 0, 0, 305], "lumpy"),
+        # Three charges alike and one small purchase: what the charges cost does not matter
+        ([41, *[0] * 6, 11, *[0] * 4, 41, *[0] * 11, 41], "lumpy"),
+        # It spends in eleven months of thirteen, but nine of them are next to nothing
+        ([600, 5, 0, 6, 5, 0, 5, 7, 5, 6, 5, 6, 600], "lumpy"),
         ([0, 0, 0, 0, 0, 0, 0, 0, 5000, 0, 0, 0], None),
         ([300, 300, 300], None),
     ],
@@ -29,8 +36,13 @@ RULES = Rules(on_budget={CHECKING: True})
         "rent",
         "groceries",
         "eating out",
+        "gifts",
+        "a haircut every other month",
         "holidays",
         "a charge twice a year",
+        "a charge every three months",
+        "a yearly charge and a stray purchase",
+        "small fees and a yearly charge",
         "a single purchase",
         "too few months",
     ],
@@ -248,24 +260,38 @@ def test_with_a_complete_month_the_running_one_is_left_out_of_the_averages(store
 
 
 @pytest.mark.parametrize(
-    ("spent", "charge", "charges", "every", "set_aside"),
+    ("spent", "charge", "charges", "every", "set_aside", "alike"),
     [
         # A yearly subscription: its price over twelve months
-        ([171_000, *[0] * 11, 171_000, *[0] * 5], 171_000, 2, 12, 14_250),
+        ([171_000, *[0] * 11, 171_000, *[0] * 5], 171_000, 2, 12, 14_250, True),
         # An insurance twice a year, a little dearer each time
-        ([480_000, 0, 0, 0, 0, 0, 500_000, 0, 0, 0, 0, 0, 520_000], 500_000, 3, 6, 500_000 / 6),
+        (
+            [480_000, 0, 0, 0, 0, 0, 500_000, 0, 0, 0, 0, 0, 520_000],
+            500_000,
+            3,
+            6,
+            500_000 / 6,
+            True,
+        ),
+        # Two purchases that have nothing to do with each other
+        ([120_000, 0, 0, 0, 6_750_000], 3_435_000, 2, 4, 858_750, False),
         # One charge so far: nothing to tell how often it comes
-        ([0, 0, 171_000, 0], 171_000, 1, None, None),
-        ([0, 0, 0], 0, 0, None, None),
+        ([0, 0, 171_000, 0], 171_000, 1, None, None, True),
+        ([0, 0, 0], 0, 0, None, None, False),
     ],
-    ids=["yearly", "twice a year", "one charge", "nothing"],
+    ids=["yearly", "twice a year", "unlike purchases", "one charge", "nothing"],
 )
 def test_the_rhythm_of_a_category_is_its_charge_and_how_far_apart_charges_are(
-    spent: list[int], charge: float, charges: int, every: float | None, set_aside: float | None
+    spent: list[int],
+    charge: float,
+    charges: int,
+    every: float | None,
+    set_aside: float | None,
+    alike: bool,
 ):
     beat = rhythm(spent)
 
-    assert (beat.charge, beat.charges, beat.every) == (charge, charges, every)
+    assert (beat.charge, beat.charges, beat.every, beat.alike) == (charge, charges, every, alike)
     assert beat.set_aside == pytest.approx(set_aside)
 
 

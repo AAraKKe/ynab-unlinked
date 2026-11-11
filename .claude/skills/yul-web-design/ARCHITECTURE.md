@@ -722,7 +722,10 @@ def months_between(start, end) -> list[dt.date]; month_start(day); month_end(day
 ### 2.9 Cash flow (`core/cashflow.py`)
 
 ```python
-STEADY_BELOW = 0.25; VARIABLE_BELOW = 0.75; LUMPY_SAME_BELOW = 0.25; MIN_MONTHS = 6
+STEADY_BELOW = 0.25; VARIABLE_BELOW = 0.75; MIN_MONTHS = 6
+LUMPY_BELOW = 0.4           # the share of months with an expense under which it is lumpy
+EXPENSE_FROM = 0.25         # of the average month: from it a month counts as an expense
+ALIKE_BELOW = 0.25          # charges that vary less than this are about the same
 HISTORY_MONTHS = 36         # how far back a category's label looks, whatever the range
 UNUSUAL_ABOVE = 1.25        # a month this many times its median gets a label
 
@@ -730,15 +733,20 @@ UNUSUAL_ABOVE = 1.25        # a month this many times its median gets a label
 class Volatility: mean: float; cv: float | None; label: str | None; active: int
 def volatility(spent: Sequence[int], months: int | None = None) -> Volatility
     # cv = population stdev / mean over a category's life (its first to its last month of
-    # spending, quiet months in between counted as zero). lumpy: spent in at most half of
-    # them, those alike (their own cv < 0.25); else steady / variable / spiky by cv. No label
+    # spending, quiet months in between counted as zero). steady / variable by cv; over
+    # VARIABLE_BELOW it is lumpy when presence(spent) < LUMPY_BELOW (few months have an
+    # expense, whatever their size) and spiky otherwise (it keeps coming). No label
     # when the history holds fewer than MIN_MONTHS months, the life fewer than MIN_LIFETIME,
     # or it spent in one month only. cash_flow() measures it over the complete months of the
     # last HISTORY_MONTHS (the range when that is longer), so a label does not change with
     # the range pills. CategoryTrend.spent and .mean are the range's.
 
+def presence(spent: Sequence[int]) -> float    # the share of months with an expense: a month
+    # counts in full from EXPENSE_FROM of the average month, in proportion below it
+
 @dataclass(frozen=True)
-class Rhythm: charge: float; charges: int; every: float | None    # set_aside = charge / every
+class Rhythm: charge: float; charges: int; every: float | None; alike: bool
+    # set_aside = charge / every; alike: the charges vary less than ALIKE_BELOW
 def rhythm(spent: Sequence[int]) -> Rhythm     # the charges of a category that spends every
     # so often: the average of the months it spent in, and the months between them
 

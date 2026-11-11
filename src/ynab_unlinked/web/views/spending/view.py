@@ -285,9 +285,11 @@ class SpendingView:
             ui.label(
                 "How much a category moves is its standard deviation over its average, from its "
                 "first month of spending to its last (quiet months in between count as zero). "
-                "The word comes from up to three years of history, whatever range is shown, so a "
-                "yearly charge is lumpy even when you look at one month. A category needs six "
-                "months of history and three of its own for a word."
+                "One that moves over 75% is lumpy when fewer than 2 months of 5 have an "
+                "expense, and spiky when more do. The word comes from up to three years of "
+                "history, whatever range is shown, so a yearly charge is lumpy even when you "
+                "look at one month. A category needs six months of history and three of its "
+                "own for a word."
             ).classes("yul-faint yul-small")
 
     def _categories(self, flow: CashFlow) -> None:

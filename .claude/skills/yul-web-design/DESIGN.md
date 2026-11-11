@@ -312,12 +312,13 @@ asks for a longer range.
       month and it is covered."
     - variable: "400.00€ a month" · "Between 200.00€ and 600.00€ a month. Set aside 400.00€
       a month to cover it over time."
-    - lumpy: "170.99€ a charge" · "About once a year. Set aside 14.25€ a month to have it
-      ready." (a charge over the months between charges). "Each charge"; A charge, Charges,
-      Comes, Set aside, Last one.
-    - spiky: "up to 6,753.00€ a month" · "Spent in 2 of the last 8 months. Set aside 860.25€
-      a month to cover months like these." (all it spent over the months since its first).
-      Biggest month, Months spent in, In all, Set aside, Last one.
+    - lumpy, its charges about the same: "170.99€ a charge" · "About once a year. Set aside
+      14.25€ a month to have it ready." (a charge over the months between charges). "Each
+      charge"; A charge, Charges, Comes, Set aside, Last one.
+    - lumpy with unlike purchases, and spiky: "up to 6,753.00€ a month" · "Spent in 2 of the
+      last 8 months. Set aside 860.25€ a month to cover months like these." (all it spent
+      over the months since its first). Biggest month, Months spent in, In all, Set aside,
+      Last one.
     - bought once: "2,000.00€ once" · "Spent once, in Jul 2026. Nothing to plan for yet."
     Lumpy and spiky draw their history from the first charge to now (the quiet months are
     how they spend), with the dashed line "Set aside a month", and no histogram.
@@ -329,7 +330,9 @@ asks for a longer range.
     it in place; the back arrow, or a click on a group or a word, brings the chart back.
   - **How it moves**: a card with the four words as tiles, each its pill and a sentence with
     examples and its threshold ("Moves under 25%."); a click shows only that kind (the tile
-    accent bordered), again shows every kind. A faint line says how the number is worked out.
+    accent bordered), again shows every kind. Lumpy and spiky both move over 75% and differ
+    in how often they spend: lumpy is nothing most months, then an expense (fewer than 2
+    months of 5 have one); spiky keeps coming, with some months far bigger. A faint line says how the number is worked out.
   - **Categories**: a group dropdown (All groups, then each group: there are too many for
     pills), and "Only ▲ spiky · × Every kind" when a word filters. Most spent first, twenty
     then "Show all N" unless a filter is on (then every match). Each row: name, a month,

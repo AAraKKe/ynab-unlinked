@@ -96,8 +96,9 @@ is instant, and it syncs with YNAB on its own while it is open and after every c
   ![Cash flow](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/cashflow.png)
 
 - **Spending**: by group and by category, and how each category moves: steady, variable,
-  spiky, or lumpy (big charges every so often, like a yearly subscription). Click a category to
-  see its months and how they spread.
+  spiky (it keeps coming, and some months are far bigger), or lumpy (nothing most months, then
+  an expense, like a yearly subscription or a repair). Click a category to see its months and
+  how they spread.
 
   ![Spending](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/spending.png)
   ![A category's months](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/spending-category.png)
