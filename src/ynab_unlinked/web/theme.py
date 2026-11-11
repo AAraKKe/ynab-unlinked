@@ -15,6 +15,7 @@ from dataclasses import dataclass, replace
 
 from nicegui import ui
 
+from ynab_unlinked.__about__ import __version__
 from ynab_unlinked.web.storage import user_storage
 
 STATIC_ROUTE = "/yul-static"
@@ -204,7 +205,9 @@ def install() -> None:
         # font's SIL Open Font License, which must travel with the file.
         f'<link rel="preload" href="{STATIC_ROUTE}/fonts/InterVariable.woff2" as="font" '
         'type="font/woff2" crossorigin>'
-        f'<link rel="stylesheet" href="{STATIC_ROUTE}/yul.css">',
+        # The version is in the address for the browsers that still hold the stylesheet of a
+        # yul before 1.3.2, which let them keep it for an hour: a new address is a new file
+        f'<link rel="stylesheet" href="{STATIC_ROUTE}/yul.css?v={__version__}">',
         shared=True,
     )
     ui.add_body_html(f"<script>{DRAG_JS}{KEYS_JS}{OUTSIDE_JS}</script>", shared=True)

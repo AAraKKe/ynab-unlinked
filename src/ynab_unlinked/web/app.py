@@ -55,7 +55,10 @@ def build(token: str, port: int) -> Callable[[], Any]:
 
     views.register()
     app.add_middleware(TokenGuard, token=token, port=port)
-    app.add_static_files(theme.STATIC_ROUTE, STATIC_DIR)
+    # The files are on this computer: a copy kept by the browser saves nothing, and it
+    # outlives an update, which then draws the new pages with the old stylesheet. So the
+    # browser asks every time, and is told "not modified" when nothing changed.
+    app.add_static_files(theme.STATIC_ROUTE, STATIC_DIR, max_cache_age=0)
     theme.install()
     ui.button.default_props("no-caps")
     ui.page(shell.ONBOARDING_PATH, title="yul · setup")(onboarding_page)
