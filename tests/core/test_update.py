@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -196,6 +197,11 @@ def test_an_upgrade_returns_the_version_it_installed(mocker: MockerFixture):
 
     assert update.run_upgrade(PIP_UPGRADE, "1.1.0") == "1.2.0"
     assert run.call_args_list[0].args[0] == PIP_UPGRADE.command
+    # Without these pip and uv read the releases they remember, from before the new one
+    environment = run.call_args_list[0].kwargs["env"]
+    assert environment["PIP_NO_CACHE_DIR"] == "1"
+    assert environment["UV_NO_CACHE"] == "1"
+    assert environment["PATH"] == os.environ["PATH"]
     # The installed version is asked to a new interpreter, never to the running one
     assert run.call_args_list[1].args[0][:2] == [sys.executable, "-c"]
 

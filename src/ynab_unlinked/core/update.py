@@ -35,6 +35,15 @@ UPGRADE_TIMEOUT = 300.0
 """Seconds the upgrade command gets, downloads included."""
 RESTARTS = os.name == "posix"
 """Whether yul can replace itself with the upgraded yul (`os.execv`): not on Windows."""
+FRESH_INDEX = {"PIP_NO_CACHE_DIR": "1", "UV_NO_CACHE": "1"}
+"""Set for the upgrade command, so the tool asks PyPI instead of trusting what it remembers.
+
+pip keeps the list of a package's releases for the ten minutes PyPI allows. An upgrade run
+within ten minutes of an install, or of an earlier upgrade, then reads a list from before
+the release yul just found and ends with "already at latest version" (pipx with pip did, on
+the day 1.3.0 followed 1.2.0). pipx runs pip or uv, so both are told; neither setting is
+written to what the tool remembers of the install.
+"""
 OUTPUT_LINES = 6
 """How many of the last lines a failed upgrade printed are kept for the user."""
 
@@ -171,15 +180,17 @@ def installed_version() -> str:
 def run_upgrade(upgrade: Upgrade, current: str, timeout: float = UPGRADE_TIMEOUT) -> str:
     """Run `upgrade.command` and return the version it installed, newer than `current`.
 
-    `UpdateError` carries the last lines the command printed when it fails, and when it
-    worked without bringing a newer yul (an install pinned to a version, a package index
-    that could not be reached): the lines usually say why.
+    The command runs with `FRESH_INDEX`: it reads the releases from PyPI, not from what the
+    tool remembers. `UpdateError` carries the last lines the command printed when it fails,
+    and when it worked without bringing a newer yul (an install pinned to a version, a
+    package index that could not be reached): the lines usually say why.
     """
     if upgrade.command is None:
         raise UpdateError("This yul was not installed from PyPI.")
     try:
         result = subprocess.run(
             upgrade.command,
+            env={**os.environ, **FRESH_INDEX},
             capture_output=True,
             text=True,
             timeout=timeout,

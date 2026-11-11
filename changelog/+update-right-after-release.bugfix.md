@@ -1,0 +1,1 @@
+Updating from the app works right after a release: an update started within ten minutes of installing or upgrading yul said "already at latest version" and kept the old one, because pip was reading a list of releases it had saved before the new one came out.
