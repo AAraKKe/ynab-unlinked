@@ -6,6 +6,27 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.2.0 (2026-11-11)
+
+### Fresh Out of the Feature Oven
+* [[#142](https://github.com/AAraKKe/ynab-unlinked/issues/142)] The app tells you when a newer yul is out: an **Update** button shows next to the version in the sidebar, and a click updates yul with the tool that installed it (uv, pipx or pip) and restarts it in the same tab. It asks PyPI once a day, sends nothing about you, and Settings › Data & privacy turns it off.
+
+### Polished Until It Shines
+* [[#139](https://github.com/AAraKKe/ynab-unlinked/issues/139)] Import: a row that was probably matched in YNAB with a transaction you entered by hand is tagged "may be in YNAB" and held back until you import it anyway or leave it out, a legend above the rows says what each tag means, and what an import creates is kept in the budget copy at once so later matches are recognised.
+
+### Bugs Squashed, Peace Restored
+* [[#139](https://github.com/AAraKKe/ynab-unlinked/issues/139)] Net worth › Months: a click anywhere outside the chart and the month's panel goes back to the whole range, not only a click on the card's empty space.
+* [[#140](https://github.com/AAraKKe/ynab-unlinked/issues/140)] Spending: with a category open in the chart's place, a click on a group or a word of How it moves brings the chart back with the dots of that filter, instead of waiting for the back arrow.
+
+### Under the Hood Upgrades
+* [[#131](https://github.com/AAraKKe/ynab-unlinked/issues/131)] Bump the github-actions group across 1 directory with 2 updates
+* [[#135](https://github.com/AAraKKe/ynab-unlinked/issues/135)] Bump the python-dependencies group across 1 directory with 11 updates
+
+### For the Builders: Dev Experience Upgrades
+* [[#141](https://github.com/AAraKKe/ynab-unlinked/issues/141)] `src` is type checked with ty instead of pyright, with the same strictness where ty has a matching rule.
+* [[#139](https://github.com/AAraKKe/ynab-unlinked/issues/139)] Tests wait for the address of a page they navigated to: reading it right after the page showed failed now and then on a slow CI runner.
+* [[#143](https://github.com/AAraKKe/ynab-unlinked/issues/143)] The test that runs `python -m ynab_unlinked` passes on GitHub too, where the help comes out in colour.
+
 ## ynab-unlinked 1.1.0 (2026-11-10)
 
 ### Fresh Out of the Feature Oven

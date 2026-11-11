@@ -8,7 +8,7 @@ exclude = ["docs/screenshots"]
 
 [project]
 name = "ynab-unlinked"
-version = "1.1.0"
+version = "1.2.0"
 description = "Keep the accounts YNAB cannot link up to date and see what your budget data means, from the command line or a local web app"
 readme = "README.md"
 requires-python = ">=3.13"
