@@ -28,7 +28,7 @@ def privacy_notice() -> None:
     """Short notice shown before asking the user for their YNAB API key."""
     info(f"[bold]Heads up:[/bold] YNAB Unlinked keeps your API key {token_location()}.")
     info(
-        "All data stays on your computer — the only network calls go to api.ynab.com. "
+        "All data stays on your computer — it only travels to api.ynab.com. "
         f"Full privacy notice: [link={PRIVACY_DOC_URL}]{PRIVACY_DOC_URL}[/link]"
     )
 
@@ -37,9 +37,14 @@ def privacy_summary() -> None:
     """Long-form summary printed by `yul privacy`."""
     console().rule("[bold]YNAB Unlinked — Privacy Summary[/bold]")
     info(
-        "YNAB Unlinked runs entirely on your computer. The only network calls it "
-        "makes are to YNAB's API at https://api.ynab.com. Nothing is sent to any "
-        "third party. There is no telemetry."
+        "YNAB Unlinked runs entirely on your computer. Your data only travels to "
+        "YNAB's API at https://api.ynab.com. None of it is sent to any third party. "
+        "There is no telemetry."
+    )
+    info(
+        "The web app (yul app) also asks https://pypi.org once a day whether a newer "
+        "version exists. That sends nothing about you or your budget, and "
+        "Settings › Data & privacy turns it off."
     )
 
     info("\n[bold]What is stored locally[/bold]")

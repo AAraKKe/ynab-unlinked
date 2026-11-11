@@ -21,12 +21,16 @@ from tests.helpers.store import upsert
 from tests.helpers.web import eventually
 from tests.helpers.ynab_api import YnabClientStub
 from tests.web.test_theme import palette_classes
+from ynab_unlinked.__about__ import __version__
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
+from ynab_unlinked.core.update import UpdateError
 from ynab_unlinked.keychain import mask_token
 from ynab_unlinked.store import ExcludedRow, Store
 from ynab_unlinked.web import shell, theme
+from ynab_unlinked.web import update as web_update
 from ynab_unlinked.web.state import AppState, state
+from ynab_unlinked.web.update import updates
 from ynab_unlinked.web.views.settings import tab_from_slug
 from ynab_unlinked.web.wording import SAVE_FAILED
 
@@ -238,6 +242,72 @@ async def test_the_data_tab_says_where_the_token_is_in_plain_words(
     [label] = user.find(marker="token-location").elements
     assert isinstance(label, ui.label)
     assert label.text == "In the settings file, since no keychain was found on this computer."
+
+
+async def _status_line(user: User) -> str:
+    await user.should_see(marker="update-status")
+    [label] = user.find(marker="update-status").elements
+    assert isinstance(label, ui.label)
+    return label.text
+
+
+async def test_turning_the_look_for_new_versions_off_is_saved_and_stops_it(
+    user: User, config_v4: LatestConfig
+):
+    await _open_tab(user, "data-privacy")
+    await user.should_see(marker="check-updates")
+    await eventually(lambda: updates().latest is not None)
+
+    user.find(marker="check-updates").click()
+
+    await user.should_see("yul no longer looks for new versions")
+    assert not LatestConfig.load().check_for_updates
+    # Even a day later: nothing asks PyPI again
+    assert not updates().due(dt.datetime.now(dt.UTC) + dt.timedelta(days=2))
+
+
+@pytest.mark.parametrize(
+    ("latest", "line", "offered"),
+    [
+        ("99.0.0", f"yul 99.0.0 is out. You have {__version__}.", True),
+        (__version__, f"yul {__version__} is the latest version.", False),
+    ],
+    ids=["newer", "latest"],
+)
+async def test_check_now_says_what_pypi_has_and_offers_a_newer_yul(
+    user: User,
+    config_v4: LatestConfig,
+    mocker: MockerFixture,
+    latest: str,
+    line: str,
+    offered: bool,
+):
+    await _open_tab(user, "data-privacy")
+    await eventually(lambda: updates().latest is not None)
+    await user.should_see(marker="check-now")
+    asked = mocker.patch.object(web_update, "latest_version", return_value=latest)
+
+    user.find(marker="check-now").click()
+
+    await eventually(lambda: asked.called)
+    await user.should_see(line)
+    if offered:
+        await user.should_see(marker="settings-update")
+    else:
+        await user.should_not_see(marker="settings-update")
+
+
+async def test_check_now_says_when_pypi_cannot_be_reached(
+    user: User, config_v4: LatestConfig, mocker: MockerFixture
+):
+    await _open_tab(user, "data-privacy")
+    await eventually(lambda: updates().latest is not None)
+    await user.should_see(marker="check-now")
+    mocker.patch.object(web_update, "latest_version", side_effect=UpdateError("offline"))
+
+    user.find(marker="check-now").click()
+
+    await user.should_see("pypi.org could not be reached.")
 
 
 async def test_resync_rebuilds_the_budget_copy_and_keeps_the_activity(

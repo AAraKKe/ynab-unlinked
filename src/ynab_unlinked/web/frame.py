@@ -1,7 +1,8 @@
 """The layout of the app: the sidebar, the top bar and the content column of each browser tab.
 
 `root()` draws them once per tab, and a `ui.sub_pages` swaps the content column when the path
-changes. The views come from `shell`'s registry; what a view needs from the layout while it is
+changes. The sidebar ends with the version and, once a newer yul is out, the button that
+updates to it (`update_dialog`). The views come from `shell`'s registry; what a view needs from the layout while it is
 on screen is `shell`'s too (`set_header`, `notify`, `refresh_view`).
 
 Every couple of seconds each tab looks at the app state (`_tick`): it starts a sync when the
@@ -29,6 +30,7 @@ from ynab_unlinked.web.shell import Layout, View
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.storage import tab_storage, user_storage
 from ynab_unlinked.web.sync_chip import sync_chip
+from ynab_unlinked.web.update_dialog import update_button
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +177,9 @@ def _sidebar(frame: ui.element) -> tuple[dict[str, ui.element], dict[str, ui.lab
         for v in (v for v in registered if v.bottom):
             nav[v.key], badges[v.key] = _nav_item(v)
         _collapse_item(frame)
-        ui.label(f"yul {__version__}").classes("yul-side-foot")
+        with ui.element("div").classes("yul-side-foot"):
+            ui.label(f"yul {__version__}").classes("yul-side-version").mark("version")
+            update_button()
     return nav, badges
 
 

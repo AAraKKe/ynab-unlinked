@@ -1,0 +1,1 @@
+The app tells you when a newer yul is out: an **Update** button shows next to the version in the sidebar, and a click updates yul with the tool that installed it (uv, pipx or pip) and restarts it in the same tab. It asks PyPI once a day, sends nothing about you, and Settings › Data & privacy turns it off.

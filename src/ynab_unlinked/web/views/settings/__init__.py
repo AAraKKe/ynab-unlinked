@@ -150,7 +150,7 @@ _KEYWORDS = {
     "Net worth": "debt return goal balance adjustments",
     "Categories": "not spending income rules",
     "Appearance": "theme palette colours dark light",
-    "Data & privacy": "copy local delete reset resync",
+    "Data & privacy": "copy local delete reset resync update version",
 }
 for _tab in TABS:
     shell.command(

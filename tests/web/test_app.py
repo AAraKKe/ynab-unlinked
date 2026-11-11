@@ -8,6 +8,8 @@ from pytest_mock import MockerFixture
 
 from tests.helpers.web import fresh_nicegui
 from ynab_unlinked.web import app as web_app
+from ynab_unlinked.web.security import HANDOVER_ENV, hand_over, inherited_token
+from ynab_unlinked.web.update import updates
 
 
 @pytest.fixture
@@ -94,3 +96,85 @@ def test_run_narrows_a_storage_folder_an_older_yul_left_readable(
     assert ui_run.call_args.kwargs["storage_secret"] == "kept"
     assert mode(web) == 0o700
     assert mode(web / "secret") == 0o600
+
+
+def announced_token(announced: list[str]) -> str:
+    return announced[0].split("token=")[1]
+
+
+@pytest.mark.version("missing")
+def test_a_run_an_update_restarted_keeps_the_session_of_the_one_before(
+    config: str, ui_run, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.delenv(HANDOVER_ENV, raising=False)
+    hand_over("the-session-of-the-run-before")
+    announced: list[str] = []
+
+    web_app.run(port=8765, open_browser=False, announce=announced.append)
+
+    assert announced_token(announced) == "the-session-of-the-run-before"
+
+
+@pytest.fixture
+def stopped_by_an_update(ui_run, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch):
+    """The server stops because an update asked for a restart. Returns the patched `execv`."""
+    monkeypatch.delenv(HANDOVER_ENV, raising=False)
+    ui_run.side_effect = lambda *args, **kwargs: setattr(updates(), "restarting", True)
+    mocker.patch("ynab_unlinked.web.app.workers.thread_pool")
+    return mocker.patch("ynab_unlinked.web.app.os.execv")
+
+
+@pytest.mark.version("missing")
+def test_after_an_update_yul_starts_again_on_the_same_port_with_the_same_session(
+    config: str, stopped_by_an_update
+):
+    announced: list[str] = []
+
+    web_app.run(port=8765, open_browser=True, announce=announced.append)
+
+    executable, command = stopped_by_an_update.call_args.args
+    assert executable == sys.executable
+    # No new tab: the ones left open reload into the new yul
+    assert command == [
+        sys.executable,
+        "-m",
+        "ynab_unlinked",
+        "app",
+        "--port",
+        "8765",
+        "--no-browser",
+    ]
+    assert inherited_token() == announced_token(announced)
+
+
+@pytest.mark.version("missing")
+def test_work_still_running_ends_before_yul_is_replaced(
+    config: str, stopped_by_an_update, mocker: MockerFixture
+):
+    order = mocker.Mock()
+    order.attach_mock(web_app.workers.thread_pool.shutdown, "wait_for_work")
+    order.attach_mock(stopped_by_an_update, "execv")
+
+    web_app.run(port=8765, open_browser=False)
+
+    assert [call[0] for call in order.mock_calls] == ["wait_for_work", "execv"]
+    assert order.mock_calls[0].kwargs == {"wait": True}
+
+
+@pytest.mark.version("missing")
+def test_a_restart_that_fails_says_to_start_yul_again(config: str, stopped_by_an_update):
+    stopped_by_an_update.side_effect = OSError("exec format error")
+    announced: list[str] = []
+
+    web_app.run(port=8765, open_browser=False, announce=announced.append)
+
+    assert announced[-1] == web_app.RESTART_FAILED
+
+
+@pytest.mark.version("missing")
+def test_a_server_stopped_by_hand_does_not_start_again(config: str, ui_run, mocker: MockerFixture):
+    execv = mocker.patch("ynab_unlinked.web.app.os.execv")
+
+    web_app.run(port=8765, open_browser=False)
+
+    execv.assert_not_called()

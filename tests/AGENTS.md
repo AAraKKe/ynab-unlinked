@@ -128,6 +128,9 @@ is almost always waiting for a fixed interval, not working. Measure before you a
   started cannot leak its task or error into the next test. `fresh_nicegui()`
   (`tests/helpers/web.py`) wraps NiceGUI's global reset, which otherwise unloads
   `ynab_unlinked` from `sys.modules`.
+- `no_newer_yul` (`tests/web/conftest.py`, autouse) keeps every web test from asking PyPI:
+  the running yul is the latest. A test about an update patches
+  `ynab_unlinked.web.update.latest_version` again (and `run_upgrade`, `app.shutdown`).
 - `store_file` (root conftest) is `store_path()` under the scratch `YUL_HOME`. Seed the store
   with `tests.helpers.store.upsert` and `Store.log(..., at=...)` after one empty `Store.sync` so
   `last_sync` is set (the `store` fixture in `tests/web/views/test_home.py`), or through

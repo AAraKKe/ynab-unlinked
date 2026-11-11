@@ -14,14 +14,20 @@ come from the app's own origin when the browser says where they come from.
 
 Being "same site" also means such a page could put the app in a frame and trick a click on
 it, so every HTTP response tells the browser never to show the app inside a frame.
+
+A run that restarts itself (after an update) keeps its token, so the tabs already open keep
+working: `hand_over()` leaves it in a pipe only the process it becomes can read, and
+`inherited_token()` takes it from there. The token is never in the command line or in a file.
 """
 
 from __future__ import annotations
 
 import html
 import json
+import os
 import secrets
 import socket
+import stat
 from urllib.parse import urlencode
 
 from starlette.datastructures import URL, QueryParams
@@ -33,6 +39,10 @@ from starlette.websockets import WebSocketClose
 HOST = "127.0.0.1"
 COOKIE_PREFIX = "yul_session"
 TOKEN_PARAM = "token"
+
+HANDOVER_ENV = "YUL_SESSION_FD"
+"""Names the pipe a run left its session token in for the run it restarted into."""
+_TOKEN_BYTES = 256
 
 _SAFE_METHODS = ("GET", "HEAD")
 _DEFAULT_HTTP_PORT = 80
@@ -50,6 +60,38 @@ FRAME_HEADERS = (
 
 def new_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+def hand_over(token: str) -> None:
+    """Leave `token` for the program this process is about to become (`os.execv`).
+
+    It waits in a pipe whose reading end survives the exec; `HANDOVER_ENV` names it.
+    """
+    reader, writer = os.pipe()
+    os.write(writer, token.encode())
+    os.close(writer)
+    os.set_inheritable(reader, True)
+    os.environ[HANDOVER_ENV] = str(reader)
+
+
+def inherited_token() -> str | None:
+    """The token of the run that restarted into this one, None for a run started by hand.
+
+    Only a pipe is read, so a stray `HANDOVER_ENV` can never make yul wait on a terminal or
+    read a file.
+    """
+    value = os.environ.pop(HANDOVER_ENV, None)
+    if value is None:
+        return None
+    try:
+        descriptor = int(value)
+        if not stat.S_ISFIFO(os.fstat(descriptor).st_mode):
+            return None
+        with os.fdopen(descriptor, "rb") as pipe:
+            token = pipe.read(_TOKEN_BYTES).decode()
+    except (ValueError, OSError):
+        return None
+    return token or None
 
 
 def free_port() -> int:
