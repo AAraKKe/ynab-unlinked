@@ -42,6 +42,9 @@ def accounts(config: str, config_files: ConfigFiles):
 
 @pytest.fixture
 def ynab(ynab_api: YnabClientStub) -> YnabClientStub:
+    ynab_api.answer_accounts(
+        *(AccountFactory(id=account) for account in (ACCOUNT_ID, OTHER_ACCOUNT_ID, BBVA_ACCOUNT_ID))
+    )
     api = ynab_api.api("transactions")
     api.get_transactions_by_account.return_value.data.transactions = []
     api.create_transaction.return_value.data.duplicate_import_ids = []
@@ -119,6 +122,22 @@ def test_yes_imports_nothing_when_a_bank_has_no_saved_account(
     assert "No saved account for Cobee" in result.output
     # Sabadell has an account, but importing it alone would leave the batch half done
     ynab.api("transactions").create_transaction.assert_not_called()
+
+
+def test_yes_imports_nothing_when_a_saved_account_is_closed_in_ynab(
+    yul: CliRunner, accounts, ynab: YnabClientStub
+):
+    ynab.answer_accounts(
+        AccountFactory(id=ACCOUNT_ID), AccountFactory(id=OTHER_ACCOUNT_ID, closed=True)
+    )
+
+    result = yul("load", "--yes", "auto", SABADELL, COBEE, env=WIDE)
+
+    assert result.exit_code == 1, result.output
+    assert "The account saved for Cobee is closed in YNAB." in result.output
+    ynab.api("transactions").create_transaction.assert_not_called()
+    # One list of the budget's accounts answers for every file
+    ynab.api("accounts").get_accounts.assert_called_once()
 
 
 def test_show_lists_the_transactions_without_importing(

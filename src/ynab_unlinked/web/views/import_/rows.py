@@ -90,6 +90,9 @@ def draw_detection(flow: ImportFlow, item: ImportFile) -> None:
             if held := held_count(item.plan):
                 pill(f"{held} to check", "warn").mark(f"held-{item.key}")
             pill(f"{len(item.plan.new_rows)} new / {total}", "acc").mark(f"count-{item.key}")
+        case Status.ACCOUNT if item.account_gone:
+            note = ui.label(item.account_gone).classes("yul-imp-reason yul-warn")
+            note.mark(f"account-gone-{item.key}")
         case Status.ERROR:
             error = ui.label(item.problem or "Error").classes("yul-imp-reason yul-bad")
             error.mark(f"error-{item.key}")

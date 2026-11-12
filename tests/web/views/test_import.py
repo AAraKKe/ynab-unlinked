@@ -1,3 +1,4 @@
+import dataclasses
 import datetime as dt
 import uuid
 from functools import partial
@@ -15,6 +16,7 @@ from ynab import ApiException, TransactionClearedStatus
 from tests.factories import (
     AccountFactory,
     ImportRowFactory,
+    StoredAccountFactory,
     StoredTransactionFactory,
     TransactionDetailFactory,
 )
@@ -23,7 +25,7 @@ from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.store import upsert
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, LoaderConfig
-from ynab_unlinked.core.detect import resolve_options
+from ynab_unlinked.core.detect import Candidate, resolve_options
 from ynab_unlinked.core.importing import ImportPlan, ImportResult
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
@@ -31,7 +33,7 @@ from ynab_unlinked.models import assign_import_ids
 from ynab_unlinked.store import ExcludedRow, Store
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.state import AppState, state
-from ynab_unlinked.web.views.import_.data import import_log
+from ynab_unlinked.web.views.import_.data import ImportFile, forget_gone_account, import_log
 from ynab_unlinked.web.wording import IMPORT_FAILED
 
 pytestmark = pytest.mark.version("V4")
@@ -310,6 +312,136 @@ async def test_a_loader_without_an_account_asks_for_one_and_saves_it_on_import(
     assert saved is not None
     assert saved.account_id == MAXIMA
     assert list(created(ynab)) == [MAXIMA]
+
+
+@pytest.mark.parametrize(
+    ("oro", "reason"),
+    [
+        ([AccountFactory(id=uuid.UUID(int=1), name="💳 Oro", closed=True)], "is closed in YNAB"),
+        ([], "is no longer in the budget"),
+    ],
+    ids=["closed", "deleted"],
+)
+async def test_a_saved_account_gone_from_ynab_asks_for_another_one_and_saves_it(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, oro: list, reason: str
+):
+    # YNAB takes transactions into a closed account and then shows them nowhere
+    ynab.answer_accounts(*oro, AccountFactory(id=uuid.UUID(int=2), name="💳 Maxima"))
+
+    await drop(user, SABADELL)
+
+    await user.should_see(
+        f"The account saved for Sabadell {reason}. Pick another one.",
+        marker="account-gone-1",
+        retries=30,
+    )
+    assert not review_button(user).enabled
+    # Reading the file again with another year still says why the account is asked for
+    year = user.find(marker="option-1-year").elements.pop()
+    assert isinstance(year, ui.select)
+    year.set_value(str(dt.date.today().year - 1))
+    await user.should_see(
+        f"The account saved for Sabadell {reason}. Pick another one.",
+        marker="account-gone-1",
+        retries=30,
+    )
+    select = user.find(marker="account-select-1").elements.pop()
+    assert isinstance(select, ui.select)
+    assert select.options == {MAXIMA: "💳 Maxima"}
+    select.set_value(MAXIMA)
+
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+
+    await user.should_see("3 transactions imported", retries=30)
+    assert list(created(ynab)) == [MAXIMA]
+    saved = LatestConfig.load().entity("sabadell")
+    assert saved is not None
+    assert saved.account_id == MAXIMA
+
+
+async def test_an_account_closed_after_the_file_was_read_is_asked_for_again_before_sending(
+    accounts: LatestConfig, ynab: YnabClientStub, store_file: Path, user: User
+):
+    oro = StoredAccountFactory(id=ORO, name="💳 Oro", type="creditCard")
+    maxima = StoredAccountFactory(id=MAXIMA, name="💳 Maxima", type="creditCard")
+    upsert(Store(store_file), BUDGET_ID, accounts=[oro, maxima])
+
+    await drop(user, SABADELL)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    # A sync while the file is on screen brings Oro closed in YNAB
+    upsert(Store(store_file), BUDGET_ID, accounts=[dataclasses.replace(oro, closed=True)])
+    state().last_sync = dt.datetime.now(dt.UTC)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+
+    await user.should_see(
+        "The account saved for Sabadell is closed in YNAB. Pick another one.",
+        marker="account-gone-1",
+        retries=30,
+    )
+    await user.should_see("Pick another account for movements.txt")
+    assert created(ynab) == {}
+    select = user.find(marker="account-select-1").elements.pop()
+    assert isinstance(select, ui.select)
+    assert select.options == {MAXIMA: "💳 Maxima"}
+    select.set_value(MAXIMA)
+
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+
+    await user.should_see("3 transactions imported", retries=30)
+    assert list(created(ynab)) == [MAXIMA]
+
+
+async def test_a_failed_read_of_the_accounts_after_a_sync_keeps_the_ones_read_before(
+    accounts: LatestConfig,
+    ynab: YnabClientStub,
+    user: User,
+    bbva_file: Path,
+    mocker: MockerFixture,
+):
+    await drop(user, SABADELL)
+    await user.should_see("→ 💳 Oro", marker="account-1", retries=30)
+    mocker.patch.object(AppState, "budget_accounts", side_effect=OSError("disk gone"))
+    state().last_sync = dt.datetime.now(dt.UTC)
+
+    # Dropped on the same page, where the flow read the accounts before
+    upload = user.find(marker="dropzone").elements.pop()
+    assert isinstance(upload, ui.upload)
+    await upload.handle_uploads(
+        [
+            SmallFileUpload(
+                name=bbva_file.name,
+                content_type="application/octet-stream",
+                _data=bbva_file.read_bytes(),
+            )
+        ]
+    )
+
+    await user.should_see("→ 💳 Maxima", marker="account-2", retries=30)
+    await user.should_see("3 new / 3", marker="count-2", retries=30)
+
+
+@pytest.mark.parametrize(
+    ("chosen", "accounts"),
+    [
+        (False, None),
+        (True, [StoredAccountFactory(id=ORO, closed=True)]),
+    ],
+    ids=["the budget's accounts could not be read", "picked on the row"],
+)
+def test_an_account_that_cannot_be_judged_gone_is_kept(chosen: bool, accounts: list | None):
+    item = ImportFile(key=1, name="movements.txt", size=1, path=SABADELL, account_id=ORO)
+    item.candidate = Candidate(loader("sabadell"), 1.0, "test", {}, (), None)
+    item.account_chosen = chosen
+
+    assert not forget_gone_account(item, accounts)
+
+    assert item.account_id == ORO
+    assert item.account_gone is None
 
 
 async def test_a_ynab_failure_is_shown_on_the_row_and_can_be_retried(

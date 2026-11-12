@@ -5,6 +5,7 @@ from ynab import ApiException
 
 from tests.cli.process.builders import (
     ACCOUNT_ID,
+    OTHER_ACCOUNT_ID,
     REGISTERED_LOADER,
     THREE_DAYS_AGO,
     TODAY,
@@ -139,3 +140,21 @@ def test_yes_with_rows_rejected_as_duplicates_is_a_success(
 
     assert result.exit_code == 0, result.output
     assert "rejected 1" in result.output
+
+
+def test_yes_stops_when_the_saved_account_is_closed_in_ynab(
+    config_file: Path, yul: CliRunner, load_entity: LoadEntityCallback, ynab: YnabClientStub
+):
+    ynab.answer_accounts(
+        AccountFactory(id=ACCOUNT_ID, closed=True), AccountFactory(id=OTHER_ACCOUNT_ID)
+    )
+    load_entity(TODAY, [TransactionFactory(date=THREE_DAYS_AGO, **COFFEE)])
+
+    result = yul("load --yes test", env={"COLUMNS": "200"})
+
+    assert result.exit_code == 1, result.output
+    assert result.output.strip() == (
+        "The account saved for test is closed in YNAB. Run without --yes to pick another one."
+    )
+    ynab.api("transactions").create_transaction.assert_not_called()
+    assert saved_config(config_file).loaders["test"].account_id == ACCOUNT_ID

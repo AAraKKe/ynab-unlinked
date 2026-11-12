@@ -413,6 +413,10 @@ async def test_bank_settings_save_the_account_and_only_non_default_options(
 
     user.find(marker="bank-settings-cobee").click()
     await user.should_see(marker="option-cobee-language")
+    # The account the config asset saves for Cobee is not in this budget
+    cobee = user.find(marker="loader-cobee").elements.pop()
+    assert isinstance(cobee, ui.select)
+    cobee.set_value(CHECKING_ID)
     language = user.find(marker="option-cobee-language").elements.pop()
     assert isinstance(language, ui.select)
     language.set_value("pt")
@@ -427,6 +431,37 @@ async def test_bank_settings_save_the_account_and_only_non_default_options(
     assert loaders["sabadell"].options == {}
     # Loaders yul does not ship (the test entity) are left alone
     assert loaders["test"].account_id == "TestAccountID"
+
+
+async def test_a_bank_whose_account_is_gone_from_ynab_asks_for_another_one(
+    config_v4: LatestConfig, budget_accounts: YnabClientStub, user: User
+):
+    config_v4.loaders["cobee"].account_id = str(uuid.UUID(int=30))  # closed in YNAB
+    config_v4.save()  # sabadell keeps an account this budget does not have
+    state().reload()
+    await _open_tab(user, "banks")
+
+    await user.should_see(
+        "Its account is closed in YNAB. Pick another one.", marker="bank-summary-cobee", retries=20
+    )
+    await user.should_see(
+        "Its account is no longer in the budget. Pick another one.", marker="bank-summary-sabadell"
+    )
+    for key in ("cobee", "sabadell"):
+        [summary] = user.find(marker=f"bank-summary-{key}").elements
+        assert "yul-warn" in summary.classes
+
+    user.find(marker="bank-settings-cobee").click()
+    await user.should_see(marker="loader-cobee")
+    cobee = user.find(marker="loader-cobee").elements.pop()
+    assert isinstance(cobee, ui.select)
+    assert cobee.value is None
+    assert "Closed" not in cobee.options.values()
+    cobee.set_value(CARD_ID)
+    user.find(marker="save-bank-cobee").click()
+
+    await user.should_see("→ 💳 Oro", marker="bank-summary-cobee")
+    assert LatestConfig.load().loaders["cobee"].account_id == CARD_ID
 
 
 async def test_a_bank_is_turned_off_and_on_from_its_card(

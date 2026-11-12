@@ -67,7 +67,7 @@ def load_callback(
             help=(
                 "Import without asking for confirmation, for use without a terminal. Exits with an "
                 "error instead of prompting when an answer is needed: there is no config yet, the "
-                "entity has no saved account, or --acount is used."
+                "entity has no saved account (or YNAB closed it), or --acount is used."
             ),
         ),
     ] = False,
@@ -187,19 +187,22 @@ def auto(
             display_transaction_table(_parse(input_file, candidate), ctx.formatter)
         return
 
-    # Every question is asked before anything is written to YNAB, so cancelling imports nothing
+    client = Client(ctx.config.api_key)
+    budget_id = ctx.config.budget.id
+
+    # Every question is asked before anything is written to YNAB, so cancelling imports
+    # nothing, and a saved account closed in YNAB stops --yes before any file is imported
+    accounts = client.accounts(budget_id)
     account_ids = [
         get_or_prompt_account_id(
             ctx.config,
             candidate.loader.name,
             force_prompt=ctx.choose_account,
             interactive=not ctx.yes,
+            accounts=accounts,
         )
         for _, candidate in chosen
     ]
-
-    client = Client(ctx.config.api_key)
-    budget_id = ctx.config.budget.id
 
     store = open_store(ctx.yes)
     plans: list[ImportPlan] = []

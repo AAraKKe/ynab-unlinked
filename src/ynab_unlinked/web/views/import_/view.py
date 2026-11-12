@@ -13,6 +13,7 @@ the file rows in `rows`, the tables in `tables`.
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 from collections.abc import Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -33,7 +34,7 @@ from ynab_unlinked.core.importing import (
 )
 from ynab_unlinked.entities.registry import loaders
 from ynab_unlinked.formatter import Formatter
-from ynab_unlinked.store import ExcludedRow
+from ynab_unlinked.store import ExcludedRow, StoredAccount
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import set_class
 from ynab_unlinked.web.components.dropzone import dropzone
@@ -54,6 +55,7 @@ from ynab_unlinked.web.views.import_.data import (
     account_label,
     chosen_accounts,
     excluded_row,
+    forget_gone_account,
     held_count,
     import_log,
     left_out_count,
@@ -81,6 +83,10 @@ class ImportFlow:
         self.reconciled = False
         self.next_key = 1
         self.account_names: dict[str, str] | None = None
+        self.accounts: list[StoredAccount] | None = None
+        """Every account of the budget, closed ones too; None until read, or if that failed."""
+        self.accounts_synced: dt.datetime | None = None
+        """`state().last_sync` when `accounts` were read: a newer sync reads them again."""
         self.stepper: list[ui.element] = []
         self.content: ui.element | None = None
         self.drop_area: ui.element | None = None
@@ -117,6 +123,8 @@ class ImportFlow:
         self.rows = {}
         self.committing = False
         self.reconciled = False
+        self.account_names = None
+        self.accounts = None
         self.show_files()
 
     def set_step(self, step: int) -> None:
@@ -233,8 +241,9 @@ class ImportFlow:
             item.problem = f"{candidate.loader.title} could not read it: {candidate.error}"
             self.refresh(item)
             return
-        # Loaded once: the names of the accounts on every row, and the choices when one is missing
+        # The names of the accounts on every row, and the choices when one is missing
         await self.account_choices()
+        forget_gone_account(item, self.accounts)
         if item.account_id is None:
             item.status = Status.ACCOUNT
             self.refresh(item)
@@ -278,14 +287,25 @@ class ImportFlow:
         self.refresh(item)
 
     async def account_choices(self) -> dict[str, str]:
-        """Accounts a file can go to: every open account of the budget."""
-        if self.account_names is None:
+        """Accounts a file can go to: every open account of the budget.
+
+        Read from the budget copy (synced when a page opens and the copy is older than
+        `AUTO_SYNC_AFTER`), so saved accounts are checked without asking YNAB. Read again
+        after each sync, so an account closed in YNAB since is seen once the copy has it.
+        """
+        synced = state().last_sync
+        if self.account_names is None or synced != self.accounts_synced:
+            self.accounts_synced = synced
             try:
-                accounts = await state().budget_accounts()
+                self.accounts = await state().budget_accounts()
             except Exception as error:
                 shell.notify(ynab_error_message(error), "warn")
-                accounts = []
-            self.account_names = {a.id: a.name for a in accounts if not a.closed}
+                # The list read before, if any, until the next sync
+                if self.account_names is None:
+                    self.accounts = None
+                    self.account_names = {}
+                return self.account_names
+            self.account_names = {a.id: a.name for a in self.accounts if not a.closed}
         return self.account_names
 
     def account_name(self, account_id: str) -> str:
@@ -298,6 +318,7 @@ class ImportFlow:
             return
         item.account_id = account_id
         item.account_chosen = True
+        item.account_gone = None
         await self.advance(item)
 
     async def change_option(self, item: ImportFile, key: str, value: str) -> None:
@@ -481,6 +502,8 @@ class ImportFlow:
         ready = [item for item in self.ready if item.plan is not None]
         self.committing = True
         try:
+            if await self.accounts_gone(ready):
+                return
             await self.commit_files(ready)
         except Exception:
             # The import button that started the commit is gone with the review
@@ -489,6 +512,22 @@ class ImportFlow:
                 shell.notify(IMPORT_FAILED, "error")
         finally:
             self.committing = False
+
+    async def accounts_gone(self, ready: Sequence[ImportFile]) -> bool:
+        """Check the saved accounts again before sending: a sync since the files were read
+        may say YNAB closed one. Those files go back to the list to pick another account."""
+        await self.account_choices()
+        gone = [item for item in ready if forget_gone_account(item, self.accounts)]
+        if not gone:
+            return False
+        for item in gone:
+            item.status = Status.ACCOUNT
+        self.show_files()
+        names = ", ".join(item.name for item in gone)
+        shell.notify(
+            f"Pick another account for {names}: the saved one is no longer open in YNAB", "warn"
+        )
+        return True
 
     async def commit_files(self, ready: Sequence[ImportFile]) -> None:
         await self.save_accounts(ready)

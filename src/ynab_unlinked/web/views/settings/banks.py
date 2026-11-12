@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from nicegui import ui
 
 from ynab_unlinked.config import LatestConfig, LoaderConfig
+from ynab_unlinked.core.accounts import AccountState, account_state
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import (
@@ -18,17 +21,32 @@ from ynab_unlinked.web.components import (
     run_dialog,
 )
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.views.settings.common import current_config, open_accounts
+from ynab_unlinked.web.views.settings.common import current_config
+from ynab_unlinked.web.wording import ynab_error_message
+from ynab_unlinked.web.ynab import fallback_accounts
 
 if TYPE_CHECKING:
     from ynab_unlinked.web.views.settings import Settings
 
 
-def bank_summary(spec: LoaderSpec, saved: LoaderConfig | None, accounts: dict[str, str]) -> str:
+@dataclass(frozen=True)
+class BankAccounts:
+    """The accounts the Banks tab offers and the saved ones that can no longer be used."""
+
+    choices: dict[str, str]
+    """Open accounts by id, plus a saved account that could not be checked (YNAB out of
+    reach), so its select still shows it."""
+    gone: Mapping[str, AccountState]
+    """Saved accounts YNAB closed or deleted: their banks are asked for another one."""
+
+
+def bank_summary(spec: LoaderSpec, saved: LoaderConfig | None, accounts: BankAccounts) -> str:
     """One line under the bank's name: its account and the defaults, or what is missing."""
     if saved is None:
         return "Pick the YNAB account its statements go to."
-    parts = [f"→ {accounts.get(saved.account_id, saved.account_id)}"]
+    if (gone := accounts.gone.get(saved.account_id)) is not None:
+        return f"Its account {gone.reason}. Pick another one."
+    parts = [f"→ {accounts.choices.get(saved.account_id, saved.account_id)}"]
     parts += [
         f"{option.label.lower()}: {saved.options.get(option.key, option.default)}"
         for option in spec.options
@@ -73,15 +91,32 @@ async def render(page: Settings) -> None:
             draw_bank(spec, card, accounts)
 
 
-async def bank_accounts(config: LatestConfig) -> dict[str, str]:
-    """Open accounts to choose from, plus any saved account that is no longer open."""
-    accounts = {account.id: account.name for account in await open_accounts()}
-    for loader_config in config.loaders.values():
-        accounts.setdefault(loader_config.account_id, loader_config.account_id)
-    return accounts
+async def bank_accounts(config: LatestConfig) -> BankAccounts:
+    """Open accounts to choose from, and the saved accounts YNAB closed or deleted.
+
+    Read from the budget copy, as every tab does. When YNAB cannot be reached the configured
+    accounts are offered and no saved account is judged gone.
+    """
+    try:
+        budget = await state().budget_accounts()
+    except Exception as error:
+        shell.notify(ynab_error_message(error), "warn")
+        choices = {account.id: account.name for account in fallback_accounts(config)}
+        gone: dict[str, AccountState] = {}
+    else:
+        choices = {account.id: account.name for account in budget if not account.closed}
+        gone = {
+            loader.account_id: found
+            for loader in config.loaders.values()
+            if (found := account_state(loader.account_id, budget)) is not AccountState.OPEN
+        }
+    for loader in config.loaders.values():
+        if loader.account_id not in gone:
+            choices.setdefault(loader.account_id, loader.account_id)
+    return BankAccounts(choices, gone)
 
 
-def draw_bank(spec: LoaderSpec, card: ui.element, accounts: dict[str, str]) -> None:
+def draw_bank(spec: LoaderSpec, card: ui.element, accounts: BankAccounts) -> None:
     """(Re)draw one bank's card from the config. Only this card changes after a save."""
     config, _ = state().require()
     saved = config.entity(spec.name)
@@ -101,7 +136,7 @@ def draw_bank(spec: LoaderSpec, card: ui.element, accounts: dict[str, str]) -> N
         ui.label(spec.title).classes("yul-bank-name")
         summary = ui.label(bank_summary(spec, saved, accounts)).classes("yul-bank-sum")
         summary.mark(f"bank-summary-{spec.key}")
-        if saved is None:
+        if saved is None or saved.account_id in accounts.gone:
             summary.classes("yul-warn")
         with ui.element("div").classes("yul-bank-foot"):
             ui.element("span").classes("yul-grow")
@@ -114,9 +149,7 @@ def draw_bank(spec: LoaderSpec, card: ui.element, accounts: dict[str, str]) -> N
             ).mark(f"bank-settings-{spec.key}")
 
 
-async def toggle_bank(
-    spec: LoaderSpec, on: bool, card: ui.element, accounts: dict[str, str]
-) -> None:
+async def toggle_bank(spec: LoaderSpec, on: bool, card: ui.element, accounts: BankAccounts) -> None:
     saved = current_config().entity(spec.name)
     if saved is None:
         # Nothing to turn on yet: the dialog saves the account (and turns the bank on)
@@ -136,11 +169,13 @@ async def toggle_bank(
     draw_bank(spec, card, accounts)
 
 
-async def bank_dialog(spec: LoaderSpec, card: ui.element, accounts: dict[str, str]) -> None:
+async def bank_dialog(spec: LoaderSpec, card: ui.element, accounts: BankAccounts) -> None:
     """Account and default options of one bank; saving turns a bank on the first time."""
     config, _ = state().require()
     saved = config.entity(spec.name)
-    chosen: dict[str, str | None] = {spec.name: saved.account_id if saved else None}
+    # A saved account YNAB closed is not offered again: the user picks another one
+    usable = saved is not None and saved.account_id not in accounts.gone
+    chosen: dict[str, str | None] = {spec.name: saved.account_id if saved and usable else None}
     values = {
         option.key: saved.options.get(option.key, option.default) if saved else option.default
         for option in spec.options
@@ -157,7 +192,9 @@ async def bank_dialog(spec: LoaderSpec, card: ui.element, accounts: dict[str, st
                 )
         with ui.element("div").classes("yul-bank-form"):
             account = (
-                ui.select(accounts, value=chosen[spec.name], clearable=True, label="YNAB account")
+                ui.select(
+                    accounts.choices, value=chosen[spec.name], clearable=True, label="YNAB account"
+                )
                 .props("outlined dense")
                 .mark(f"loader-{spec.key}")
             )

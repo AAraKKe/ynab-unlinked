@@ -929,6 +929,7 @@ body.yul-dragging .yul-dropover { display: grid; animation: yul-fade .15s ease b
   display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; cursor: default;
 }
 .yul-imp-reason { color: var(--text-3); font-size: 12px; max-width: 320px; text-align: right; }
+.yul-imp-reason.yul-warn { color: var(--warn); }
 .yul-imp-arrow { transition: transform .2s; color: var(--text-3); font-size: 18px; width: 12px; }
 .yul-imp-file.open .yul-imp-arrow { transform: rotate(90deg); }
 .yul-imp-body {

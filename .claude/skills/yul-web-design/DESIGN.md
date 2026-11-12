@@ -137,7 +137,10 @@ A three step flow with a horizontal stepper at the top. Steps advance on their o
    their transaction counts. Unsupported files are kept, greyed, with the reason, and can
    be removed. Every option of the bank (Sabadell year, Cobee language) is a small select
    on the row, prefilled with the saved default or the detected value, so the defaults
-   from Settings can be changed per file. The step ends with "Review n files".
+   from Settings can be changed per file. A bank whose saved account was closed (or deleted)
+   in YNAB gets the account select instead of the pill, with an amber line "The account
+   saved for Sabadell is closed in YNAB. Pick another one."; the pick is saved for the bank
+   on import. The step ends with "Review n files".
 2. **Review**. A legend first: each status tag on screen, as the rows show it, and one line
    saying what it means (only the tags some row has). Then one card per file: header
    (loader, account, "n to check" in amber and "n left out" when there are some, new /
@@ -448,7 +451,9 @@ data" with confirmation).
   "Settings" cog in the footer that opens the account and default options in a dialog (the
   same options show on every file in Import). An on bank's card is live, an off one muted.
   A bank never set up is muted and its line "Pick the YNAB account its statements go to."
-  is amber: that is the call to action.
+  is amber: that is the call to action. A bank whose account was closed in YNAB says so
+  the same way, "Its account is closed in YNAB. Pick another one." ("is no longer in the
+  budget" when it was deleted), and its dialog starts with no account picked.
   When the account picked in the dialog already takes another bank's statements, an amber
   line under it says so ("Sabadell also sends statements here; a same day, same amount row
   from both can be taken for one"); Save still works.

@@ -2,6 +2,7 @@ import datetime as dt
 from unittest.mock import MagicMock
 
 from ynab import (
+    Account,
     CategoriesResponse,
     CategoriesResponseData,
     Category,
@@ -57,6 +58,10 @@ class YnabClientStub(Client):
 
     def budget(self) -> MagicMock:
         return self.registry.get("budget")
+
+    def answer_accounts(self, *accounts: Account) -> None:
+        """The accounts of the budget YNAB lists. `yul load` checks the saved one is open."""
+        self.api("accounts").get_accounts.return_value.data.accounts = list(accounts)
 
     def accounts(self) -> MagicMock:
         return self.registry.get("accounts")
