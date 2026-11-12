@@ -396,6 +396,35 @@ async def test_an_account_closed_after_the_file_was_read_is_asked_for_again_befo
     assert list(created(ynab)) == [MAXIMA]
 
 
+async def test_a_failed_read_of_the_accounts_after_a_sync_keeps_the_ones_read_before(
+    accounts: LatestConfig,
+    ynab: YnabClientStub,
+    user: User,
+    bbva_file: Path,
+    mocker: MockerFixture,
+):
+    await drop(user, SABADELL)
+    await user.should_see("→ 💳 Oro", marker="account-1", retries=30)
+    mocker.patch.object(AppState, "budget_accounts", side_effect=OSError("disk gone"))
+    state().last_sync = dt.datetime.now(dt.UTC)
+
+    # Dropped on the same page, where the flow read the accounts before
+    upload = user.find(marker="dropzone").elements.pop()
+    assert isinstance(upload, ui.upload)
+    await upload.handle_uploads(
+        [
+            SmallFileUpload(
+                name=bbva_file.name,
+                content_type="application/octet-stream",
+                _data=bbva_file.read_bytes(),
+            )
+        ]
+    )
+
+    await user.should_see("→ 💳 Maxima", marker="account-2", retries=30)
+    await user.should_see("3 new / 3", marker="count-2", retries=30)
+
+
 @pytest.mark.parametrize(
     ("chosen", "accounts"),
     [

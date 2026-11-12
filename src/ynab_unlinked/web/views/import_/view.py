@@ -300,8 +300,12 @@ class ImportFlow:
                 self.accounts = await state().budget_accounts()
             except Exception as error:
                 shell.notify(ynab_error_message(error), "warn")
-                self.accounts = None
-            self.account_names = {a.id: a.name for a in self.accounts or [] if not a.closed}
+                # The list read before, if any, until the next sync
+                if self.account_names is None:
+                    self.accounts = None
+                    self.account_names = {}
+                return self.account_names
+            self.account_names = {a.id: a.name for a in self.accounts if not a.closed}
         return self.account_names
 
     def account_name(self, account_id: str) -> str:
