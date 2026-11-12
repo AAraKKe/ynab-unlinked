@@ -1,0 +1,1 @@
+Money coming in now reads with a + in green wherever transactions are listed (import review, rows left out, reconcile, an account's last transactions, `yul load` and `yul reconcile`), so a refund no longer hides among the spending.

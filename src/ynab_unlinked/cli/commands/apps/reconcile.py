@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from functools import partial
 
+from rich.style import Style
 from rich.text import Text
 from textual.app import App
+from textual.color import Color
 from textual.containers import Container, Grid, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Label, Static, Switch
@@ -63,24 +65,28 @@ class AccountTable(Container):
 
         return cleared_str(status)
 
+    def _amount(self, amount: float) -> Text:
+        """Money in with a `+` in the colour of a positive balance, money out with its `-`."""
+        text = Text(self.formatter.format_flow(amount), justify="right")
+        if self.formatter.is_inflow(amount):
+            text.stylize(Style(color=Color.parse(POSITIVE_COLOR).rich_color))
+        return text
+
     def choice_to_table(self) -> DataTable[str | Text | None]:
         table: DataTable[str | Text | None] = DataTable(cursor_type="row")
 
         table.add_column("Date")
         table.add_column("Payee")
-        table.add_column("Inflow")
-        table.add_column("Outflow")
+        table.add_column(Text("Amount", justify="right"))
         table.add_column("Cleared Status")
 
         for choice in self.choice.choices:
             t = choice.transaction
-            amount = t.amount / 1000
             table.add_row(
                 self.formatter.format_date(t.var_date),
                 # YNAB text, never markup: a payee with `[/]` would not render
                 Text(t.payee_name or ""),
-                self.formatter.format_amount(amount) if amount > 0 else "",
-                self.formatter.format_amount(amount) if amount < 0 else "",
+                self._amount(t.amount / 1000),
                 self._cleared_status(choice),
                 key=choice.id,
             )

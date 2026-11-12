@@ -12,7 +12,7 @@ from nicegui import ui
 from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import StoredTransaction
-from ynab_unlinked.web.components import button
+from ynab_unlinked.web.components import amount, button
 from ynab_unlinked.web.components.history_chart import ChartSeries, history_chart
 from ynab_unlinked.web.theme import Palette
 
@@ -68,5 +68,6 @@ def _transaction_row(formatter: Formatter, transaction: StoredTransaction) -> No
             ui.label(transaction.payee_name or "—")
             if transaction.memo:
                 ui.label(transaction.memo).classes("yul-faint yul-small yul-nw-memo")
-        amount = ui.label(formatter.format_amount_milli(transaction.amount))
-        amount.classes("yul-num yul-nw-tx-amount")
+        amount(transaction.amount / 1000, formatter).classes("yul-nw-tx-amount").mark(
+            "drawer-amount"
+        )

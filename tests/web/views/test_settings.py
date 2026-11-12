@@ -329,12 +329,12 @@ async def test_resync_rebuilds_the_budget_copy_and_keeps_the_activity(
     assert "Imported 3 transactions" in [a.message for a in store.activity(config_v4.budget.id)]
 
 
-def left_out(account_id: str, payee: str, day: int) -> ExcludedRow:
+def left_out(account_id: str, payee: str, day: int, amount: int = -18_380) -> ExcludedRow:
     return ExcludedRow(
         account_id=account_id,
-        import_id=f"YNAB:-18380:2025-05-{day:02d}:1",
+        import_id=f"YNAB:{amount}:2025-05-{day:02d}:1",
         date=dt.date(2025, 5, day),
-        amount=-18_380,
+        amount=amount,
         payee=payee,
     )
 
@@ -359,6 +359,23 @@ async def test_the_data_tab_lists_the_rows_left_out_and_includes_one_again(
     assert [row.payee for row in store.excluded(config_v4.budget.id)] == ["Glovo"]
     [entry] = store.activity(config_v4.budget.id, kind="include")
     assert entry.message.startswith("Included Maya mobile ltd")
+
+
+async def test_the_rows_left_out_show_money_in_with_a_plus_in_the_good_tone(
+    config_v4: LatestConfig, store_file: Path, user: User
+):
+    store = Store(store_file)
+    upsert(
+        store, config_v4.budget.id, accounts=[StoredAccountFactory(id=CARD_ID, name="💳 Maxima")]
+    )
+    store.exclude(config_v4.budget.id, left_out(CARD_ID, "Zara refund", 12, amount=39_950))
+    store.exclude(config_v4.budget.id, left_out(CARD_ID, "Glovo", 2))
+    await _open_tab(user, "data-privacy")
+
+    await user.should_see("+39.95€", marker="left-out-amount-0", retries=20)
+    await user.should_see("-18.38€", marker="left-out-amount-1")
+    assert "in" in user.find(marker="left-out-amount-0").elements.pop().classes
+    assert "in" not in user.find(marker="left-out-amount-1").elements.pop().classes
 
 
 async def test_the_data_tab_says_when_no_row_is_left_out(user: User, config_v4: LatestConfig):

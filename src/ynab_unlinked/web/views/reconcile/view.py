@@ -21,6 +21,7 @@ from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import StoredAccount, StoredTransaction
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import (
+    amount,
     check,
     empty_state,
     glass_card,
@@ -309,14 +310,14 @@ class ReconcileView:
         candidates = gap_candidates([row.transaction for row in group.pending()], group.difference)
         self.set_open(group, True)
         self.highlight(group, candidates)
-        amount = self.money(group.difference)
+        gap = self.money(group.difference)
         if candidates:
             shell.notify(
-                f"{plural(len(candidates), 'highlighted transaction')} could explain {amount}",
+                f"{plural(len(candidates), 'highlighted transaction')} could explain {gap}",
                 "info",
             )
         else:
-            shell.notify(f"No transaction or pair of them adds up to {amount}", "warn")
+            shell.notify(f"No transaction or pair of them adds up to {gap}", "warn")
 
     @staticmethod
     def highlight(group: AccountGroup, ids: set[str]) -> None:
@@ -333,9 +334,7 @@ class ReconcileView:
             row.box = ui.element("span").classes("yul-rec-cb")
             ui.label(short_date(t.date, self.today)).classes("yul-num yul-faint")
             ui.label(t.payee_name or t.memo or "No payee").classes("payee")
-            amount = ui.label(self.money(t.amount)).classes("amt")
-            if t.amount > 0:
-                amount.classes("yul-good")
+            amount(t.amount / 1000, self.formatter).classes("amt").mark(f"amount-{t.id}")
         row.element = element
         element.on("click", lambda _, row=row: self.toggle_row(row))
         self.paint_row(row)

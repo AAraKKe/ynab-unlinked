@@ -43,3 +43,18 @@ class Formatter:
     def format_amount_milli(self, milli_amount: int) -> str:
         amount = milli_amount / 1000.0
         return self.format_amount(amount)
+
+    def format_flow(self, amount: float) -> str:
+        """An amount in a list of transactions: money in carries a `+`, money out its `-`.
+
+        The sign says the direction even where the colour of an inflow is lost (a terminal
+        without colour, a colour blind reader). Balances and totals use `format_amount`.
+        """
+        amount = round(amount, self.currency_format.decimal_digits)
+        text = self.format_amount(amount)
+        return f"+{text}" if amount > 0 else text
+
+    def is_inflow(self, amount: float) -> bool:
+        """Whether `format_flow` shows `amount` as money in: positive once rounded to the
+        currency's digits, so a sub-cent amount is neither green nor signed."""
+        return round(amount, self.currency_format.decimal_digits) > 0

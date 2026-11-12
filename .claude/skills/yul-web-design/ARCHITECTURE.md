@@ -262,7 +262,8 @@ On screen it is "reconcile" everywhere (buttons, footer "Reconcile all", confirm
 progress, toasts); the code keeps `lock` names and the activity kind stays `reconcile`.
 Markers: `account-{id}`, `cleared-{id}`, `cleared-count-{id}`, `uncleared-{id}`,
 `uncleared-count-{id}`, `bank-{id}`, `match-{id}`, `gap-{id}`, `rows-{id}`,
-`section-{cleared|uncleared|reconciled}-{id}` with its `note-...-{id}`, `row-{transaction id}`,
+`section-{cleared|uncleared|reconciled}-{id}` with its `note-...-{id}`, `row-{transaction id}`
+and its `amount-{transaction id}`,
 `bar-{id}` (class `open` when open), `toggle-{id}`, `lock-{id}`, and on the page `rec-title`,
 `scope`, `include-uncleared`, `scope-empty`, `all-reconciled`, `rec-footer`, `rec-summary`,
 `select-all`, `deselect-all`, `lock-all`, `rec-done`, `lock-more`, `see-networth`.
@@ -972,7 +973,9 @@ web/
                        No CSS lives in Python.
   components/          button, glass_card, pill, bank_logo, stat_tile, segmented_bar, share_bar,
                        empty_state, spinner, check, closed_pill, icon (+ ICONS), count_up (the one count up
-                       animation: Home and Net worth heroes); the helpers every view reuses:
+                       animation: Home and Net worth heroes), amount(value, formatter) (the one
+                       amount of a transaction in a list, `yul-amt`, `in` on money in; value in
+                       currency units); the helpers every view reuses:
                        set_class(el, name, on), clickable(el, handler, role="button") (role,
                        tabindex, click and Enter), loading(text) / show_state(box, kind, text)
                        (loading, error, ok lines), section_title(text, swatch=None),
@@ -1435,6 +1438,8 @@ panel, and the picked month goes back to the whole range). Period
 panel: `period-panel`, `period-title` and `period-clear` (a picked month only), `bridge`,
 `step-{income|spending|assets|other|net}`, `moved-{account_id}`, `came-in`, `spent-on`.
 Movers: `movers`, `mover-{account_id}`.
+Account drawer: `nw-drawer`, `drawer-chart`, `drawer-tx` (one per last transaction) and
+`drawer-amount` (its amount, `components.amount`).
 
 Markers: `no-tracked`, `pick-{account_id}`, `pick-count`, `edit-{account_id}`,
 `balance-input-{account_id}`, `accept-{account_id}`, `cancel-{account_id}`,
@@ -1513,7 +1518,8 @@ Markers: `tab-{slug}` (the tabs, a list down the side), `settings-panel`, `setti
 (class `yul-warn` when the bank has no account or YNAB closed or deleted it), `bank-shared-{key}`, `accounts-lede`, `account-card-{id}` (class `closed` on a closed
 account, tagged `closed-{id}`), `bucket-section-{bucket}`,
 `account-{id}`, `bucket-{id}`, `bucket-{id}-{bucket}`, `by-hand-{id}`, `left-out` (the list
-of rows left out of imports), `left-out-{index}`, `include-again-{index}`, `left-out-empty`;
+of rows left out of imports), `left-out-{index}`, `left-out-amount-{index}`,
+`include-again-{index}`, `left-out-empty`;
 Appearance: `tab-appearance`, `themes` (the card grid), `theme-{name}` (a palette's card,
 `live` when chosen). Categories: `category-rules`, `no-categories`, `not-spending`,
 `not-spending-{id}`, `spending-again-{id}`, `add-not-spending` (a category picker). Net
@@ -1525,7 +1531,8 @@ each category row with the marker, a dash and the category id.
 #### Import
 
 Review rows: `row-status-{file key}-{index}` (new, may be in YNAB, already in YNAB, matched in
-YNAB, left out; every one a pill), `leave-out-{file key}-{index}` on a new row,
+YNAB, left out; every one a pill), `row-amount-{file key}-{index}` (`components.amount`),
+`leave-out-{file key}-{index}` on a new row,
 `include-{file key}-{index}` on a row left out, `review-left-out-{file key}` and
 `review-left-out` (footer) when rows are left out. A row that may be in YNAB has
 `row-twin-{file key}-{index}` (the transaction it looks like), `import-anyway-{file key}-{index}`

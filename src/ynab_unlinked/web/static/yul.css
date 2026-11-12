@@ -231,6 +231,8 @@ body::after { background: var(--bg-blob-2); bottom: -240px; right: -180px; }
 .yul-good { color: var(--good); }
 .yul-warn { color: var(--warn); }
 .yul-bad { color: var(--bad); }
+/* A transaction's amount in a list (components.amount): money in carries a + and the good tone */
+.yul-amt.in { color: var(--good); }
 .yul-h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; line-height: 1.3; }
 .yul-lede { margin: 0 0 16px; color: var(--text-2); }
 .yul-grad { background: var(--accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -963,6 +965,8 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-imp-table tr.dim td { color: var(--text-3); }
 .yul-imp-table tr.out td { color: var(--text-3); }
 .yul-imp-table tr.out td:not(:last-child) { text-decoration: line-through; }
+.yul-imp-table tr.dim .yul-amt.in,
+.yul-imp-table tr.out .yul-amt.in { color: color-mix(in oklab, var(--good) 50%, var(--text-3)); }
 .yul-imp-table .yul-imp-twin { color: var(--warn); font-size: 12px; }
 .yul-imp-acts { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
 /* What each status tag means: the tag, then its line */
@@ -1029,8 +1033,9 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 }
 .yul-rec-row:hover { background: var(--surface-2); }
 .yul-rec-row > .payee { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.yul-rec-row > .amt { text-align: right; font-variant-numeric: tabular-nums; }
+.yul-rec-row > .amt { text-align: right; }
 .yul-rec-row.unclear { color: var(--text-3); }
+.yul-rec-row.unclear .yul-amt.in { color: color-mix(in oklab, var(--good) 50%, var(--text-3)); }
 .yul-rec-row.locked { opacity: .45; cursor: default; }
 .yul-rec-row.locked:hover { background: none; }
 .yul-rec-row.gap {

@@ -232,6 +232,17 @@ async def test_rows_are_grouped_under_what_their_status_means(user: User, seed: 
     )
 
 
+async def test_money_in_reads_with_a_plus_in_the_good_tone(user: User, seed: Seed):
+    seed()
+    await open_reconcile(user)
+    user.find(marker=f"toggle-{CHECKING}").click()
+
+    await user.should_see("+4,120.00€", marker="amount-chk-payroll")
+    await user.should_see("-32.17€", marker="amount-chk-gym")
+    assert "in" in classes(user, "amount-chk-payroll")
+    assert "in" not in classes(user, "amount-chk-gym")
+
+
 @pytest.mark.parametrize(
     ("typed", "expected", "primary"),
     [

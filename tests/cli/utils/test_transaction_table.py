@@ -6,13 +6,13 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from tests.cli.utils.builders import column, only_table
+from tests.cli.utils.builders import cell_styles, column, only_table
 from tests.factories import ImportRowFactory, TransactionFactory
 from ynab_unlinked.cli.utils import display_import_table, display_transaction_table
 from ynab_unlinked.formatter import Formatter
 
 
-def test_transaction_table_splits_the_amount_into_inflow_and_outflow(
+def test_transaction_table_shows_money_in_with_a_plus_in_green(
     printed: MagicMock, formatter: Formatter
 ):
     display_transaction_table(
@@ -25,8 +25,8 @@ def test_transaction_table_splits_the_amount_into_inflow_and_outflow(
 
     table = only_table(printed)
     assert column(table, "Date") == ["15/05/2025", "15/05/2025"]
-    assert column(table, "Inflow") == ["1,500.00€", ""]
-    assert column(table, "Outflow") == ["", "-12.34€"]
+    assert column(table, "Amount") == ["+1,500.00€", "-12.34€"]
+    assert cell_styles(table, "Amount") == ["green", ""]
 
 
 def test_transaction_table_lists_every_row_of_the_export(printed: MagicMock, formatter: Formatter):

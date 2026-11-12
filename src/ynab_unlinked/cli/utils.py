@@ -19,24 +19,30 @@ from ynab_unlinked.ynab_api.client import Client
 
 IMPORT_HELP_MESSAGE = (
     "The table below shows the transactions to be imported to YNAB.\n"
-    " - The [green]green[/] rows are new transactions to be imported.\n"
+    " - Money coming in has a [green]+[/] and is [green]green[/]; money going out has a -.\n"
+    " - The rows tagged [green]new[/] are new transactions to be imported.\n"
     " - The [gray37]dimmed[/] rows are already in YNAB and will not be sent again.\n"
     " - The [gray37]matched[/] rows were matched in YNAB with a transaction you had entered "
     "by hand: they are there too.\n"
-    " - The [yellow]may be in YNAB[/] rows have the same amount as a transaction you entered "
-    "by hand and matched in YNAB: they are not sent until you decide in `yul app`.\n"
+    " - The rows tagged [yellow]may be in YNAB[/] have the same amount as a transaction you "
+    "entered by hand and matched in YNAB: they are not sent until you decide in `yul app`.\n"
     " - The [gray37 strike]crossed out[/] rows were left out of imports in `yul app` and are "
     "never sent.\n"
     "YNAB matches every imported transaction against the ones you entered yourself on the same "
     "account, so the payee shown here is the one from the bank export, not the final one."
 )
 
-_STATUS: dict[RowStatus, tuple[str, Style]] = {
-    RowStatus.NEW: ("new", Style(color="green")),
-    RowStatus.IN_YNAB: ("in YNAB", Style(color="gray37")),
-    RowStatus.MATCHED: ("matched in YNAB", Style(color="gray37")),
-    RowStatus.MAYBE_IN_YNAB: ("may be in YNAB", Style(color="yellow")),
-    RowStatus.EXCLUDED: ("left out", Style(color="gray37", strike=True)),
+INFLOW = Style(color="green")
+"""The colour of money coming in, in every table of transactions (the web app's good tone)."""
+DIMMED = Style(color="gray37")
+
+_STATUS: dict[RowStatus, tuple[str, Style, Style | None]] = {
+    # The tag, its colour, and the style of a row that steps back, as the web app shows them
+    RowStatus.NEW: ("new", Style(color="green"), None),
+    RowStatus.IN_YNAB: ("in YNAB", DIMMED, DIMMED),
+    RowStatus.MATCHED: ("matched in YNAB", DIMMED, DIMMED),
+    RowStatus.MAYBE_IN_YNAB: ("may be in YNAB", Style(color="yellow"), None),
+    RowStatus.EXCLUDED: ("left out", DIMMED, DIMMED + Style(strike=True)),
 }
 
 
@@ -79,28 +85,28 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
     return budget_from_plan(budget_details)
 
 
-def _flows(amount: float, formatter: Formatter) -> tuple[str, str]:
-    amount_str = formatter.format_amount(amount)
-    return (amount_str if amount > 0 else "", amount_str if amount < 0 else "")
+def flow(amount: float, formatter: Formatter, *, dimmed: bool = False) -> Text:
+    """The amount of one transaction in a table: money in with a `+` in green, money out with
+    its `-` in the row's colour. In a dimmed row the green is dimmed too."""
+    if not formatter.is_inflow(amount):
+        return Text(formatter.format_flow(amount))
+    return Text(formatter.format_flow(amount), INFLOW + Style(dim=True) if dimmed else INFLOW)
 
 
 def display_transaction_table(transactions: list[Transaction], formatter: Formatter):
     columns = [
         Column(header="Date", justify="left", max_width=10),
         Column(header="Payee", justify="left", width=50),
-        Column(header="Inflow", justify="right", max_width=15),
-        Column(header="Outflow", justify="right", max_width=15),
+        Column(header="Amount", justify="right", max_width=16),
     ]
     table = Table(*columns, title="Transactions to process", box=box.SIMPLE)
 
     for transaction in transactions:
-        inflow, outflow = _flows(transaction.amount, formatter)
         table.add_row(
             formatter.format_date(transaction.date),
             # Bank text, never markup: a payee with `[/]` would not render
             Text(transaction.payee),
-            inflow,
-            outflow,
+            flow(transaction.amount, formatter),
         )
 
     console().print(table)
@@ -113,22 +119,19 @@ def display_import_table(rows: Sequence[ImportRow], formatter: Formatter):
     columns = [
         Column(header="Date", justify="left", max_width=10),
         Column(header="Payee", justify="left", width=50),
-        Column(header="Inflow", justify="right", max_width=15),
-        Column(header="Outflow", justify="right", max_width=15),
+        Column(header="Amount", justify="right", max_width=16),
         Column(header="Status", justify="left", max_width=16),
     ]
     table = Table(*columns, title="Transactions to import", box=box.SIMPLE)
 
     for row in rows:
-        inflow, outflow = _flows(row.transaction.amount, formatter)
-        status, style = _STATUS[row.status]
+        status, tag, row_style = _STATUS[row.status]
         table.add_row(
             formatter.format_date(row.transaction.date),
             Text(row.transaction.payee),
-            inflow,
-            outflow,
-            status,
-            style=style,
+            flow(row.transaction.amount, formatter, dimmed=row_style is not None),
+            Text(status, tag),
+            style=row_style,
         )
 
     console().print(Rule("Transactions to be imported"))
