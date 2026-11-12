@@ -6,6 +6,14 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.3.4 (2026-11-12)
+
+### Polished Until It Shines
+* [[#157](https://github.com/AAraKKe/ynab-unlinked/issues/157)] Money coming in now reads with a + in green wherever transactions are listed (import review, rows left out, reconcile, an account's last transactions, `yul load` and `yul reconcile`), so a refund no longer hides among the spending.
+
+### Bugs Squashed, Peace Restored
+* [[#156](https://github.com/AAraKKe/ynab-unlinked/issues/156)] Imports no longer go to a bank's saved account once it is closed or deleted in YNAB: `yul load` and the app ask for another account (`--yes` stops with an error), and Settings › Banks points it out.
+
 ## ynab-unlinked 1.3.3 (2026-11-11)
 
 ### Polished Until It Shines
