@@ -44,7 +44,8 @@ def get_or_prompt_account_id(
     loader = config.entity(entity_name)
     if (loader is None or force_prompt) and not interactive:
         display.error(
-            f"No saved account for {entity_name}. Run this load once without --yes to select one."
+            f"No saved account for {_bank_title(entity_name)}. "
+            "Run this load once without --yes to select one."
         )
         raise typer.Exit(1)
 

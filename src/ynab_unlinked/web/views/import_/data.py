@@ -46,7 +46,7 @@ class Status(StrEnum):
     """Several loaders read the file, the user picks one."""
     ACCOUNT = "account"
     """The loader has no account yet, or YNAB closed or deleted its saved one: the user picks
-    one (`problem` says why when the saved one is gone)."""
+    one (`account_gone` says why when the saved one is gone)."""
     PLANNING = "planning"
     READY = "ready"
     ERROR = "error"
@@ -67,6 +67,8 @@ class ImportFile:
     account_id: str | None = None
     account_chosen: bool = False
     """Picked on the row: saved to the config when the import is confirmed."""
+    account_gone: str | None = None
+    """Why the saved account was dropped (closed or deleted in YNAB), shown until one is picked."""
     plan: ImportPlan | None = None
     problem: str | None = None
     digest: str = ""
@@ -126,29 +128,31 @@ def take_candidate(item: ImportFile, candidate: Candidate, saved: LoaderConfig |
         item.account_chosen = False
     if not item.account_chosen:
         item.account_id = saved.account_id if saved else None
+        item.account_gone = None
     return True
 
 
-def forget_gone_account(item: ImportFile, accounts: Sequence[StoredAccount] | None) -> None:
-    """Drop the saved account of `item` when YNAB closed or deleted it, saying so in
-    `problem`: the file then asks for another one, since YNAB would take the rows into a
-    closed account and show them nowhere.
+def forget_gone_account(item: ImportFile, accounts: Sequence[StoredAccount] | None) -> bool:
+    """Drop the saved account of `item` when YNAB closed or deleted it, saying why in
+    `account_gone`: the file then asks for another one, since YNAB would take the rows into
+    a closed account and show them nowhere. Returns whether it dropped it.
 
     `accounts` are the budget's (closed ones included); None when they could not be read,
     and the saved account is kept: the plan then fails on YNAB's own error. An account
     picked on the row is never dropped, it was one of the open ones.
     """
-    item.problem = None
     if item.candidate is None or item.account_id is None or item.account_chosen:
-        return
+        return False
     if accounts is None:
-        return
+        return False
     if (gone := account_state(item.account_id, accounts)) is AccountState.OPEN:
-        return
+        return False
     item.account_id = None
-    item.problem = (
+    item.plan = None
+    item.account_gone = (
         f"The account saved for {item.candidate.loader.title} {gone.reason}. Pick another one."
     )
+    return True
 
 
 def account_label(account_id: str, names: Mapping[str, str], config: LatestConfig) -> str:

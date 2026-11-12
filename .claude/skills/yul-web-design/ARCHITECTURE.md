@@ -183,7 +183,11 @@ check the account saved for a bank before planning an import into it. `yul load`
 `client.accounts` per run, shared by every file of `load auto`) warns and asks for another
 account, saved as a first pick is; with `--yes` it stops with one line and exit code 1. The
 app checks against the account list its Import flow already reads (`state().budget_accounts()`,
-the budget copy) and asks on the row (`Status.ACCOUNT`, `forget_gone_account`); Settings ›
+the budget copy) and asks on the row (`Status.ACCOUNT`, `forget_gone_account`,
+`ImportFile.account_gone`); it reads the list again after each sync and checks once more
+before sending, so a file whose account closed meanwhile goes back to the list. The app asks
+YNAB nothing for it, so an account closed in YNAB after the last sync (at most
+`AUTO_SYNC_AFTER` while the app is open) is only caught once the next sync has it. Settings ›
 Banks says so on the bank's card.
 
 The `NullProgress()` defaults are `core.progress.NO_PROGRESS` in the code. The CLI passes `cli.display.CliProgress`, a context manager that shows a

@@ -1,3 +1,4 @@
+import dataclasses
 import datetime as dt
 import uuid
 from functools import partial
@@ -335,6 +336,15 @@ async def test_a_saved_account_gone_from_ynab_asks_for_another_one_and_saves_it(
         retries=30,
     )
     assert not review_button(user).enabled
+    # Reading the file again with another year still says why the account is asked for
+    year = user.find(marker="option-1-year").elements.pop()
+    assert isinstance(year, ui.select)
+    year.set_value(str(dt.date.today().year - 1))
+    await user.should_see(
+        f"The account saved for Sabadell {reason}. Pick another one.",
+        marker="account-gone-1",
+        retries=30,
+    )
     select = user.find(marker="account-select-1").elements.pop()
     assert isinstance(select, ui.select)
     assert select.options == {MAXIMA: "💳 Maxima"}
@@ -351,6 +361,41 @@ async def test_a_saved_account_gone_from_ynab_asks_for_another_one_and_saves_it(
     assert saved.account_id == MAXIMA
 
 
+async def test_an_account_closed_after_the_file_was_read_is_asked_for_again_before_sending(
+    accounts: LatestConfig, ynab: YnabClientStub, store_file: Path, user: User
+):
+    oro = StoredAccountFactory(id=ORO, name="💳 Oro", type="creditCard")
+    maxima = StoredAccountFactory(id=MAXIMA, name="💳 Maxima", type="creditCard")
+    upsert(Store(store_file), BUDGET_ID, accounts=[oro, maxima])
+
+    await drop(user, SABADELL)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    # A sync while the file is on screen brings Oro closed in YNAB
+    upsert(Store(store_file), BUDGET_ID, accounts=[dataclasses.replace(oro, closed=True)])
+    state().last_sync = dt.datetime.now(dt.UTC)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+
+    await user.should_see(
+        "The account saved for Sabadell is closed in YNAB. Pick another one.",
+        marker="account-gone-1",
+        retries=30,
+    )
+    await user.should_see("Pick another account for movements.txt")
+    assert created(ynab) == {}
+    select = user.find(marker="account-select-1").elements.pop()
+    assert isinstance(select, ui.select)
+    assert select.options == {MAXIMA: "💳 Maxima"}
+    select.set_value(MAXIMA)
+
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+
+    await user.should_see("3 transactions imported", retries=30)
+    assert list(created(ynab)) == [MAXIMA]
+
+
 @pytest.mark.parametrize(
     ("chosen", "accounts"),
     [
@@ -364,10 +409,10 @@ def test_an_account_that_cannot_be_judged_gone_is_kept(chosen: bool, accounts: l
     item.candidate = Candidate(loader("sabadell"), 1.0, "test", {}, (), None)
     item.account_chosen = chosen
 
-    forget_gone_account(item, accounts)
+    assert not forget_gone_account(item, accounts)
 
     assert item.account_id == ORO
-    assert item.problem is None
+    assert item.account_gone is None
 
 
 async def test_a_ynab_failure_is_shown_on_the_row_and_can_be_retried(
