@@ -432,6 +432,21 @@ async def test_the_review_shows_money_in_with_a_plus_in_the_good_tone(
     ]
 
 
+async def test_money_in_on_a_row_left_out_keeps_its_tone_on_the_crossed_out_row(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User
+):
+    await drop(user, SABADELL)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    user.find(marker="review").click()
+
+    user.find(marker="leave-out-1-1").click()
+
+    await user.should_see("left out", marker="row-status-1-1", retries=20)
+    label = user.find(marker="row-amount-1-1").elements.pop()
+    row = label.parent_slot.parent.parent_slot.parent
+    assert (label.text, "in" in label.classes, "out" in row.classes) == ("+12.50€", True, True)
+
+
 @pytest.fixture
 def sabadell_first_left_out(store_file: Path) -> str:
     """The first Sabadell row, left out of imports to Oro in an earlier run. Before `user`."""

@@ -88,7 +88,7 @@ def prompt_for_budget(api_key: str | None = None) -> Budget:
 def flow(amount: float, formatter: Formatter, *, dimmed: bool = False) -> Text:
     """The amount of one transaction in a table: money in with a `+` in green, money out with
     its `-` in the row's colour. In a dimmed row the green is dimmed too."""
-    if amount <= 0:
+    if not formatter.is_inflow(amount):
         return Text(formatter.format_flow(amount))
     return Text(formatter.format_flow(amount), INFLOW + Style(dim=True) if dimmed else INFLOW)
 

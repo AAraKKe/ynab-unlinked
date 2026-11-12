@@ -198,6 +198,8 @@ def test_style_survives_every_symbol_placement(currency_formatter: Formatter, ex
         pytest.param(CurrencyFormatFactory.build(), 12.99, "+12.99€", id="inflow-gets-a-plus"),
         pytest.param(CurrencyFormatFactory.build(), -8.75, "-8.75€", id="outflow-keeps-its-minus"),
         pytest.param(CurrencyFormatFactory.build(), 0, "0.00€", id="zero-has-no-sign"),
+        pytest.param(CurrencyFormatFactory.build(), 0.004, "0.00€", id="sub-cent-in-is-zero"),
+        pytest.param(CurrencyFormatFactory.build(), -0.004, "0.00€", id="sub-cent-out-is-zero"),
         pytest.param(
             CurrencyFormatFactory.build(symbol_first=True, currency_symbol="$"),
             12.99,
@@ -207,4 +209,6 @@ def test_style_survives_every_symbol_placement(currency_formatter: Formatter, ex
     ],
 )
 def test_a_flow_says_its_direction_with_its_sign(currency_format, amount: float, expected: str):
-    assert Formatter("DD/MM/YYYY", currency_format).format_flow(amount) == expected
+    formatter = Formatter("DD/MM/YYYY", currency_format)
+    assert formatter.format_flow(amount) == expected
+    assert formatter.is_inflow(amount) is expected.startswith("+")

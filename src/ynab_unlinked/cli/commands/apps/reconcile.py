@@ -68,7 +68,7 @@ class AccountTable(Container):
     def _amount(self, amount: float) -> Text:
         """Money in with a `+` in the colour of a positive balance, money out with its `-`."""
         text = Text(self.formatter.format_flow(amount), justify="right")
-        if amount > 0:
+        if self.formatter.is_inflow(amount):
             text.stylize(Style(color=Color.parse(POSITIVE_COLOR).rich_color))
         return text
 

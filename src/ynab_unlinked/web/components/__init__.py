@@ -169,7 +169,7 @@ def amount(value: float, formatter: Formatter) -> ui.label:
     transactions and keep their own figures.
     """
     element = ui.label(formatter.format_flow(value)).classes("yul-amt yul-num")
-    if value > 0:
+    if formatter.is_inflow(value):
         element.classes("in")
     return element
 

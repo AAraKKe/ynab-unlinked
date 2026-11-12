@@ -50,5 +50,11 @@ class Formatter:
         The sign says the direction even where the colour of an inflow is lost (a terminal
         without colour, a colour blind reader). Balances and totals use `format_amount`.
         """
+        amount = round(amount, self.currency_format.decimal_digits)
         text = self.format_amount(amount)
         return f"+{text}" if amount > 0 else text
+
+    def is_inflow(self, amount: float) -> bool:
+        """Whether `format_flow` shows `amount` as money in: positive once rounded to the
+        currency's digits, so a sub-cent amount is neither green nor signed."""
+        return round(amount, self.currency_format.decimal_digits) > 0

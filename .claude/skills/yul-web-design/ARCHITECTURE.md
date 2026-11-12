@@ -1416,6 +1416,8 @@ panel, and the picked month goes back to the whole range). Period
 panel: `period-panel`, `period-title` and `period-clear` (a picked month only), `bridge`,
 `step-{income|spending|assets|other|net}`, `moved-{account_id}`, `came-in`, `spent-on`.
 Movers: `movers`, `mover-{account_id}`.
+Account drawer: `nw-drawer`, `drawer-chart`, `drawer-tx` (one per last transaction) and
+`drawer-amount` (its amount, `components.amount`).
 
 Markers: `no-tracked`, `pick-{account_id}`, `pick-count`, `edit-{account_id}`,
 `balance-input-{account_id}`, `accept-{account_id}`, `cancel-{account_id}`,

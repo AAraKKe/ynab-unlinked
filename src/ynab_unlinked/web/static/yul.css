@@ -1032,7 +1032,7 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 }
 .yul-rec-row:hover { background: var(--surface-2); }
 .yul-rec-row > .payee { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.yul-rec-row > .amt { text-align: right; font-variant-numeric: tabular-nums; }
+.yul-rec-row > .amt { text-align: right; }
 .yul-rec-row.unclear { color: var(--text-3); }
 .yul-rec-row.unclear .yul-amt.in { color: color-mix(in oklab, var(--good) 50%, var(--text-3)); }
 .yul-rec-row.locked { opacity: .45; cursor: default; }
