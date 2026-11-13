@@ -30,7 +30,7 @@ classifiers = [
 ]
 dependencies = [
   "ynab==5.0.0",
-  "typer==0.28.0",
+  "typer==0.29.0",
   "html-text==0.7.1",
   "pdfplumber==0.11.10",
   "pydantic==2.14.3",
