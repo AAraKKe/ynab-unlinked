@@ -1,5 +1,6 @@
 import dataclasses
 import datetime as dt
+import shutil
 import uuid
 from functools import partial
 from pathlib import Path
@@ -23,10 +24,12 @@ from tests.factories import (
 from tests.helpers import assets
 from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.store import upsert
+from tests.helpers.web import eventually
 from tests.helpers.ynab_api import YnabClientStub
-from ynab_unlinked.config import LatestConfig, LoaderConfig
+from ynab_unlinked.config import ImportedFiles, LatestConfig, LoaderConfig
+from ynab_unlinked.core import imported_files
 from ynab_unlinked.core.detect import Candidate, resolve_options
-from ynab_unlinked.core.importing import ImportPlan, ImportResult, Twin
+from ynab_unlinked.core.importing import ImportPlan, ImportResult, Twin, file_digest
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
 from ynab_unlinked.models import assign_import_ids
@@ -932,3 +935,237 @@ def test_the_log_line_of_an_import_says_how_many_rows_were_left_out():
 
     assert logged == "Imported 1 transaction to 💳 Oro from movements.txt · 1 left out"
     assert (details["skipped"], details["matched"], details["excluded"]) == (1, 1, 1)
+
+
+# ---- removing the imported files ---------------------------------------------------------
+
+
+@pytest.fixture
+def statement(downloads: Path) -> Path:
+    """The Sabadell statement in the Downloads folder, where the browser left it."""
+    return Path(shutil.copy(SABADELL, downloads / "movimientos.txt"))
+
+
+def imported_files_setting(choice: ImportedFiles) -> None:
+    state().update_config(lambda config: setattr(config, "imported_files", choice))
+
+
+async def import_it(user: User, *paths: Path, created: str = "3 transactions imported") -> None:
+    """Drop the files and import them, up to the Done card."""
+    await drop(user, *paths)
+    await user.should_see(marker="count-1", retries=30)
+    user.find(marker="review").click()
+    user.find(marker="import").click()
+    await user.should_see(marker="done-title", content=created, retries=30)
+
+
+async def test_the_imported_file_is_offered_for_removal_and_removed(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, statement: Path
+):
+    await import_it(user, statement)
+
+    await user.should_see("Remove the imported file?", retries=20)
+    await user.should_see(marker="removal-file-0", content=str(statement))
+    await user.should_see("Remove 1 file")
+    assert statement.exists()
+
+    user.find(marker="removal-remove").click()
+
+    await user.should_see(
+        marker="removal-done", content="Removed movimientos.txt from this computer.", retries=20
+    )
+    assert not statement.exists()
+    # Asked again next time: the box was not ticked
+    assert LatestConfig.load().imported_files is ImportedFiles.ASK
+    # Home says which file went, and the log keeps the bytes it held
+    await eventually(lambda: bool(state().store.activity(BUDGET_ID, kind="remove")))
+    [entry] = state().store.activity(BUDGET_ID, kind="remove")
+    assert entry.message == f"Removed {statement} from this computer"
+    assert entry.details == {
+        "count": 1,
+        "files": [{"path": str(statement), "digest": file_digest(SABADELL)}],
+    }
+
+
+async def test_a_file_that_changed_while_the_question_was_open_is_not_removed(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, statement: Path
+):
+    await import_it(user, statement)
+    await user.should_see(marker="removal-remove", retries=20)
+    # Downloaded again under the same name while the dialog waited
+    statement.write_text("a newer statement")
+
+    user.find(marker="removal-remove").click()
+
+    await user.should_see(
+        marker="removal-failed-0",
+        content=f"Could not remove {statement}: it changed since it was imported.",
+        retries=20,
+    )
+    await user.should_not_see(marker="removal-done")
+    assert statement.read_text() == "a newer statement"
+    assert state().store.activity(BUDGET_ID, kind="remove") == []
+
+
+async def test_keeping_the_imported_file_leaves_it_where_it_is(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, statement: Path
+):
+    await import_it(user, statement)
+    await user.should_see(marker="removal-keep", retries=20)
+
+    user.find(marker="removal-keep").click()
+
+    await user.should_not_see(marker="removal-dialog")
+    await user.should_not_see(marker="removal-done")
+    assert statement.exists()
+    assert LatestConfig.load().imported_files is ImportedFiles.ASK
+    assert state().store.activity(BUDGET_ID, kind="remove") == []
+
+
+@pytest.mark.parametrize(
+    ("button", "saved", "said", "removed"),
+    [
+        pytest.param(
+            "removal-remove",
+            ImportedFiles.REMOVE,
+            "yul removes imported files from now on",
+            True,
+            id="remove",
+        ),
+        pytest.param(
+            "removal-keep",
+            ImportedFiles.KEEP,
+            "yul keeps imported files and no longer asks",
+            False,
+            id="keep",
+        ),
+    ],
+)
+async def test_dont_ask_again_saves_the_answer_and_the_next_import_follows_it(
+    accounts: LatestConfig,
+    ynab: YnabClientStub,
+    user: User,
+    statement: Path,
+    downloads: Path,
+    bbva_file: Path,
+    button: str,
+    saved: ImportedFiles,
+    said: str,
+    removed: bool,
+):
+    await import_it(user, statement)
+    await user.should_see(marker="removal-remember", retries=20)
+
+    user.find(marker="removal-remember").click()
+    user.find(marker=button).click()
+
+    await user.should_see(
+        marker="removal-saved", content=f"{said}. Settings › Data & privacy changes it.", retries=20
+    )
+    assert LatestConfig.load().imported_files is saved
+    if removed:
+        # The line is drawn once the file is gone
+        await user.should_see(marker="removal-done", retries=20)
+    assert statement.exists() is not removed
+
+    card = Path(shutil.copy(bbva_file, downloads / "tarjeta.xlsx"))
+    await import_it(user, card)
+
+    # Nothing is asked this time
+    if removed:
+        await user.should_see(
+            marker="removal-done", content="Removed tarjeta.xlsx from this computer.", retries=20
+        )
+    await user.should_not_see(marker="removal-dialog")
+    assert card.exists() is not removed
+
+
+async def test_a_file_that_is_not_found_is_named_and_nothing_is_asked(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, downloads: Path
+):
+    # The same name with other bytes is not the file that was imported
+    other = downloads / SABADELL.name
+    other.write_text("last month's statement")
+
+    await import_it(user, SABADELL)
+
+    await user.should_see(
+        marker="removal-missing",
+        content="movements.txt was not found on this computer, so yul could not remove it.",
+        retries=20,
+    )
+    await user.should_not_see(marker="removal-dialog")
+    assert other.read_text() == "last month's statement"
+
+
+async def test_a_file_in_more_than_one_place_is_asked_about_even_when_files_are_removed(
+    accounts: LatestConfig,
+    ynab: YnabClientStub,
+    user: User,
+    statement: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    archive = tmp_path / "Documents"
+    archive.mkdir()
+    kept = Path(shutil.copy(statement, archive / statement.name))
+    monkeypatch.setattr(imported_files, "common_folders", lambda: [statement.parent, archive])
+    imported_files_setting(ImportedFiles.REMOVE)
+
+    await import_it(user, statement)
+
+    await user.should_see("Some of them are in more than one place", retries=20)
+    await user.should_see(marker="removal-file-1")
+    # The setting is already made: there is no box to tick
+    await user.should_not_see(marker="removal-remember")
+    user.find(marker="removal-keep").click()
+    await user.should_not_see(marker="removal-dialog")
+    assert statement.exists() and kept.exists()
+    assert LatestConfig.load().imported_files is ImportedFiles.REMOVE
+
+
+async def test_a_file_whose_import_failed_is_not_removed(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, statement: Path
+):
+    imported_files_setting(ImportedFiles.REMOVE)
+    ynab.api("transactions").create_transaction.side_effect = ApiException(status=500)
+
+    await import_it(user, statement, created="0 transactions imported")
+
+    await user.should_see(marker="commit-error-1")
+    await user.should_not_see(marker="removal-done")
+    assert statement.exists()
+
+
+async def test_a_second_copy_dropped_under_another_name_is_removed_with_the_first(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, statement: Path
+):
+    copy = Path(shutil.copy(statement, statement.with_name("movimientos (1).txt")))
+    imported_files_setting(ImportedFiles.REMOVE)
+
+    await import_it(user, statement, copy)
+
+    await user.should_see(
+        marker="removal-done",
+        content="Removed movimientos.txt and movimientos (1).txt from this computer.",
+        retries=20,
+    )
+    assert not statement.exists() and not copy.exists()
+
+
+async def test_nothing_is_looked_for_when_imported_files_are_kept(
+    accounts: LatestConfig,
+    ynab: YnabClientStub,
+    user: User,
+    statement: Path,
+    mocker: MockerFixture,
+):
+    imported_files_setting(ImportedFiles.KEEP)
+    locate = mocker.spy(imported_files, "locate")
+
+    await import_it(user, statement)
+
+    await user.should_not_see(marker="removal-dialog")
+    await user.should_not_see(marker="removal-missing")
+    assert locate.call_count == 0
+    assert statement.exists()

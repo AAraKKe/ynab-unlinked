@@ -88,13 +88,25 @@ def question(
     password: bool = False,
     choices: list[str] | None = None,
     show_choices: bool = True,
+    default: str | None = None,
 ) -> str:
+    """Ask for a line of text, one of `choices` when given. `default` answers an empty line."""
+    prompt = f"[bold cyan]{message}[/bold cyan]"
+    if default is None:
+        return Prompt.ask(
+            prompt,
+            console=console(),
+            password=password,
+            choices=choices,
+            show_choices=show_choices,
+        )
     return Prompt.ask(
-        f"[bold cyan]{message}[/bold cyan]",
+        prompt,
         console=console(),
         password=password,
         choices=choices,
         show_choices=show_choices,
+        default=default,
     )
 
 

@@ -983,6 +983,14 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-imp-card-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .yul-imp-counts { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: none; }
 .yul-imp-done { text-align: center; padding: 28px; }
+.yul-imp-done-acts { display: flex; justify-content: center; gap: 10px; }
+.yul-imp-prog-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 8px; }
+.yul-imp-prog-account { font-weight: 600; }
+.yul-imp-prog-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yul-imp-prog-status { margin-left: auto; flex: none; }
+.yul-imp-removal { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 12px; text-align: center; }
+.yul-imp-originals { margin-bottom: 12px; word-break: break-all; }
+.yul-imp-remember { margin: 2px 0 16px 28px; }
 
 /* ---- reconcile: account cards and their rows (views/reconcile) ---- */
 .yul-rec-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -1437,6 +1445,11 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   .yul-imp-card-main { flex-wrap: wrap; flex-basis: 0; }
   .yul-imp-card-title { flex-basis: 100%; line-height: 30px; }
   .yul-imp-counts { flex-wrap: wrap; justify-content: flex-end; padding-top: 4px; }
+  /* Done: the account and its status, the file under them; the two buttons one over the other */
+  .yul-imp-prog-file { order: 1; flex-basis: 100%; }
+  .yul-imp-done { padding: 24px 18px; }
+  .yul-imp-done-acts { flex-direction: column; align-items: stretch; }
+  .yul-imp-done-acts > .yul-btn { justify-content: center; }
   /* A row of a table is two lines: payee and amount, then the date, the tag and what to do */
   .yul-imp .yul-imp-table { display: block; }
   .yul-imp .yul-imp-table tr.head { display: none; }

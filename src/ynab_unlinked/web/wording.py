@@ -12,6 +12,7 @@ from typing import Any, Literal
 
 from ynab import ApiException, PlanSummary
 
+from ynab_unlinked.config import ImportedFiles
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import ExcludedRow
 from ynab_unlinked.text import plural
@@ -25,6 +26,13 @@ IMPORT_FAILED = "The import stopped before it finished. Check the account in YNA
 YNAB_TIMED_OUT = "YNAB did not answer in time. Check your connection and try again."
 YNAB_UNREACHABLE = "Could not reach YNAB. Check your connection and try again."
 UNEXPECTED = "Something went wrong. Try again."
+
+IMPORTED_FILES_SAVED = {
+    ImportedFiles.ASK: "yul asks after each import whether to remove its files",
+    ImportedFiles.REMOVE: "yul removes imported files from now on",
+    ImportedFiles.KEEP: "yul keeps imported files and no longer asks",
+}
+"""What is said once the setting is saved, in Settings or under the Done card of Import."""
 
 VERSUS_YNAB_TITLE = "Why this can differ from YNAB"
 VERSUS_YNAB = (

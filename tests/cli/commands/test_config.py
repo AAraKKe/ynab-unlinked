@@ -12,7 +12,7 @@ from tests.helpers.config import ConfigFiles
 from tests.helpers.keychain import MemoryKeyring
 from tests.helpers.types import CliRunner
 from ynab_unlinked import keychain
-from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config import ImportedFiles, LatestConfig
 
 pytestmark = pytest.mark.version("V4")
 
@@ -121,3 +121,20 @@ def test_config_set_budget_keeps_the_mappings_when_the_same_budget_is_picked(
         "sabadell-account"
     )
     assert "are cleared" not in result.output
+
+
+@pytest.mark.parametrize(
+    ("answer", "saved"),
+    [
+        pytest.param("remove", ImportedFiles.REMOVE, id="remove"),
+        pytest.param("keep", ImportedFiles.KEEP, id="keep"),
+        pytest.param("", ImportedFiles.ASK, id="enter-keeps-the-current-one"),
+    ],
+)
+def test_config_set_imported_files_saves_what_becomes_of_them(
+    yul: CliRunner, answer: str, saved: ImportedFiles
+):
+    result = yul("config set imported_files", input=f"{answer}\n", env=WIDE_TERMINAL)
+
+    assert result.exit_code == 0, result.output
+    assert LatestConfig.load().imported_files is saved

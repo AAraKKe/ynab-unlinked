@@ -9,6 +9,7 @@ from .v4 import (
     ConfigV4,
     DebtMapping,
     Finances,
+    ImportedFiles,
     LoaderConfig,
     TrackedAccount,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "ClearedStatus",
     "DebtMapping",
     "Finances",
+    "ImportedFiles",
     "EntityConfig",
     "EntityConfigV3",
     "LoaderConfig",

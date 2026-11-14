@@ -39,6 +39,8 @@ There is no analytics, telemetry, crash reporting, or any other outbound traffic
 
 `yul load` and the web app's Import screen read the bank export files (CSV, XLSX, PDF, …) you give it as input. These files are parsed locally, used to build the list of transactions, and never copied or transmitted outside the YNAB API calls described above. The tool does not retain a copy of them: files uploaded to the web app go to a temporary directory that is removed once the import ends or is discarded.
 
+After an import, YNAB Unlinked can remove the export files themselves from your computer. It asks first, unless you chose "Don't ask again" (or answered `always` in the terminal); Settings › Data & privacy and `yul config set imported_files` change that choice. Removing deletes the file permanently, it is not moved to the Trash. `yul load` removes the files it was given. The web app receives a copy of each file from the browser without its location, so it looks for the original by name: through Spotlight anywhere in your home folder on macOS, and in your Downloads, Desktop and Documents folders otherwise. It reads the candidates to compare their content and only removes a file whose bytes are exactly the ones it imported, checking again right before deleting it. Each removal is noted in the activity log with the path of every file removed, so the app's recent activity shows what went. Nothing about this search leaves your computer.
+
 ## What is stored locally
 
 YNAB Unlinked keeps your YNAB Personal Access Token in the operating system's keychain, through the [`keyring`](https://pypi.org/project/keyring/) library: the macOS Keychain, the Windows Credential Manager, or Secret Service (GNOME Keyring) / KWallet on Linux. The item is named `ynab-unlinked`. On a computer without any of these (a headless server, say) the token stays in the configuration file below, in plaintext, and `yul privacy` says so. A token stored in the file by an older version moves to the keychain the first time the new version runs.
@@ -66,7 +68,7 @@ If you have an old configuration created before version `0.7.0`, a legacy file m
 
 ### Local transaction store
 
-YNAB Unlinked also keeps a local copy of your budget's transactions (split lines included), accounts, categories (and what they held in past months) and month notes, kept in sync with YNAB, plus an activity log of what it did (imports, reconciliations, balance adjustments). It is a SQLite file named `store.sqlite` in your user data directory (on macOS the same directory as the configuration, on Linux typically `~/.local/share/ynab-unlinked/`, on Windows `%LOCALAPPDATA%\committhatline\ynab-unlinked\`). It is not encrypted either, and `yul config reset` deletes it.
+YNAB Unlinked also keeps a local copy of your budget's transactions (split lines included), accounts, categories (and what they held in past months) and month notes, kept in sync with YNAB, plus an activity log of what it did (imports, reconciliations, balance adjustments, statement files removed). It is a SQLite file named `store.sqlite` in your user data directory (on macOS the same directory as the configuration, on Linux typically `~/.local/share/ynab-unlinked/`, on Windows `%LOCALAPPDATA%\committhatline\ynab-unlinked\`). It is not encrypted either, and `yul config reset` deletes it.
 
 ### Local web app
 

@@ -48,6 +48,17 @@ class ClearedStatus(StrEnum):
     RECONCILED = "reconciled"
 
 
+class ImportedFiles(StrEnum):
+    """What becomes of the statement files once an import is done."""
+
+    ASK = "ask"
+    """Ask after each import whether to remove them."""
+    REMOVE = "remove"
+    """Remove them from this computer without asking."""
+    KEEP = "keep"
+    """Leave them where they are, and do not ask."""
+
+
 class Adjustments(BaseModel):
     memo: str = "Balance adjustment by yul"
     payee: str = "Balance Adjustment"
@@ -83,6 +94,9 @@ class ConfigV4(BaseModel):
     check_for_updates: bool = True
     """The web app asks PyPI every half hour whether a newer yul exists. New after V4 shipped: a
     file without it loads with the check on, so no migration is needed."""
+    imported_files: ImportedFiles = ImportedFiles.ASK
+    """Whether the statement files are removed after an import. New after V4 shipped: a
+    file without it loads with `ASK`, so no migration is needed."""
     version_number: str = Field(default="V4", alias="version")
 
     # A validation error must not print the token, which the input of the error would show

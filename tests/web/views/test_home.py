@@ -560,8 +560,27 @@ def test_relative_time_shows_the_day_for_older_entries_and_the_year_when_it_diff
         ),
         ("adjustment", "Balance set to 6.00€", {"amount": 6}, "Balance set to 6.00€"),
         ("reconcile", "Reconciled", {"count": True}, "Reconciled"),
+        (
+            "remove",
+            "Removed /disk/a.txt and /disk/b & c.xlsx from this computer",
+            {
+                "count": 2,
+                "files": [
+                    {"path": "/disk/a.txt", "digest": "1"},
+                    {"path": "/disk/b & c.xlsx", "digest": "2"},
+                ],
+            },
+            'Removed <span class="yul-mono">/disk/a.txt</span> and '
+            '<span class="yul-mono">/disk/b &amp; c.xlsx</span> from this computer',
+        ),
     ],
-    ids=["import", "count-next-to-an-amount", "no-count-for-the-kind", "not-a-number"],
+    ids=[
+        "import",
+        "count-next-to-an-amount",
+        "no-count-for-the-kind",
+        "not-a-number",
+        "removed-files",
+    ],
 )
 def test_activity_message_markup(kind: str, message: str, details: dict, expected: str):
     entry = Activity(at=now(), kind=kind, message=message, details=details)

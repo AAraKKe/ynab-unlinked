@@ -33,6 +33,7 @@ src/ynab_unlinked/
     finance.py           where a period's money came from and went: Flows, Rules, period() (2.8)
     cashflow.py          income and spending by month, category trends and volatility (2.9)
     update.py            a newer yul on PyPI and how this install gets it (2.10)
+    imported_files.py    where the files of an import are on disk, and removing them (2.12)
     plan.py              what the last months measured, carried forward month by month (2.11)
   entities/              parsers, now with sniff() and a LoaderSpec per package (2.4)
   config/                V1..V4, migrations (2.6)
@@ -492,6 +493,9 @@ class ConfigV4(BaseModel):
     finances: Finances = Finances()
     check_for_updates: bool = True              # the app asks PyPI for a newer yul; added
                                                 # after V4 shipped, default only: no migration
+    imported_files: ImportedFiles = ImportedFiles.ASK   # ASK, REMOVE or KEEP ("ask", ...):
+                                                # what becomes of the statement files after
+                                                # an import (2.12); default only, as above
     version_number: str = Field(default="V4", alias="version")
 
     # Config protocol
@@ -907,6 +911,55 @@ def project(position, assumptions, months, goal=None) -> Projection
     # stays goes to assets.
 def date_after(day, months) -> dt.date         # the same day, the month's last when shorter
 ```
+
+### 2.12 Imported files (`core/imported_files.py`)
+
+```python
+@dataclass(frozen=True)
+class Original:                 # a file on disk holding exactly the bytes an import read
+    path: Path
+    digest: str                 # core.importing.file_digest
+    @staticmethod
+    def of(path) -> Original    # as it is now: take it before the file is read
+
+@dataclass(frozen=True)
+class Imported: name: str; digest: str; size: int     # a file as the web app knows it
+@dataclass(frozen=True)
+class Located: originals: tuple[Original, ...]; missing: tuple[str, ...]; copies: bool
+@dataclass(frozen=True)
+class Removal: removed: tuple[Original, ...]; failed: tuple[tuple[Path, str], ...]  # path, why
+
+def spotlight(name) -> list[Path]         # macOS: files called `name` in the home folder
+def common_folders() -> list[Path]        # Downloads, Desktop, Documents (platformdirs)
+def find_originals(name, digest, size=None) -> list[Original]
+def locate(files: Sequence[Imported]) -> Located
+def remove_originals(originals) -> Removal    # never raises
+def removal_log(removed) -> tuple[str, dict]  # the `remove` activity entry (3.4)
+def shown(path) -> str                    # "~/Downloads/movimientos.txt"
+```
+
+- `yul load` knows the path of what it reads (`cli.process.originals`). The web app does
+  not: a browser gives a page a file's name and bytes, never its folder. `find_originals`
+  takes the candidates from Spotlight (anywhere in the home folder) or, without an answer
+  from it, from the top of `common_folders()`, and keeps the ones whose bytes have the
+  digest. A file with the same name and other bytes is never offered.
+- Removing is `unlink`, not the Trash: the point is that statements do not stay on disk. A
+  file is only deleted while its bytes are the ones that were imported: the digest is
+  compared when the file is found and again right before the `unlink`, so one that changed
+  meanwhile, or is gone, is left alone and reported.
+- What was deleted is logged as one `remove` activity entry (3.4) with each path and its
+  digest, so Home's recent activity says which files went.
+- The setting is `config.imported_files`. `ASK`: the app asks in a dialog after the import
+  (`web/views/import_/removal.py`) and `yul load` in the terminal
+  (`cli.process.offer_removal`: yes, no, always, never); "Don't ask again" / `always` /
+  `never` save `REMOVE` or `KEEP`. `REMOVE` removes without asking, except a file found in
+  more than one place, which the app always asks about. `KEEP` looks for nothing. With
+  `--yes` nothing is asked: files are removed only under `REMOVE`.
+- Offered: the files that are done (sent, or with nothing new to send) and second copies
+  of them given in the same import. Never a file whose import failed or was declined.
+- Tests never search the real computer: the autouse fixture `downloads` (tests/conftest.py)
+  silences `spotlight` and points `common_folders` at a scratch folder. A CLI test that
+  removes a file imports a copy under `tmp_path`, never an asset.
 
 ## 3. Web app (`web/`, extra `web`)
 
@@ -1338,14 +1391,18 @@ that number in the message and shows `file` in mono.
 | `include` | `Included {payee} ({amount}, {date}) in imports to {account_name} again` | as `exclude` |
 | `reconcile` | `Reconciled {count} transactions in {n} accounts` | `count`, `accounts: [{id, name, count}]` |
 | `adjustment` | `Balance of {account_name} set to {new} ({signed amount})` | `account_id`, `account_name`, `old`, `new`, `amount` (milliunits) |
+| `remove` | `Removed {paths} from this computer`, each path as `imported_files.shown` gives it, joined by `text.name_list` (`imported_files.removal_log`) | `count`, `files: [{path, digest}]` (the absolute path, and the SHA-256 of the bytes the file held: the ones that were imported) |
 | `sync` | `Synced · {changes} changes from YNAB`, plus ` · {ghosts} stale removed` when ghosts > 0 | `changes`, `full`, `ghosts` (only when > 0) |
 | `config` | free text | free |
 
 Amounts in messages are formatted with `state().formatter`; in details they are milliunits.
 `exclude` and `include` come from `web.wording.left_out_entry`, logged by the Import review
 and Settings › Data & privacy after the registry write, both through `run.io_bound`.
-The CLI writes `import` (after each committed file of `yul load <bank>` and `yul load auto`)
-and `reconcile` (after `yul reconcile` locks) with the same shapes through
+`remove` is logged once per removal that deleted something, by the Import view and by
+`yul load`; Home shows its paths in mono, as it does an imported file.
+The CLI writes `import` (after each committed file of `yul load <bank>` and `yul load auto`),
+`remove` (after it deleted their files) and `reconcile` (after `yul reconcile` locks) with
+the same shapes through
 `ynab_unlinked.activity`, at `store_path()`; a store it cannot open only warns. The app's
 next sync brings the transactions.
 Use singular nouns for 1 ("1 change"). `AppState._sync` logs `sync` only when the sync was
@@ -1548,6 +1605,13 @@ each category row with the marker, a dash and the category id.
 their index in the plan, so the markers below keep their numbers whatever is hidden, and
 `hidden-{file key}` is the line under a table counting what is (`data.hidden_note`). The
 choice is the browser preference `yul.import_show_all`.
+
+After an import: `removal` is the element under the Done card with one line per outcome,
+`removal-done` (what was removed), `removal-failed-{index}`, `removal-missing` (files not
+found on this computer) and `removal-saved` (the setting "Don't ask again" saved). The
+dialog is `removal-dialog` with `removal-file-{index}` (a path), `removal-not-found`,
+`removal-remember` (the checkbox, only when the setting is to ask), `removal-keep` and
+`removal-remove`. Settings › Data & privacy has `imported-files-{ask|remove|keep}`.
 
 Review rows: `row-status-{file key}-{index}` (new, may be in YNAB, already in YNAB, matched in
 YNAB, left out; every one a pill), `row-amount-{file key}-{index}` (`components.amount`),

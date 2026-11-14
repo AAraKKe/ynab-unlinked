@@ -131,7 +131,13 @@ def auto(
     from ynab import TransactionClearedStatus
 
     from ynab_unlinked.activity import log_import
-    from ynab_unlinked.cli.process import get_or_prompt_account_id, open_store, plan_notes
+    from ynab_unlinked.cli.process import (
+        get_or_prompt_account_id,
+        offer_removal,
+        open_store,
+        originals,
+        plan_notes,
+    )
     from ynab_unlinked.cli.utils import display_import_table, display_transaction_table
     from ynab_unlinked.core.detect import detect_loaders
     from ynab_unlinked.core.importing import (
@@ -144,6 +150,8 @@ def auto(
 
     ctx = load_context(context)
 
+    # Second copies included: the same bytes are as imported as the first
+    read = originals(files)
     files, copies = unique_files(files)
     for copy, first in copies:
         display.warning(escape(f"{copy.name}: same file as {first.name}, imported once"))
@@ -239,6 +247,7 @@ def auto(
     to_import = [plan for plan in plans if plan.new_rows]
     if not to_import:
         display.info("🎉 All done! Nothing to do.")
+        offer_removal(ctx.config, read, interactive=not ctx.yes)
         return
 
     count = sum(len(plan.new_rows) for plan in to_import)
@@ -291,6 +300,7 @@ def auto(
             f"{_account_name(account_id, ctx)}: {amount}" for account_id, amount in created.items()
         )
     )
+    offer_removal(ctx.config, read, interactive=not ctx.yes)
 
 
 def _parse(input_file: Path, candidate: Candidate) -> list[Transaction]:

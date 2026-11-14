@@ -158,6 +158,15 @@ The first command runs setup if there is no configuration yet. `yul load` shows 
 transaction it is about to create and asks once before importing; add `--yes` to run it
 unattended.
 
+Once the statements are in YNAB, yul offers to remove them from your computer, so they do
+not pile up in Downloads: the app in a dialog with "Don't ask again", `yul load` with a
+question you can answer `always` or `never`. Removing deletes the file for good, not to the
+Trash. The app only gets a copy of what you drop on it, so it looks for the original by name
+and content (anywhere in your home folder on macOS, in Downloads, Desktop and Documents
+elsewhere) and only ever removes a file with exactly the bytes it imported. The app's recent
+activity lists every file removed. Settings › Data & privacy, or
+`yul config set imported_files`, changes the answer.
+
 Send each bank to its own YNAB account. yul recognises what it already imported the way YNAB's
 own file import does, by date, amount and how many times that pair repeats, without the bank.
 Two banks feeding one account can then take a row of the same day and amount, imported in

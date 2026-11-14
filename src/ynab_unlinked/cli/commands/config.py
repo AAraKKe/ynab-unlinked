@@ -4,10 +4,18 @@ from typing import Annotated
 import typer
 
 from ynab_unlinked import keychain
-from ynab_unlinked.cli.display import bullet_list, confirm, console, info, success, warning
+from ynab_unlinked.cli.display import (
+    bullet_list,
+    confirm,
+    console,
+    info,
+    question,
+    success,
+    warning,
+)
 from ynab_unlinked.cli.setup import ensure_config
 from ynab_unlinked.cli.utils import prompt_for_api_key, prompt_for_budget
-from ynab_unlinked.config import LatestConfig, switch_budget, update_config
+from ynab_unlinked.config import ImportedFiles, LatestConfig, switch_budget, update_config
 from ynab_unlinked.local_data import delete_local_data, local_data_paths
 from ynab_unlinked.privacy import privacy_notice
 
@@ -15,6 +23,7 @@ from ynab_unlinked.privacy import privacy_notice
 class ValidKeys(StrEnum):
     BUDGET = "budget"
     API_KEY = "api_key"
+    IMPORTED_FILES = "imported_files"
 
 
 config_app = typer.Typer(help="Manage YNAB Unlinked configuration")
@@ -26,7 +35,7 @@ def set_command(
     key: Annotated[ValidKeys, typer.Argument(help="The config key to set", show_default=False)],
 ):
     """Set configuration options"""
-    ctx = ensure_config(context, require_token=key is not ValidKeys.API_KEY)
+    ctx = ensure_config(context, require_token=key is ValidKeys.BUDGET)
     config: LatestConfig = ctx.config
 
     match key:
@@ -46,6 +55,20 @@ def set_command(
             switch_budget(config, budget)
             update_config(lambda saved: switch_budget(saved, budget))
             success("🎉 The budget has been updated")
+        case ValidKeys.IMPORTED_FILES:
+            info(
+                "What yul does with the statement files once they are imported: `ask` each "
+                "time, `remove` them from this computer for good, or `keep` them."
+            )
+            choice = ImportedFiles(
+                question(
+                    "Imported files",
+                    choices=[option.value for option in ImportedFiles],
+                    default=config.imported_files.value,
+                )
+            )
+            update_config(lambda saved: setattr(saved, "imported_files", choice))
+            success(f"🎉 Imported files: {choice.value}")
 
 
 @config_app.command(name="show")

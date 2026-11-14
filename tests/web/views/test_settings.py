@@ -23,7 +23,13 @@ from tests.helpers.ynab_api import YnabClientStub
 from tests.web.test_theme import palette_classes
 from ynab_unlinked.__about__ import __version__
 from ynab_unlinked.buckets import Bucket
-from ynab_unlinked.config import ClearedStatus, DebtMapping, LatestConfig, TrackedAccount
+from ynab_unlinked.config import (
+    ClearedStatus,
+    DebtMapping,
+    ImportedFiles,
+    LatestConfig,
+    TrackedAccount,
+)
 from ynab_unlinked.core.update import UpdateError
 from ynab_unlinked.keychain import mask_token
 from ynab_unlinked.store import ExcludedRow, Store
@@ -264,6 +270,24 @@ async def test_turning_the_look_for_new_versions_off_is_saved_and_stops_it(
     assert not LatestConfig.load().check_for_updates
     # Even a day later: nothing asks PyPI again
     assert not updates().due(dt.datetime.now(dt.UTC) + dt.timedelta(days=2))
+
+
+async def test_what_becomes_of_imported_files_is_picked_and_saved(
+    user: User, config_v4: LatestConfig
+):
+    await _open_tab(user, "data-privacy")
+    await user.should_see(marker="imported-files-ask")
+    assert "on" in user.find(marker="imported-files-ask").elements.pop().classes
+
+    user.find(marker="imported-files-remove").click()
+
+    await user.should_see("yul removes imported files from now on", retries=20)
+    assert LatestConfig.load().imported_files is ImportedFiles.REMOVE
+
+    user.find(marker="imported-files-keep").click()
+
+    await user.should_see("yul keeps imported files and no longer asks", retries=20)
+    assert LatestConfig.load().imported_files is ImportedFiles.KEEP
 
 
 @pytest.mark.parametrize(

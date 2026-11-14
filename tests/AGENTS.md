@@ -50,7 +50,8 @@ fixes. What keeps the suite that way:
   the wrong reason. A text with `kind=` or `content=` is refused.
 - **No real time, no real machine.** Dates come from `today`, intervals are module
   constants a test patches down, and the autouse fixtures keep every test off the real
-  config, keychain, PyPI and disk (`yul_home`, `no_keychain`, `no_newer_yul`).
+  config, keychain, PyPI and disk (`yul_home`, `no_keychain`, `no_newer_yul`,
+  `downloads`).
 - **No order.** A test sets up what it needs and leaves nothing behind; the suite passes
   in any order.
 
@@ -99,6 +100,11 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
 - `yul_home` (root conftest, autouse) sets `YUL_HOME` to a folder under `tmp_path` for every
   test, so no test reaches the real config, budget copy, preferences or keychain item, even
   without the fixtures below. `keychain.service_name()` follows it; never cache it.
+- `downloads` (root conftest, autouse) keeps the search for the files of an import
+  (`core.imported_files`) off the real computer, where a file found could be removed:
+  Spotlight answers nothing and the only folder searched is the scratch folder it returns.
+  A test that removes a file through `yul load` imports a copy under `tmp_path`, never one
+  of `tests/assets`.
 - `config_files` (root conftest) points every config path into a scratch directory and returns
   the `ConfigFiles` paths. `config` writes the asset for `@pytest.mark.version("V1".."V4")` there
   and yields the version; `"missing"` leaves it empty. Use `"V4"` (the latest) unless the test is

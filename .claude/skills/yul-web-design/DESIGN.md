@@ -123,8 +123,9 @@ from the local store; Home never calls YNAB. Before the first sync a quiet banne
 - **Where it went** (right column): the five categories that spent most this month, each a
   bar with a mark at its usual month. A row opens that category in Spending.
 - **Recent activity**: last 10 events from the store's activity log (imports, reconciles,
-  adjustments) with timestamps: "29 Oct · Imported 13 transactions to 💳 Oro from
-  movimientos.txt".
+  adjustments, statement files removed) with timestamps: "29 Oct · Imported 13 transactions
+  to 💳 Oro from movimientos.txt", "29 Oct · Removed ~/Downloads/movimientos.txt from this
+  computer" (file names and paths in mono).
 
 ### Import
 
@@ -147,7 +148,9 @@ wrapping under it. A file's card in Review reads like a list item: the bank and 
 on the first line, the account and the file name under the bank. A row of a table is two
 lines, the payee and the amount, then the date, the tag and what to do with it ("Leave
 out"), with no header row. A flow's footer (Import, Reconcile) puts what it counts on a line
-of its own and the buttons under it, the primary one as wide as the space left.
+of its own and the buttons under it, the primary one as wide as the space left. On Done a
+file's card has the account and its status on the first line and the file under them, and
+the two buttons of the success card sit one over the other, as wide as the card.
 
 1. **Files**. Dropzone (large until the first file, then compact at the top). Each file
    appears as a row with a type badge, name, size and a live detection state: scanning
@@ -178,7 +181,16 @@ of its own and the buttons under it, the primary one as wide as the space left.
    file's body, and "n to check" on its row and in its footer.
 3. **Done**. Per file progress bars that fill as YNAB answers, then a success card:
    created count, anything YNAB rejected as duplicate, and two buttons: "Reconcile these
-   accounts" and "Import more".
+   accounts" and "Import more". Then the files: a dialog "Remove the imported files?" lists
+   where each one is on this computer ("~/Downloads/movimientos.txt"), says that removing
+   deletes them for good and not to the Trash, and has the checkbox "Don't ask again" with
+   one faint line under it, a ghost "Keep them" and a danger "Remove 2 files". Ticked, the
+   answer becomes the setting and later imports follow it without a dialog (a file found
+   in more than one place is still asked about, without the checkbox). What happened is
+   said in muted lines under the card, where it stays: "Removed movimientos.txt from this
+   computer.", "yul removes imported files from now on. Settings › Data & privacy changes
+   it.", and for a file yul could not find, "… was not found on this computer, so yul could
+   not remove it." Files whose import failed are never offered.
 
 ### Reconcile
 
@@ -469,7 +481,9 @@ and path), **Banks**, **Accounts**, **Net worth** (debt -> accounts mapping with
 picker, the goal), **Categories**, **Appearance** (the palette), **Data & privacy** (what is stored where, store size, last sync,
 "Updates": the "Look for new versions" switch, on by default, one line saying what is asked
 and that nothing about the user is sent, what is known ("yul 1.1.0 is the latest version.",
-"yul 1.2.0 is out. You have 1.1.0.") with "Check now" and, with a newer yul, "Update"; the
+"yul 1.2.0 is out. You have 1.1.0.") with "Check now" and, with a newer yul, "Update";
+"Imported files": a pill group "Ask each time", "Remove them", "Keep them" and one line
+saying how yul finds the files and that removing is for good; the
 rows left out of imports with "Include again" on each, "Resync from scratch", "Reset all
 data" with confirmation).
 

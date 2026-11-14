@@ -5,13 +5,14 @@ import typer
 from rich.markup import escape
 from ynab import Account, TransactionClearedStatus
 
-from ynab_unlinked.activity import log_import
+from ynab_unlinked.activity import log_import, log_removal
 from ynab_unlinked.cli import display
 from ynab_unlinked.cli.context_object import YnabUnlinkedContext
 from ynab_unlinked.cli.display import CliProgress, bullet_list, confirm, console, info, question
 from ynab_unlinked.cli.utils import display_import_table, display_transaction_table
-from ynab_unlinked.config import LatestConfig, update_config
+from ynab_unlinked.config import ImportedFiles, LatestConfig, update_config
 from ynab_unlinked.core.accounts import AccountState, account_state
+from ynab_unlinked.core.imported_files import Original, remove_originals, shown
 from ynab_unlinked.core.importing import (
     ImportPlan,
     RowStatus,
@@ -23,7 +24,7 @@ from ynab_unlinked.entities.registry import loaders
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store, store_path
-from ynab_unlinked.text import plural
+from ynab_unlinked.text import name_list, plural
 from ynab_unlinked.ynab_api.client import Client
 
 
@@ -130,6 +131,67 @@ def plan_notes(plan: ImportPlan, formatter: Formatter) -> None:
     )
 
 
+REMOVE_CHOICES = ("yes", "no", "always", "never")
+"""The answers to "Remove the imported files?": the last two save it as the setting."""
+
+
+def originals(paths: Sequence[Path]) -> list[Original]:
+    """The files as they are now, before they are read: one that changes during the import is
+    not removed after it. A path that cannot be read as a file is not offered for removal."""
+    found: list[Original] = []
+    for path in dict.fromkeys(paths):
+        try:
+            found.append(Original.of(path))
+        except OSError:
+            continue
+    return found
+
+
+def offer_removal(config: LatestConfig, files: Sequence[Original], *, interactive: bool) -> None:
+    """Remove the files an import read, as the setting `imported_files` says.
+
+    `ASK` asks once for all of them, where "always" and "never" save the answer so that the
+    question is not asked again; without a terminal to ask on (`--yes`) the files stay.
+    Removing deletes a file for good, and leaves alone one that changed since it was read.
+    """
+    mode = config.imported_files
+    if mode is ImportedFiles.KEEP or not files:
+        return
+    if mode is ImportedFiles.ASK:
+        if not interactive:
+            return
+        names = name_list([original.path.name for original in files])
+        info(
+            f"{'It is' if len(files) == 1 else 'They are'} in YNAB now. Removing deletes "
+            f"{'it' if len(files) == 1 else 'them'} for good, not to the Trash. "
+            "`always` and `never` save the answer (`yul config set imported_files` changes it)."
+        )
+        try:
+            answer = question(
+                # A file name is the user's text, never markup
+                escape(f"Remove {names} from this computer?"),
+                choices=list(REMOVE_CHOICES),
+                default="no",
+            )
+        except EOFError:
+            # Nobody to answer: the files stay
+            return
+        if answer in ("always", "never"):
+            choice = ImportedFiles.REMOVE if answer == "always" else ImportedFiles.KEEP
+            config.imported_files = choice
+            update_config(lambda saved: setattr(saved, "imported_files", choice))
+        if answer not in ("yes", "always"):
+            return
+
+    removal = remove_originals(files)
+    if removal.removed:
+        paths = [shown(original.path) for original in removal.removed]
+        display.success(escape(f"Removed {name_list(paths)}"))
+        log_removal(config, removal.removed)
+    for path, why in removal.failed:
+        display.warning(escape(f"Could not remove {shown(path)}: {why}"))
+
+
 def process_transactions(
     entity: Entity,
     input_file: Path,
@@ -162,6 +224,8 @@ def process_transactions(
         display_transaction_table(parsed_input, context.formatter)
         return
 
+    read = originals([input_file])
+
     account_id = get_or_prompt_account_id(
         config, entity.name(), force_prompt=context.choose_account, interactive=not context.yes
     )
@@ -192,6 +256,7 @@ def process_transactions(
 
     if not plan.new_rows:
         info("🎉 All done! Nothing to do.")
+        offer_removal(config, read, interactive=not context.yes)
         return
 
     display.info(f"Transactions to import:       {len(plan.new_rows)}")
@@ -238,3 +303,4 @@ def process_transactions(
 
     created = result.created
     display.success(f"🎉 All done! {created} transaction{'' if created == 1 else 's'} imported.")
+    offer_removal(config, read, interactive=not context.yes)
