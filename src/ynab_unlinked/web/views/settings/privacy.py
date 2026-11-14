@@ -28,8 +28,8 @@ if TYPE_CHECKING:
 SERVER_DESCRIPTION = "On this computer only. Your budget is sent nowhere but YNAB."
 LOOK_FOR_UPDATES = "Look for new versions"
 UPDATES_HINT = (
-    "Once a day yul asks pypi.org, where it is published, for its latest version. Nothing "
-    "about you or your budget is sent."
+    "Every half hour while it is open, yul asks pypi.org, where it is published, for its "
+    "latest version. Nothing about you or your budget is sent."
 )
 LOOKING = "yul looks for new versions"
 NOT_LOOKING = "yul no longer looks for new versions"

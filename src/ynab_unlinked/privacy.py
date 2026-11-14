@@ -42,8 +42,8 @@ def privacy_summary() -> None:
         "There is no telemetry."
     )
     info(
-        "The web app (yul app) also asks https://pypi.org once a day whether a newer "
-        "version exists. That sends nothing about you or your budget, and "
+        "The web app (yul app) also asks https://pypi.org every half hour, while it is "
+        "open, whether a newer version exists. That sends nothing about you or your budget, and "
         "Settings › Data & privacy turns it off."
     )
 

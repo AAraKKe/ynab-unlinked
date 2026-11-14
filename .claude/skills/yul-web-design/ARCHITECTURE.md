@@ -919,7 +919,7 @@ web/
                        the upgraded yul once an update stopped the server (3.1)
   update.py            Updates / updates(): latest, available, failed, updating, restarting,
                        due(now=None), check() (shared, never raises), update(upgrade) ->
-                       version installed, restart(); CHECK_EVERY (24 h), RETRY_AFTER (1 h)
+                       version installed, restart(); CHECK_EVERY (30 min, after a failed check too)
   update_dialog.py     update_button() (the sidebar's, each tab looks every LOOK_SECONDS and
                        runs a due check), update_dialog(), out_line(version)
   state.py             AppState / state(): config, client, store, formatter, loaders, last_sync,

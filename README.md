@@ -170,7 +170,7 @@ choose "Import anyway" or "Leave out"; `yul load` names those rows and does not 
 ## Privacy
 
 Everything runs on your computer and your data only goes to YNAB's API. The app also asks
-PyPI once a day whether a newer yul is out, which sends nothing about you and can be turned
+PyPI every half hour, while it is open, whether a newer yul is out, which sends nothing about you and can be turned
 off in Settings › Data & privacy. There is no telemetry. The copy of your budget stays on your computer. Your token lives in the system
 keychain (macOS Keychain, Windows Credential Manager, Secret Service or KWallet on Linux).
 `yul privacy` lists what is stored and where, `yul config reset` deletes all of it, and the
