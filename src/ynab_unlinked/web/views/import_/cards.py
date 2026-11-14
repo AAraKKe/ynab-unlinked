@@ -159,13 +159,14 @@ def progress_card(item: ImportFile, account_name: str) -> Progress:
     """A file's card in Done, waiting (or "nothing new") until its turn comes."""
     assert item.plan is not None
     with glass_card().classes("yul-imp-card").mark(f"progress-{item.key}"):
-        with ui.element("div").classes("yul-row").style("margin-bottom:8px"):
-            ui.label(account_name).style("font-weight:600")
+        # One line when wide. On a phone the account and the status share the first line and
+        # the file goes under them.
+        with ui.element("div").classes("yul-imp-prog-head"):
+            ui.label(account_name).classes("yul-imp-prog-account")
             ui.label(f"{plural(len(item.plan.new_rows), 'transaction')} · {item.name}").classes(
-                "yul-muted"
+                "yul-imp-prog-file yul-muted"
             )
-            ui.element("span").classes("yul-grow")
-            status = ui.element("div").classes("yul-row yul-small")
+            status = ui.element("div").classes("yul-imp-prog-status yul-row yul-small")
         with status:
             ui.label("waiting" if item.plan.new_rows else "nothing new").classes("yul-muted")
         with ui.element("div").classes("yul-prog") as bar:
@@ -189,7 +190,7 @@ def done_card(
         ui.label(done_summary(duplicates, skipped, failed, left_out, held)).classes(
             "yul-lede"
         ).mark("done-summary")
-        with ui.element("div").classes("yul-row").style("justify-content:center"):
+        with ui.element("div").classes("yul-imp-done-acts"):
             button(
                 "Reconcile these accounts",
                 kind="primary",

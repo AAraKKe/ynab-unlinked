@@ -148,7 +148,9 @@ wrapping under it. A file's card in Review reads like a list item: the bank and 
 on the first line, the account and the file name under the bank. A row of a table is two
 lines, the payee and the amount, then the date, the tag and what to do with it ("Leave
 out"), with no header row. A flow's footer (Import, Reconcile) puts what it counts on a line
-of its own and the buttons under it, the primary one as wide as the space left.
+of its own and the buttons under it, the primary one as wide as the space left. On Done a
+file's card has the account and its status on the first line and the file under them, and
+the two buttons of the success card sit one over the other, as wide as the card.
 
 1. **Files**. Dropzone (large until the first file, then compact at the top). Each file
    appears as a row with a type badge, name, size and a live detection state: scanning
