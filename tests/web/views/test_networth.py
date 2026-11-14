@@ -202,6 +202,13 @@ def seeded(tracked: LatestConfig, ynab_api: YnabClientStub, store_file: Path) ->
 
 
 @pytest.fixture
+def noted(seeded: Store, ynab_api: YnabClientStub) -> Store:
+    """`seeded`, with a note on the month running."""
+    serve_note(ynab_api, seeded, "Sold the car")
+    return seeded
+
+
+@pytest.fixture
 def no_sync(mocker: MockerFixture) -> MagicMock:
     return mocker.patch.object(AppState, "sync_in_background")
 
@@ -662,9 +669,8 @@ async def test_range_pills_change_the_chart_dates(seeded: Store, no_sync, user: 
 
 
 async def test_a_day_says_the_note_of_its_month_in_the_chart_and_in_the_drawer(
-    seeded: Store, ynab_api: YnabClientStub, no_sync, user: User
+    noted: Store, no_sync, user: User
 ):
-    serve_note(ynab_api, seeded, "Sold the car")
     await open_networth(user)
 
     assert "Sold the car" in tooltip(user, "nw-chart")

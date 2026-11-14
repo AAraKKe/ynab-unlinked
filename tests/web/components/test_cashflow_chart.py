@@ -21,6 +21,7 @@ FORMAT = CurrencyFormat(
     [
         pytest.param([(10_000, 12_000, 3), (12_000, 14_000, 1)], 0, id="whole units"),
         pytest.param([(15_000, 15_500, 3), (15_500, 16_000, 1)], 2, id="narrower than a unit"),
+        pytest.param([(1_100_000, 1_100_000, 12)], 0, id="one slice of an amount that never moved"),
     ],
 )
 def test_slices_narrower_than_a_unit_are_written_with_decimals(

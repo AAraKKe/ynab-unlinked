@@ -41,7 +41,8 @@ _TOOLTIP_CSS = (
 
 
 NOTE_LENGTH = 300
-"""How much of a month's note a tooltip writes."""
+NOTE_LINES = 6
+"""How much of a month's note a tooltip writes: a longer one ends with an ellipsis."""
 
 
 @dataclass(frozen=True)
@@ -93,19 +94,23 @@ def compact_js(currency_format: CurrencyFormat) -> str:
 
 def note_html(note: str) -> str:
     """A month's note as a tooltip writes it: escaped, its lines kept (the blank ones left
-    out), cut at `NOTE_LENGTH`."""
+    out), cut at `NOTE_LENGTH` characters and `NOTE_LINES` lines."""
     text = note.strip()
     if len(text) > NOTE_LENGTH:
         text = text[: NOTE_LENGTH - 1].rstrip() + "…"
-    return "<br>".join(html.escape(line.strip()) for line in text.splitlines() if line.strip())
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) > NOTE_LINES:
+        lines = [*lines[: NOTE_LINES - 1], lines[NOTE_LINES - 1].rstrip("…") + "…"]
+    return "<br>".join(html.escape(line) for line in lines)
 
 
 def tooltip_block(palette: Palette) -> str:
     """The opening tag of a tooltip's last block, under a hairline: where it says more about
-    the month than its figures. Its text wraps."""
+    the month than its figures. Its text wraps, a long word or link too."""
     return (
         '<div style="margin-top:6px;padding-top:6px;border-top:1px solid '
-        f'{palette.hair};color:{palette.text_2};max-width:240px;white-space:normal">'
+        f"{palette.hair};color:{palette.text_2};max-width:240px;white-space:normal;"
+        'overflow-wrap:anywhere">'
     )
 
 
@@ -150,7 +155,7 @@ def _tooltip_js(currency_format: CurrencyFormat, palette: Palette, note: str) ->
         " + '<b style=\"font-weight:600;font-variant-numeric:tabular-nums\">' + money(p.value[1])"
         " + '</b></div>').join('');"
         f"return '<div style=\"color:{palette.text_3};margin-bottom:4px\">' + day + '</div>' + rows"
-        f" + ({note})(new Date(ps[0].value[0]).toISOString());"
+        f" + ({note})(new Date(ps[0].value[0]).toJSON() || '');"
         "}"
     )
 

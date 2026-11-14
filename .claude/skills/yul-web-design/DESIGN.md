@@ -348,8 +348,10 @@ asks for a longer range.
     "Each month" (bars, series 1, a dashed "Average" line, both in the legend, the month's
     note in its tooltip); the numbers
     in a row (average, median, lowest month, highest month, spread); "How the months spread"
-    (a histogram, whole unit labels slanted 45°, series 5: as many slices as show the shape,
-    the most from five to twenty that leave no more than three of them empty). A new range
+    (a histogram, labels slanted 45°, series 5: as many slices as show the shape, the most
+    from five to twenty that leave no more than three of them empty; labels in whole units,
+    with decimals when the slices are narrower than one, and on a narrow window a label that
+    would cover the one before it is left out). A new range
     updates
     it in place; the back arrow, or a click on a group or a word, brings the chart back.
   - **How it moves**: a card with the four words as tiles, each its pill and a sentence with
@@ -627,8 +629,8 @@ the next render, and Net worth restyles its charts within a second.
 **Month notes.** Every chart with months on its axis (Net worth's history, its account
 drawer and Months; Cash flow's two charts; a category's months in Spending) ends the tooltip
 of a month, or of a day of it, with the note written on that month in YNAB: under a
-hairline, in `--text-2`, wrapped at 240px, its lines kept and the blank ones left out, cut at
-300 characters. A month without a note adds nothing. Only Cash flow's "Income and spending"
+hairline, in `--text-2`, wrapped at 240px (a long word or link too), its lines kept and the
+blank ones left out, cut at 300 characters and six lines with an ellipsis. A month without a note adds nothing. Only Cash flow's "Income and spending"
 also writes the note (first line) on the chart itself.
 
 ### Amounts in a list

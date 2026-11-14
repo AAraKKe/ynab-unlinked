@@ -211,8 +211,10 @@ def income_spending_options(
         " rows += row('Saved', money(saved) + (income.value > 0 ? ' · '"
         " + Math.round(saved / income.value * 100) + '%' : '')); }"
         f"const told = {told}[ps[0].dataIndex];"
+        # Each on a line of its own, apart: a note of several lines ends where the next begins
         f"if (told.length) rows += {json.dumps(tooltip_block(palette))}"
-        " + told.join('<br>') + '</div>';"
+        " + told.map((line, i) => '<div' + (i ? ' style=\"margin-top:4px\"' : '') + '>'"
+        " + line + '</div>').join('') + '</div>';"
         f"return '<div style=\"color:{palette.text_3};margin-bottom:4px\">' + title + '</div>' + rows;"
         "}"
     )
@@ -470,11 +472,13 @@ def histogram_options(
     """How many months fell in each slice (low, high, months) of a category's monthly amounts.
 
     The slices are written in whole units and slanted, so close ones stay apart and readable;
-    with the budget's decimals when a slice is narrower than a unit, or its ends would read
-    the same.
+    with the budget's decimals when they are narrower than a unit, or the ends of one would
+    read the same. On a narrow chart a label that would cover the one before it is left out.
     """
     keys = [f"{low / 1000}|{high / 1000}" for low, high, _ in bins]
-    digits = 0 if all(high - low >= 1000 for low, high, _ in bins) else None
+    # One slice is a category that never moved: its two ends are the same amount anyway
+    narrow = len(bins) > 1 and any(high - low < 1000 for low, high, _ in bins)
+    digits = None if narrow else 0
     slice_js = (
         f"(value) => {{ const [low, high] = String(value).split('|').map(Number);"
         f" const m = {money_js(currency_format, digits)}; return m(low) + '–' + m(high); }}"
@@ -502,6 +506,7 @@ def histogram_options(
             "axisLabel": {
                 **_axis_label(palette),
                 "interval": 0,
+                "hideOverlap": True,
                 "rotate": 45,
                 ":formatter": slice_js,
             },

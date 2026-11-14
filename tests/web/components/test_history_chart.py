@@ -17,6 +17,7 @@ from ynab_unlinked.web.components.cashflow_chart import (
 from ynab_unlinked.web.components.flow_chart import months_options
 from ynab_unlinked.web.components.history_chart import (
     NOTE_LENGTH,
+    NOTE_LINES,
     ChartSeries,
     history_options,
     note_html,
@@ -49,6 +50,13 @@ def test_a_long_note_is_cut():
 
     assert len(told) == NOTE_LENGTH
     assert told.endswith("word…")
+
+
+def test_a_note_of_many_lines_keeps_the_first_ones():
+    told = note_html("\n".join(f"- item {n}" for n in range(1, 26)))
+
+    assert told.count("<br>") == NOTE_LINES - 1
+    assert told.endswith(f"- item {NOTE_LINES}…")
 
 
 def test_only_the_notes_of_the_months_drawn_reach_the_browser():

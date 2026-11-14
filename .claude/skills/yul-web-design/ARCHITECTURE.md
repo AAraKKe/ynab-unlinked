@@ -998,10 +998,10 @@ web/
                        chart with months ends a tooltip with, the note of that month (a
                        `YYYY-MM` key or a day of it) from `notes` (keyed by the month's first
                        day, only those of `months` sent); note_html(note) (escaped, lines
-                       kept, cut at NOTE_LENGTH), tooltip_block(palette) (the block's tag)
+                       kept, cut at NOTE_LENGTH and NOTE_LINES), tooltip_block(palette) (the block's tag)
     flow_chart.py      months_options(months, palette, currency_format, selected=None,
                        notes=None),
-                       months_chart(..., on_pick(index), selected=None): Net worth › Months'
+                       months_chart(..., on_pick(index), selected=None, notes=None): Net worth › Months'
                        stacked bars, net line, a transparent column per month for clicks
                        bridge_options(steps, labels, palette, currency_format) / bridge_chart:
                        the period panel's waterfall
@@ -1009,7 +1009,8 @@ web/
                        the Return explainer's bars and put in line, the steps after upto empty
     cashflow_chart.py  income_spending_options, rate_options, volatility_options,
                        category_months_options (bars and a dashed Average line),
-                       histogram_options (slanted whole unit slices), chart(): the charts of
+                       histogram_options (slanted slices, in whole units unless they are
+                       narrower than one), chart(): the charts of
                        Cash flow and Spending; the three with months take `notes=None`
     plan_chart.py      worth_options (so far, the plan, as measured dashed, the range as a
                        band), types_options (stacked by bucket), goal_options (to its target
