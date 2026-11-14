@@ -1,8 +1,8 @@
 """Looking for a newer yul while the app is open, and moving to it.
 
 One `Updates` per process, reached through `updates()`. The open tabs ask it whether a check
-is `due()` (when the first page opens and once a day after that, unless the config turns the
-check off) and run it; the answer is remembered for every tab.
+is `due()` (when the first page opens and every half hour after that, unless the config turns
+the check off) and run it; the answer is remembered for every tab.
 
 `update()` runs the upgrade; `restart()` then stops the server, and `app.run()` starts the
 new yul in this one's place, on the same address and with the same session, so the open tabs
@@ -29,10 +29,9 @@ from ynab_unlinked.web.state import state
 
 logger = logging.getLogger(__name__)
 
-CHECK_EVERY = dt.timedelta(hours=24)
-"""How long an answer from PyPI stands before the app asks again."""
-RETRY_AFTER = dt.timedelta(hours=1)
-"""How long the app waits to ask again when PyPI could not be reached."""
+CHECK_EVERY = dt.timedelta(minutes=30)
+"""How long the app waits before it asks PyPI again, whether or not it answered. Short, so an
+open app offers a release well within the hour it came out."""
 
 
 class Updates:
@@ -76,7 +75,7 @@ class Updates:
         return self.available
 
     def due(self, now: dt.datetime | None = None) -> bool:
-        """Whether it is time to ask PyPI again: never asked, or the last answer is old.
+        """Whether it is time to ask PyPI again: never asked, or `CHECK_EVERY` ago.
 
         Never when the config turns the check off, before yul is set up or while updating.
         """
@@ -86,7 +85,7 @@ class Updates:
         if self._attempt is None:
             return True
         now = now or dt.datetime.now(dt.UTC)
-        return now - self._attempt >= (RETRY_AFTER if self.failed else CHECK_EVERY)
+        return now - self._attempt >= CHECK_EVERY
 
     async def update(self, upgrade: Upgrade) -> str:
         """Run the upgrade off the event loop and return the version it installed.

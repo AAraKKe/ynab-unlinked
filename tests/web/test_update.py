@@ -9,7 +9,7 @@ from ynab_unlinked.core.update import Install, UpdateError, Upgrade
 from ynab_unlinked.web import state as web_state
 from ynab_unlinked.web import update as web_update
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.update import CHECK_EVERY, RETRY_AFTER, updates
+from ynab_unlinked.web.update import CHECK_EVERY, updates
 
 pytestmark = pytest.mark.version("V4")
 
@@ -53,7 +53,7 @@ async def test_no_update_when_pypi_has_nothing_later(pypi: Callable[[object], No
     assert updates().latest == latest
 
 
-async def test_pypi_is_asked_when_the_app_opens_and_once_a_day_after(
+async def test_pypi_is_asked_when_the_app_opens_and_every_half_hour_after(
     pypi: Callable[[object], None],
 ):
     pypi(NEWER)
@@ -64,9 +64,11 @@ async def test_pypi_is_asked_when_the_app_opens_and_once_a_day_after(
 
     assert not status.due(now + CHECK_EVERY - dt.timedelta(minutes=1))
     assert status.due(now + CHECK_EVERY)
+    # A release is offered within the hour it came out
+    assert dt.timedelta(hours=1) > CHECK_EVERY
 
 
-async def test_a_check_that_fails_keeps_what_was_known_and_is_tried_again_sooner(
+async def test_a_check_that_fails_keeps_what_was_known_and_is_tried_again_as_often(
     pypi: Callable[[object], None],
 ):
     status = updates()
@@ -77,8 +79,8 @@ async def test_a_check_that_fails_keeps_what_was_known_and_is_tried_again_sooner
     assert await status.check() == NEWER
     assert status.failed
     now = dt.datetime.now(dt.UTC)
-    assert not status.due(now + RETRY_AFTER - dt.timedelta(minutes=1))
-    assert status.due(now + RETRY_AFTER)
+    assert not status.due(now + CHECK_EVERY - dt.timedelta(minutes=1))
+    assert status.due(now + CHECK_EVERY)
 
 
 def test_pypi_is_never_asked_once_the_check_is_turned_off(config_v4: LatestConfig):
