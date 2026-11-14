@@ -119,7 +119,7 @@ def synced(config_v4: LatestConfig, ynab_api: YnabClientStub, store_file: Path) 
             months=[
                 MonthSummary(
                     month=month_ago(2, 1),
-                    note="Moved flat",
+                    note="Moved flat\nPaid the deposit",
                     income=0,
                     budgeted=0,
                     activity=0,
@@ -152,6 +152,10 @@ async def test_cash_flow_averages_the_complete_months(synced: Store, no_sync, us
     ]
     assert labels[-3] == "Moved flat"
     assert labels[-5] == "🏝 Vacation"
+    # The bar carries the first line of the note, the tooltip of the month all of it
+    rate = user.find(marker="cf-rate-chart").elements.pop()
+    for drawn in (chart, rate):
+        assert "Moved flat<br>Paid the deposit" in drawn.options["tooltip"][":formatter"]
     assert texts(user, "cf-sources").startswith("Came in from by payee, the whole range Employer")
 
 
@@ -371,6 +375,40 @@ def test_a_histogram_counts_months_in_equal_slices():
     assert [(b.low, b.high, b.months) for b in bins] == [(0, 200, 3), (200, 400, 0), (400, 600, 1)]
 
 
+EVERY_100 = list(range(0, 2_000, 100))
+"""Twenty months, one in each of twenty slices."""
+
+
+@pytest.mark.parametrize(
+    ("values", "slices", "empty"),
+    [
+        pytest.param(EVERY_100, 20, 0, id="twenty when every slice holds a month"),
+        pytest.param(
+            [v for v in EVERY_100 if v not in (300, 700, 1_100)],
+            20,
+            3,
+            id="twenty with three empty",
+        ),
+        pytest.param(
+            [v for v in EVERY_100 if v not in (300, 700, 1_100, 1_500)],
+            16,
+            3,
+            id="fewer when twenty leave four empty",
+        ),
+        pytest.param([0, 100, 200, 300, 400], 8, 3, id="five months fill at most eight"),
+        pytest.param([100, 110, 120, 130, 2_000], 5, 3, id="five with a month far from the rest"),
+    ],
+)
+def test_a_histogram_has_the_most_slices_that_leave_no_more_than_three_empty(
+    values: list[int], slices: int, empty: int
+):
+    bins = spending.histogram(values)
+
+    assert len(bins) == slices
+    assert [b.months for b in bins].count(0) == empty
+    assert sum(b.months for b in bins) == len(values)
+
+
 def test_a_group_mix_splits_its_spending_by_how_it_moves():
     trends = [
         CategoryTrend("a", "A", "Bills", (300,) * 6, Volatility(300, 0.1, "steady", 6)),
@@ -572,6 +610,8 @@ async def test_a_category_spent_every_month_still_reads_a_month(synced: Store, n
         "About the same every month. Set aside 1,000.00€ a month and it is covered."
     )
     await user.should_see(marker="detail-histogram")
+    months = user.find(marker="detail-chart").elements.pop()
+    assert "Moved flat<br>Paid the deposit" in months.options["tooltip"][":formatter"]
 
 
 # ---- every kind of category is told in its own words ------------------------------------------

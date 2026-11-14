@@ -217,6 +217,9 @@ class CashFlow:
     """The complete months the categories' labels were told from, oldest first."""
     income: tuple[PayeeIncome, ...] = field(default=())
     """By payee over the range, most first."""
+    notes: Mapping[dt.date, str] = field(default_factory=dict)
+    """The whole note the user wrote in YNAB on each month that has one, keyed by the month's
+    first day: every month of the budget, those before the range too."""
 
     @property
     def complete(self) -> tuple[FlowMonth, ...]:
@@ -468,4 +471,5 @@ def cash_flow(
         categories=tuple(trends),
         income=tuple(income_by_payee(lines, rules)),
         history=tuple(history),
+        notes=dict(notes or {}),
     )

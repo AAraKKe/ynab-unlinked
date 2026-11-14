@@ -18,14 +18,14 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from nicegui import events, ui
 
 from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.core.finance import Flows
-from ynab_unlinked.web.components.history_chart import compact_js, money_js
+from ynab_unlinked.web.components.history_chart import compact_js, money_js, note_js
 from ynab_unlinked.web.theme import Palette
 
 CHART_HEIGHT = 260
@@ -51,7 +51,7 @@ _TOOLTIP_CSS = (
 )
 
 
-def _tooltip_js(currency_format: CurrencyFormat, palette: Palette) -> str:
+def _tooltip_js(currency_format: CurrencyFormat, palette: Palette, note: str) -> str:
     return (
         "(params) => {"
         "const ps = Array.isArray(params) ? params : [params];"
@@ -67,7 +67,7 @@ def _tooltip_js(currency_format: CurrencyFormat, palette: Palette) -> str:
         " + '</b></div>').join('');"
         f"return '<div style=\"color:{palette.text_3};margin-bottom:4px\">'"
         f" + ({MONTH_JS})(ps[0].name, 1, true)"
-        " + '</div>' + rows;"
+        f" + '</div>' + rows + ({note})(ps[0].name);"
         "}"
     )
 
@@ -106,8 +106,10 @@ def months_options(
     palette: Palette,
     currency_format: CurrencyFormat,
     selected: int | None = None,
+    notes: Mapping[dt.date, str] | None = None,
 ) -> dict[str, Any]:
-    """The ECharts option for `months`; `selected` (an index) is drawn highlighted."""
+    """The ECharts option for `months`; `selected` (an index) is drawn highlighted. The
+    tooltip of a month ends with its note in `notes` (`note_js`)."""
     # Unique keys, so a click on a month's name finds it; the axis writes them as names
     keys = [month.strftime("%Y-%m") for month, _ in months]
     axis_label = {"color": palette.text_3, "fontSize": 11, "fontFamily": "Inter, system-ui"}
@@ -168,7 +170,7 @@ def months_options(
                 f"color:{palette.text};"
             ),
             "axisPointer": {"type": "shadow", "shadowStyle": {"color": palette.hair}},
-            ":formatter": _tooltip_js(currency_format, palette),
+            ":formatter": _tooltip_js(currency_format, palette, note_js(notes, keys, palette)),
         },
         "xAxis": {
             "type": "category",
@@ -229,6 +231,7 @@ def months_chart(
     currency_format: CurrencyFormat,
     on_pick: Callable[[int], Any],
     selected: int | None = None,
+    notes: Mapping[dt.date, str] | None = None,
 ) -> ui.echart:
     """The chart, as wide as its parent; clicking a month (anywhere in its column) calls
     `on_pick` with its index."""
@@ -243,7 +246,8 @@ def months_chart(
             return on_pick(keys.index(args["value"]))
         return None
 
-    chart = ui.echart(months_options(months, palette, currency_format, selected), renderer="svg")
+    options = months_options(months, palette, currency_format, selected, notes)
+    chart = ui.echart(options, renderer="svg")
     chart.on("componentClick", clicked, ["componentType", "dataIndex", "value"])
     return chart.style(f"height:{CHART_HEIGHT}px;width:100%")
 

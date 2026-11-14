@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+from collections.abc import Sequence
 from functools import partial
+from typing import Any
 
 from nicegui import PageArguments, run, ui
 
@@ -274,7 +276,12 @@ class NetWorthView:
                 self.chips = ui.element("div")
             self._render_chips()
             self.chart = (
-                history_chart(self._series(), self.palette, config.budget.currency_format)
+                history_chart(
+                    self._series(),
+                    self.palette,
+                    config.budget.currency_format,
+                    notes=snapshot.notes,
+                )
                 .classes("yul-nw-chart")
                 .mark("nw-chart")
             )
@@ -337,14 +344,15 @@ class NetWorthView:
             ]
         return [ChartSeries("Net worth", self.history.get(TOTAL, []), palette.accent[0])]
 
+    def _history_options(self, series: Sequence[ChartSeries]) -> dict[str, Any]:
+        config, _ = state().require()
+        notes = None if self.snapshot is None else self.snapshot.notes
+        return history_options(series, self.palette, config.budget.currency_format, notes)
+
     def _redraw(self) -> None:
         if self.chart is None or self.chart.is_deleted:
             return
-        config, _ = state().require()
-        set_options(
-            self.chart,
-            history_options(self._series(), self.palette, config.budget.currency_format),
-        )
+        set_options(self.chart, self._history_options(self._series()))
 
     def restyle(self) -> None:
         self._redraw()
@@ -352,10 +360,7 @@ class NetWorthView:
         if self.drawer is not None:
             chart, series = self.drawer
             if not chart.is_deleted:
-                config, _ = state().require()
-                set_options(
-                    chart, history_options(series, self.palette, config.budget.currency_format)
-                )
+                set_options(chart, self._history_options(series))
 
     async def set_range(self, key: str) -> None:
         if self.snapshot is None or not self.snapshot.tracked:
@@ -508,6 +513,7 @@ class NetWorthView:
                 palette=self.palette,
                 currency_format=config.budget.currency_format,
                 formatter=formatter,
+                notes=snapshot.notes,
                 transactions=transactions[-DRAWER_TRANSACTIONS:][::-1],
             )
         self.drawer = (chart, series)

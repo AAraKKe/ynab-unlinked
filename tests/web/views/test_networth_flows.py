@@ -16,7 +16,7 @@ from ynab import (
 
 from tests.factories import AccountFactory, TransactionDetailFactory
 from tests.helpers.ynab_api import YnabClientStub
-from tests.web.views.test_networth import texts
+from tests.web.views.test_networth import serve_note, texts, tooltip
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import LatestConfig, TrackedAccount
 from ynab_unlinked.config.models.v2 import CurrencyFormat
@@ -121,6 +121,13 @@ def synced(config_v4: LatestConfig, ynab_api: YnabClientStub, store_file: Path) 
     return store
 
 
+@pytest.fixture
+def noted(synced: Store, ynab_api: YnabClientStub) -> Store:
+    """`synced`, with a note on the month running."""
+    serve_note(ynab_api, synced, "Sold the car")
+    return synced
+
+
 async def open_months(user: User) -> None:
     await user.open("/networth?tab=months")
     await user.should_see(marker="period-panel", retries=20)
@@ -141,6 +148,19 @@ async def test_the_months_tab_splits_the_change_into_saving_and_assets(
     assert sum(point["value"] for point in chart.options["series"][3]["data"]) == pytest.approx(
         1_700
     )
+
+
+async def test_a_month_says_its_note_also_once_one_is_picked(noted: Store, no_sync, user: User):
+    await open_months(user)
+
+    assert "Sold the car" in tooltip(user, "months-chart")
+
+    # Picking a month draws the chart again, the others faded: the note stays
+    user.find(marker="months-chart").trigger(
+        "componentClick", {"componentType": "series", "dataIndex": 0}
+    )
+    await user.should_see(marker="period-clear", retries=20)
+    assert "Sold the car" in tooltip(user, "months-chart")
 
 
 async def test_the_panel_shows_the_whole_range_until_a_month_is_picked(

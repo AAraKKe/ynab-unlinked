@@ -11,7 +11,7 @@ assets did and its return.
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
 from typing import Any
 
 from nicegui import run, ui
@@ -84,6 +84,7 @@ class PeriodTabs:
                 formatter=formatter,
                 on_month=self.pick,
                 selected=self.selected,
+                notes=snapshot.notes,
             )
             self.chart.props(KEEP_PROP)
             self.panel = ui.element("div").props(KEEP_PROP)
@@ -120,8 +121,9 @@ class PeriodTabs:
         if chart is None or period is None or palette is None or chart.is_deleted:
             return
         config, _ = state().require()
+        notes = None if self.snapshot is None else self.snapshot.notes
         options = months_options(
-            period.months, palette, config.budget.currency_format, self.selected
+            period.months, palette, config.budget.currency_format, self.selected, notes
         )
         set_options(chart, options)
 
@@ -165,6 +167,7 @@ def months_tab(
     formatter: Formatter,
     on_month: Callable[[int], Any],
     selected: int | None = None,
+    notes: Mapping[dt.date, str] | None = None,
 ) -> ui.echart:
     """Draw the tiles and the chart card; returns the chart, which the view restyles."""
     flows = period.flows
@@ -199,7 +202,7 @@ def months_tab(
             ui.label(
                 "click a month to see it; again, or anywhere else, for the whole range"
             ).classes("yul-faint yul-small")
-        chart = months_chart(period.months, palette, currency_format, on_month, selected)
+        chart = months_chart(period.months, palette, currency_format, on_month, selected, notes)
         chart.mark("months-chart")
         if any(month.other + month.transfers for _, month in period.months):
             ui.label(words.OTHER_NOTE).classes("yul-faint yul-small").mark("other-note")

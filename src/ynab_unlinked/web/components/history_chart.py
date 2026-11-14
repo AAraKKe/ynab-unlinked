@@ -10,12 +10,17 @@ rebuilt with `set_options()` when the theme changes.
 Amounts reach the browser in currency units; the tick, label and tooltip formatters are
 small JavaScript functions built from the budget's currency format, so the chart writes
 amounts the way the rest of the app does.
+
+`note_js()` is what every chart with months says about the one under the pointer: the note the
+user wrote on it in YNAB, as the last block of the tooltip.
 """
 
 from __future__ import annotations
 
+import datetime as dt
+import html
 import json
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -33,6 +38,11 @@ _TOOLTIP_CSS = (
     "backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);"
     "box-shadow:0 10px 30px rgba(0,0,0,.3);"
 )
+
+
+NOTE_LENGTH = 300
+NOTE_LINES = 6
+"""How much of a month's note a tooltip writes: a longer one ends with an ellipsis."""
 
 
 @dataclass(frozen=True)
@@ -82,7 +92,52 @@ def compact_js(currency_format: CurrencyFormat) -> str:
     )
 
 
-def _tooltip_js(currency_format: CurrencyFormat, palette: Palette) -> str:
+def note_html(note: str) -> str:
+    """A month's note as a tooltip writes it: escaped, its lines kept (the blank ones left
+    out), cut at `NOTE_LENGTH` characters and `NOTE_LINES` lines."""
+    text = note.strip()
+    if len(text) > NOTE_LENGTH:
+        text = text[: NOTE_LENGTH - 1].rstrip() + "…"
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) > NOTE_LINES:
+        lines = [*lines[: NOTE_LINES - 1], lines[NOTE_LINES - 1].rstrip("…") + "…"]
+    return "<br>".join(html.escape(line) for line in lines)
+
+
+def tooltip_block(palette: Palette) -> str:
+    """The opening tag of a tooltip's last block, under a hairline: where it says more about
+    the month than its figures. Its text wraps, a long word or link too."""
+    return (
+        '<div style="margin-top:6px;padding-top:6px;border-top:1px solid '
+        f"{palette.hair};color:{palette.text_2};max-width:240px;white-space:normal;"
+        'overflow-wrap:anywhere">'
+    )
+
+
+def note_js(
+    notes: Mapping[dt.date, str] | None, months: Iterable[dt.date | str], palette: Palette
+) -> str:
+    """A JavaScript `(month) => html` for a tooltip: the note written in YNAB on a month
+    (`YYYY-MM`, or a day of it) as a `tooltip_block`, nothing for a month without one.
+
+    `notes` is keyed by each month's first day; only the notes of `months`, what the chart
+    draws (days, or `YYYY-MM` keys), reach the browser.
+    """
+    shown = {str(month)[:7] for month in months}
+    told = {
+        key: note_html(note)
+        for month, note in (notes or {}).items()
+        if (key := f"{month:%Y-%m}") in shown and note.strip()
+    }
+    return (
+        "(month) => {"
+        f"const note = {json.dumps(told)}[String(month).slice(0, 7)];"
+        f"return note ? {json.dumps(tooltip_block(palette))} + note + '</div>' : '';"
+        "}"
+    )
+
+
+def _tooltip_js(currency_format: CurrencyFormat, palette: Palette, note: str) -> str:
     return (
         "(params) => {"
         "const ps = Array.isArray(params) ? params : [params];"
@@ -99,7 +154,8 @@ def _tooltip_js(currency_format: CurrencyFormat, palette: Palette) -> str:
         " + p.color + '\"></i>' + esc(p.seriesName) + '</span>'"
         " + '<b style=\"font-weight:600;font-variant-numeric:tabular-nums\">' + money(p.value[1])"
         " + '</b></div>').join('');"
-        f"return '<div style=\"color:{palette.text_3};margin-bottom:4px\">' + day + '</div>' + rows;"
+        f"return '<div style=\"color:{palette.text_3};margin-bottom:4px\">' + day + '</div>' + rows"
+        f" + ({note})(new Date(ps[0].value[0]).toJSON() || '');"
         "}"
     )
 
@@ -129,13 +185,18 @@ def _area(color: str, *, visible: bool) -> dict[str, Any]:
 
 
 def history_options(
-    series: Sequence[ChartSeries], palette: Palette, currency_format: CurrencyFormat
+    series: Sequence[ChartSeries],
+    palette: Palette,
+    currency_format: CurrencyFormat,
+    notes: Mapping[dt.date, str] | None = None,
 ) -> dict[str, Any]:
     """The ECharts option for `series`. A single series gets a gradient area of its colour.
 
-    Colours are hex (`#rrggbb`); pass `palette.accent[0]` for the net worth total.
+    Colours are hex (`#rrggbb`); pass `palette.accent[0]` for the net worth total. The
+    tooltip of a day ends with the note of its month in `notes` (`note_js`).
     """
     single = len(series) == 1
+    days = [point.date for item in series for point in item.points]
     legend = len(series) >= 2
     axis_label = {"color": palette.text_3, "fontSize": 11, "fontFamily": "Inter, system-ui"}
 
@@ -173,7 +234,7 @@ def history_options(
                 "type": "line",
                 "lineStyle": {"color": palette.text_3, "width": 1, "type": "solid"},
             },
-            ":formatter": _tooltip_js(currency_format, palette),
+            ":formatter": _tooltip_js(currency_format, palette, note_js(notes, days, palette)),
         },
         "xAxis": {
             "type": "time",
@@ -227,11 +288,11 @@ def history_chart(
     currency_format: CurrencyFormat,
     *,
     height: int = CHART_HEIGHT,
+    notes: Mapping[dt.date, str] | None = None,
 ) -> ui.echart:
     """An ECharts line chart of `series`, `height` pixels tall and as wide as its parent."""
-    return ui.echart(history_options(series, palette, currency_format), renderer="svg").style(
-        f"height:{height}px;width:100%"
-    )
+    options = history_options(series, palette, currency_format, notes)
+    return ui.echart(options, renderer="svg").style(f"height:{height}px;width:100%")
 
 
 def set_options(chart: ui.echart, options: dict[str, Any]) -> None:

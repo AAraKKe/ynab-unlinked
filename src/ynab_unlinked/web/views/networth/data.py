@@ -125,6 +125,8 @@ class Snapshot:
     earliest: dt.date
     last_set: dict[str, dt.date | None]
     """By hand accounts only."""
+    notes: dict[dt.date, str]
+    """The note written in YNAB on each month that has one, which the charts' tooltips say."""
 
     def raw(self, account_id: str) -> int:
         stored = self.stored.get(account_id)
@@ -186,6 +188,7 @@ def load_snapshot(store: Store, config: LatestConfig, today: dt.date) -> Snapsho
         worth=worth,
         earliest=min(earliest, today),
         last_set=by_hand,
+        notes=store.month_notes(budget_id),
     )
 
 

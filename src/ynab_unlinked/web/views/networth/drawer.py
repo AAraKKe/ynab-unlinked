@@ -5,7 +5,8 @@ A `ui.dialog` on the right, full height (a `ui.drawer` cannot live inside `ui.su
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import datetime as dt
+from collections.abc import Mapping, Sequence
 
 from nicegui import ui
 
@@ -27,6 +28,7 @@ def account_drawer(
     palette: Palette,
     currency_format: CurrencyFormat,
     formatter: Formatter,
+    notes: Mapping[dt.date, str],
     transactions: Sequence[StoredTransaction],
 ) -> ui.echart:
     """Open the drawer in the current context; it deletes itself once closed.
@@ -46,7 +48,7 @@ def account_drawer(
         ui.label(balance).classes("yul-nw-drawer-figure yul-num")
         ui.label(since).classes("yul-faint yul-small")
         chart = (
-            history_chart(series, palette, currency_format, height=220)
+            history_chart(series, palette, currency_format, height=220, notes=notes)
             .classes("yul-nw-chart")
             .mark("drawer-chart")
         )
