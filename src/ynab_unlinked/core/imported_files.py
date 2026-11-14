@@ -6,7 +6,9 @@ the file on this computer instead, by name and then by content, so the only file
 offered for removal hold exactly the bytes that were imported.
 
 Removing is deleting for good, not moving to the Trash: the point is that statements do not
-stay on disk. A file that changed since it was read is left alone.
+stay on disk. A file is only removed while its bytes are the ones that were imported (its
+SHA-256 is compared when it is found and again right before it is deleted), and what was
+removed goes to the activity log with that digest (`removal_log`).
 """
 
 from __future__ import annotations
@@ -18,13 +20,17 @@ import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from platformdirs import user_desktop_dir, user_documents_dir, user_downloads_dir
 
 from ynab_unlinked.core.importing import file_digest
+from ynab_unlinked.text import name_list
 
 SEARCH_TIMEOUT = 10.0
 """Seconds Spotlight gets to answer. It usually takes a few hundredths."""
+REMOVE_KIND = "remove"
+"""The kind of the activity log entry of a removal (`removal_log`)."""
 
 
 @dataclass(frozen=True)
@@ -66,7 +72,7 @@ class Located:
 class Removal:
     """What `remove_originals` did."""
 
-    removed: tuple[Path, ...]
+    removed: tuple[Original, ...]
     failed: tuple[tuple[Path, str], ...]
     """The files still there, each with why."""
 
@@ -147,7 +153,7 @@ def remove_originals(originals: Iterable[Original]) -> Removal:
 
     Never raises: a file that is gone, changed or cannot be deleted is in `failed` with why.
     """
-    removed: list[Path] = []
+    removed: list[Original] = []
     failed: list[tuple[Path, str]] = []
     for original in originals:
         path = original.path
@@ -158,10 +164,23 @@ def remove_originals(originals: Iterable[Original]) -> Removal:
                 failed.append((path, "it changed since it was imported"))
             else:
                 path.unlink()
-                removed.append(path)
+                removed.append(original)
         except OSError as error:
             failed.append((path, error.strerror or str(error)))
     return Removal(tuple(removed), tuple(failed))
+
+
+def removal_log(removed: Sequence[Original]) -> tuple[str, dict[str, Any]]:
+    """The activity log message and details of the files a removal deleted (`REMOVE_KIND`):
+    where each one was, and the SHA-256 of the bytes it held, the ones that were imported."""
+    message = (
+        f"Removed {name_list([shown(original.path) for original in removed])} from this computer"
+    )
+    details: dict[str, Any] = {
+        "count": len(removed),
+        "files": [{"path": str(original.path), "digest": original.digest} for original in removed],
+    }
+    return message, details
 
 
 def shown(path: Path) -> str:

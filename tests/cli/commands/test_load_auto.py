@@ -15,7 +15,7 @@ from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.cli import display
 from ynab_unlinked.config import ImportedFiles, LatestConfig
 from ynab_unlinked.core.detect import resolve_options
-from ynab_unlinked.core.importing import ImportPlan
+from ynab_unlinked.core.importing import ImportPlan, file_digest
 from ynab_unlinked.entities.registry import loader
 from ynab_unlinked.models import assign_import_ids
 from ynab_unlinked.store import ExcludedRow, Store
@@ -411,10 +411,13 @@ def test_the_imported_files_are_removed_when_the_user_says_so(
     accounts,
     ynab: YnabClientStub,
     statement: Path,
+    store_file: Path,
     answer: str,
     removed: bool,
     saved: ImportedFiles,
 ):
+    digest = file_digest(statement)
+
     result = yul("load", "auto", str(statement), input=f"y\n{answer}\n", env=WIDE)
 
     assert result.exit_code == 0, result.output
@@ -424,6 +427,21 @@ def test_the_imported_files_are_removed_when_the_user_says_so(
     assert ("Removed" in result.output) is removed
     # `always` and `never` are the setting from now on
     assert LatestConfig.load().imported_files is saved
+    # The app's activity lists the file, with the bytes it held
+    logged = [
+        (entry.message, entry.details)
+        for entry in Store(store_file).activity(BUDGET_ID, kind="remove")
+    ]
+    assert logged == (
+        [
+            (
+                f"Removed {statement} from this computer",
+                {"count": 1, "files": [{"path": str(statement), "digest": digest}]},
+            )
+        ]
+        if removed
+        else []
+    )
 
 
 def test_no_answer_to_the_question_keeps_the_files(
@@ -522,3 +540,27 @@ def test_a_single_bank_load_offers_to_remove_its_file(
     assert result.exit_code == 0, result.output
     assert "Remove movimientos.txt from this computer?" in result.output
     assert not statement.exists()
+
+
+def test_a_file_that_changes_during_the_import_is_not_removed(
+    yul: CliRunner,
+    accounts,
+    config_files: ConfigFiles,
+    ynab: YnabClientStub,
+    statement: Path,
+    store_file: Path,
+):
+    imported_files_setting(config_files, ImportedFiles.REMOVE)
+
+    def downloaded_again(*args: object, **kwargs: object) -> object:
+        statement.write_text("a newer statement")
+        return ynab.api("transactions").create_transaction.return_value
+
+    ynab.api("transactions").create_transaction.side_effect = downloaded_again
+
+    result = yul("load", "--yes", "auto", str(statement), env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert "it changed since it was imported" in result.output
+    assert statement.read_text() == "a newer statement"
+    assert Store(store_file).activity(BUDGET_ID, kind="remove") == []

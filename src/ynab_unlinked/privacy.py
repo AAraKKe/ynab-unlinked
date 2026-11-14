@@ -63,7 +63,7 @@ def privacy_summary() -> None:
                 "A copy of your budget's transactions, accounts, categories and month notes, "
                 "kept in sync with YNAB",
                 "An activity log of what YNAB Unlinked did (imports, reconciliations, "
-                "balance adjustments)",
+                "balance adjustments, statement files removed)",
             ]
         )
     )

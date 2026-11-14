@@ -1,8 +1,9 @@
-"""Activity log entries for what the CLI wrote to YNAB, so `yul app` shows it too.
+"""Activity log entries for what the CLI did, so `yul app` shows it too.
 
 The entries go to the local store with the shapes the app writes (ARCHITECTURE 3.4): Home
-reads the newest `import` per bank and the newest `reconcile`. The next sync of the app
-brings the transactions themselves. A store that cannot be opened never fails the command.
+reads the newest `import` per bank and the newest `reconcile`, and lists the files a
+`remove` deleted. The next sync of the app brings the transactions themselves. A store that
+cannot be opened never fails the command.
 """
 
 from __future__ import annotations
@@ -13,25 +14,38 @@ from typing import Any
 
 from ynab_unlinked.cli import display
 from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.core.imported_files import REMOVE_KIND, Original, removal_log
 from ynab_unlinked.store import Store, store_path
 from ynab_unlinked.text import import_message, plural
 
 logger = logging.getLogger(__name__)
 
 
-def _open_store() -> Store | None:
+YNAB_UPDATED = "YNAB is updated"
+FILES_REMOVED = "The files are removed"
+
+
+def _open_store(done: str = YNAB_UPDATED) -> Store | None:
+    """The store to log in; `done` is what already happened, said when it cannot be opened."""
     try:
         return Store(store_path())
     except Exception as error:
-        display.warning(f"YNAB is updated, but yul could not note it in its activity log: {error}")
+        display.warning(f"{done}, but yul could not note it in its activity log: {error}")
         return None
 
 
-def _write(store: Store, budget_id: str, kind: str, message: str, details: dict[str, Any]) -> None:
+def _write(
+    store: Store,
+    budget_id: str,
+    kind: str,
+    message: str,
+    details: dict[str, Any],
+    done: str = YNAB_UPDATED,
+) -> None:
     try:
         store.log(budget_id, kind, message, details)
     except Exception as error:
-        display.warning(f"YNAB is updated, but yul could not note it in its activity log: {error}")
+        display.warning(f"{done}, but yul could not note it in its activity log: {error}")
 
 
 def _account_name(store: Store, config: LatestConfig, account_id: str) -> str:
@@ -105,3 +119,11 @@ def log_reconcile(config: LatestConfig, accounts: Sequence[tuple[str, str, int]]
             ],
         },
     )
+
+
+def log_removal(config: LatestConfig, removed: Sequence[Original]) -> None:
+    """One `remove` entry naming the statement files deleted after an import."""
+    if not removed or (store := _open_store(FILES_REMOVED)) is None:
+        return
+    message, details = removal_log(removed)
+    _write(store, config.budget.id, REMOVE_KIND, message, details, FILES_REMOVED)

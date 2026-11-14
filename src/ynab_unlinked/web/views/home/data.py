@@ -12,11 +12,13 @@ import html
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.core.balances import AccountBalance, net_worth
 from ynab_unlinked.core.history import TOTAL, Point, net_worth_series
+from ynab_unlinked.core.imported_files import REMOVE_KIND, shown
 from ynab_unlinked.entities.registry import LoaderSpec
 from ynab_unlinked.store import Activity, Store
 from ynab_unlinked.web import accounts as tracking
@@ -179,16 +181,27 @@ def last_imports_line(data: HomeData, today: dt.date) -> str | None:
 
 
 def message_markup(entry: Activity) -> str:
-    """The entry's message as escaped HTML, its count in bold and an imported file in mono."""
+    """The entry's message as escaped HTML, its count in bold and the files it names (the
+    one imported, the ones removed) in mono."""
     markup = html.escape(entry.message)
     count = entry.details.get(_COUNT_DETAIL.get(entry.kind, ""))
     if isinstance(count, int) and not isinstance(count, bool):
         markup = re.sub(rf"(?<![\w.,]){count}(?!\w|[.,]\d)", f"<b>{count}</b>", markup, count=1)
-    file = entry.details.get("file")
-    if entry.kind == "import" and isinstance(file, str) and file:
+    for file in _files(entry):
         escaped = html.escape(file)
         markup = markup.replace(escaped, f'<span class="yul-mono">{escaped}</span>', 1)
     return markup
+
+
+def _files(entry: Activity) -> list[str]:
+    """The files an entry's message names: the one imported, or the ones removed after."""
+    if entry.kind == "import":
+        file = entry.details.get("file")
+        return [file] if isinstance(file, str) and file else []
+    if entry.kind == REMOVE_KIND and isinstance(files := entry.details.get("files"), list):
+        paths = (file.get("path") for file in files if isinstance(file, dict))
+        return [shown(Path(path)) for path in paths if isinstance(path, str)]
+    return []
 
 
 @dataclass(frozen=True)

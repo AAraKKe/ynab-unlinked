@@ -28,7 +28,7 @@ from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import ImportedFiles, LatestConfig, LoaderConfig
 from ynab_unlinked.core import imported_files
 from ynab_unlinked.core.detect import Candidate, resolve_options
-from ynab_unlinked.core.importing import ImportPlan, ImportResult, Twin
+from ynab_unlinked.core.importing import ImportPlan, ImportResult, Twin, file_digest
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
 from ynab_unlinked.models import assign_import_ids
@@ -976,6 +976,33 @@ async def test_the_imported_file_is_offered_for_removal_and_removed(
     assert not statement.exists()
     # Asked again next time: the box was not ticked
     assert LatestConfig.load().imported_files is ImportedFiles.ASK
+    # Home says which file went, and the log keeps the bytes it held
+    [entry] = state().store.activity(BUDGET_ID, kind="remove")
+    assert entry.message == f"Removed {statement} from this computer"
+    assert entry.details == {
+        "count": 1,
+        "files": [{"path": str(statement), "digest": file_digest(SABADELL)}],
+    }
+
+
+async def test_a_file_that_changed_while_the_question_was_open_is_not_removed(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User, statement: Path
+):
+    await import_it(user, statement)
+    await user.should_see(marker="removal-remove", retries=20)
+    # Downloaded again under the same name while the dialog waited
+    statement.write_text("a newer statement")
+
+    user.find(marker="removal-remove").click()
+
+    await user.should_see(
+        marker="removal-failed-0",
+        content=f"Could not remove {statement}: it changed since it was imported.",
+        retries=20,
+    )
+    await user.should_not_see(marker="removal-done")
+    assert statement.read_text() == "a newer statement"
+    assert state().store.activity(BUDGET_ID, kind="remove") == []
 
 
 async def test_keeping_the_imported_file_leaves_it_where_it_is(
@@ -990,6 +1017,7 @@ async def test_keeping_the_imported_file_leaves_it_where_it_is(
     await user.should_not_see(marker="removal-done")
     assert statement.exists()
     assert LatestConfig.load().imported_files is ImportedFiles.ASK
+    assert state().store.activity(BUDGET_ID, kind="remove") == []
 
 
 @pytest.mark.parametrize(

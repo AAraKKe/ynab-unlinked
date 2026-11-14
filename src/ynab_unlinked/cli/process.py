@@ -5,7 +5,7 @@ import typer
 from rich.markup import escape
 from ynab import Account, TransactionClearedStatus
 
-from ynab_unlinked.activity import log_import
+from ynab_unlinked.activity import log_import, log_removal
 from ynab_unlinked.cli import display
 from ynab_unlinked.cli.context_object import YnabUnlinkedContext
 from ynab_unlinked.cli.display import CliProgress, bullet_list, confirm, console, info, question
@@ -185,7 +185,9 @@ def offer_removal(config: LatestConfig, files: Sequence[Original], *, interactiv
 
     removal = remove_originals(files)
     if removal.removed:
-        display.success(escape(f"Removed {name_list([shown(path) for path in removal.removed])}"))
+        paths = [shown(original.path) for original in removal.removed]
+        display.success(escape(f"Removed {name_list(paths)}"))
+        log_removal(config, removal.removed)
     for path, why in removal.failed:
         display.warning(escape(f"Could not remove {shown(path)}: {why}"))
 

@@ -3,7 +3,8 @@
 The browser gave yul a copy of each file, not where it is, so the originals are looked for
 by name and content (`core.imported_files`). What happens to the ones found is the setting
 `imported_files`: asked in a dialog, where "Don't ask again" saves the answer, or done
-without asking. A file found in more than one place is always asked about.
+without asking. A file found in more than one place is always asked about. What is removed
+is noted in the activity log, each file with where it was.
 """
 
 from __future__ import annotations
@@ -15,7 +16,16 @@ from dataclasses import dataclass
 from nicegui import run, ui
 
 from ynab_unlinked.config import ImportedFiles, LatestConfig
-from ynab_unlinked.core.imported_files import Imported, Located, locate, remove_originals, shown
+from ynab_unlinked.core.imported_files import (
+    REMOVE_KIND,
+    Imported,
+    Located,
+    Original,
+    locate,
+    removal_log,
+    remove_originals,
+    shown,
+)
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button, dialog_box, run_dialog
 from ynab_unlinked.web.state import state
@@ -83,12 +93,23 @@ async def offer_removal(files: Sequence[Imported], box: ui.element) -> None:
         if removal.removed:
             _line(removed_line(removal), "removal-done")
             shell.notify(f"{plural(len(removal.removed), 'file')} removed from this computer")
+            await _log(removal.removed)
         for index, line in enumerate(not_removed_lines(removal)):
             _line(line, f"removal-failed-{index}").classes(add="yul-warn")
         if removal.failed:
             shell.notify("Some imported files could not be removed", "warn")
         if located.missing:
             _line(missing_line(located.missing), "removal-missing")
+
+
+async def _log(removed: Sequence[Original]) -> None:
+    """Note what was removed in the activity log, so Home says which files went."""
+    config, _ = state().require()
+    message, details = removal_log(removed)
+    try:
+        await run.io_bound(state().store.log, config.budget.id, REMOVE_KIND, message, details)
+    except Exception as error:
+        shell.notify(f"Could not record the removal in the activity log: {error}", "warn")
 
 
 def _line(text: str, marker: str) -> ui.label:

@@ -927,13 +927,14 @@ class Imported: name: str; digest: str; size: int     # a file as the web app kn
 @dataclass(frozen=True)
 class Located: originals: tuple[Original, ...]; missing: tuple[str, ...]; copies: bool
 @dataclass(frozen=True)
-class Removal: removed: tuple[Path, ...]; failed: tuple[tuple[Path, str], ...]   # path, why
+class Removal: removed: tuple[Original, ...]; failed: tuple[tuple[Path, str], ...]  # path, why
 
 def spotlight(name) -> list[Path]         # macOS: files called `name` in the home folder
 def common_folders() -> list[Path]        # Downloads, Desktop, Documents (platformdirs)
 def find_originals(name, digest, size=None) -> list[Original]
 def locate(files: Sequence[Imported]) -> Located
 def remove_originals(originals) -> Removal    # never raises
+def removal_log(removed) -> tuple[str, dict]  # the `remove` activity entry (3.4)
 def shown(path) -> str                    # "~/Downloads/movimientos.txt"
 ```
 
@@ -943,7 +944,11 @@ def shown(path) -> str                    # "~/Downloads/movimientos.txt"
   from it, from the top of `common_folders()`, and keeps the ones whose bytes have the
   digest. A file with the same name and other bytes is never offered.
 - Removing is `unlink`, not the Trash: the point is that statements do not stay on disk. A
-  file whose bytes changed since it was read, or that is gone, is left alone and reported.
+  file is only deleted while its bytes are the ones that were imported: the digest is
+  compared when the file is found and again right before the `unlink`, so one that changed
+  meanwhile, or is gone, is left alone and reported.
+- What was deleted is logged as one `remove` activity entry (3.4) with each path and its
+  digest, so Home's recent activity says which files went.
 - The setting is `config.imported_files`. `ASK`: the app asks in a dialog after the import
   (`web/views/import_/removal.py`) and `yul load` in the terminal
   (`cli.process.offer_removal`: yes, no, always, never); "Don't ask again" / `always` /
@@ -1386,14 +1391,18 @@ that number in the message and shows `file` in mono.
 | `include` | `Included {payee} ({amount}, {date}) in imports to {account_name} again` | as `exclude` |
 | `reconcile` | `Reconciled {count} transactions in {n} accounts` | `count`, `accounts: [{id, name, count}]` |
 | `adjustment` | `Balance of {account_name} set to {new} ({signed amount})` | `account_id`, `account_name`, `old`, `new`, `amount` (milliunits) |
+| `remove` | `Removed {paths} from this computer`, each path as `imported_files.shown` gives it, joined by `text.name_list` (`imported_files.removal_log`) | `count`, `files: [{path, digest}]` (the absolute path, and the SHA-256 of the bytes the file held: the ones that were imported) |
 | `sync` | `Synced · {changes} changes from YNAB`, plus ` · {ghosts} stale removed` when ghosts > 0 | `changes`, `full`, `ghosts` (only when > 0) |
 | `config` | free text | free |
 
 Amounts in messages are formatted with `state().formatter`; in details they are milliunits.
 `exclude` and `include` come from `web.wording.left_out_entry`, logged by the Import review
 and Settings › Data & privacy after the registry write, both through `run.io_bound`.
-The CLI writes `import` (after each committed file of `yul load <bank>` and `yul load auto`)
-and `reconcile` (after `yul reconcile` locks) with the same shapes through
+`remove` is logged once per removal that deleted something, by the Import view and by
+`yul load`; Home shows its paths in mono, as it does an imported file.
+The CLI writes `import` (after each committed file of `yul load <bank>` and `yul load auto`),
+`remove` (after it deleted their files) and `reconcile` (after `yul reconcile` locks) with
+the same shapes through
 `ynab_unlinked.activity`, at `store_path()`; a store it cannot open only warns. The app's
 next sync brings the transactions.
 Use singular nouns for 1 ("1 change"). `AppState._sync` logs `sync` only when the sync was

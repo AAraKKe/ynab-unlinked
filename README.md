@@ -163,8 +163,9 @@ not pile up in Downloads: the app in a dialog with "Don't ask again", `yul load`
 question you can answer `always` or `never`. Removing deletes the file for good, not to the
 Trash. The app only gets a copy of what you drop on it, so it looks for the original by name
 and content (anywhere in your home folder on macOS, in Downloads, Desktop and Documents
-elsewhere) and only ever removes a file with exactly the bytes it imported. Settings › Data
-& privacy, or `yul config set imported_files`, changes the answer.
+elsewhere) and only ever removes a file with exactly the bytes it imported. The app's recent
+activity lists every file removed. Settings › Data & privacy, or
+`yul config set imported_files`, changes the answer.
 
 Send each bank to its own YNAB account. yul recognises what it already imported the way YNAB's
 own file import does, by date, amount and how many times that pair repeats, without the bank.

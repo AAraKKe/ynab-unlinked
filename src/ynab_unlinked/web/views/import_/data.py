@@ -366,7 +366,8 @@ def missing_line(names: Sequence[str]) -> str:
 
 
 def removed_line(removal: Removal) -> str:
-    return f"Removed {name_list([path.name for path in removal.removed])} from this computer."
+    names = name_list([original.path.name for original in removal.removed])
+    return f"Removed {names} from this computer."
 
 
 def not_removed_lines(removal: Removal) -> list[str]:

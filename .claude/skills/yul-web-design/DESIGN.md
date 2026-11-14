@@ -123,8 +123,9 @@ from the local store; Home never calls YNAB. Before the first sync a quiet banne
 - **Where it went** (right column): the five categories that spent most this month, each a
   bar with a mark at its usual month. A row opens that category in Spending.
 - **Recent activity**: last 10 events from the store's activity log (imports, reconciles,
-  adjustments) with timestamps: "29 Oct · Imported 13 transactions to 💳 Oro from
-  movimientos.txt".
+  adjustments, statement files removed) with timestamps: "29 Oct · Imported 13 transactions
+  to 💳 Oro from movimientos.txt", "29 Oct · Removed ~/Downloads/movimientos.txt from this
+  computer" (file names and paths in mono).
 
 ### Import
 

@@ -12,6 +12,7 @@ from ynab_unlinked.core.imported_files import (
     Original,
     find_originals,
     locate,
+    removal_log,
     remove_originals,
     shown,
     spotlight,
@@ -101,9 +102,11 @@ def test_every_copy_of_a_file_is_located_and_said_to_be_a_copy(
 def test_removing_deletes_the_file_for_good(downloads: Path):
     statement = write(downloads / "movements.txt")
 
-    removal = remove_originals([Original.of(statement)])
+    original = Original.of(statement)
 
-    assert removal.removed == (statement,)
+    removal = remove_originals([original])
+
+    assert removal.removed == (original,)
     assert removal.failed == ()
     assert not statement.exists()
 
@@ -140,6 +143,26 @@ def test_a_file_that_cannot_be_deleted_is_reported_not_raised(downloads: Path):
     assert path == statement
     assert "denied" in why.lower()
     assert statement.exists()
+
+
+def test_the_log_entry_of_a_removal_names_each_file_and_the_bytes_it_held(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    statement = Original(tmp_path / "Downloads" / "movimientos.txt", "a" * 64)
+    card = Original(Path("/Volumes/disk/tarjeta.xlsx"), "b" * 64)
+
+    message, details = removal_log([statement, card])
+
+    home = Path("~") / "Downloads" / "movimientos.txt"
+    assert message == f"Removed {home} and /Volumes/disk/tarjeta.xlsx from this computer"
+    assert details == {
+        "count": 2,
+        "files": [
+            {"path": str(statement.path), "digest": "a" * 64},
+            {"path": "/Volumes/disk/tarjeta.xlsx", "digest": "b" * 64},
+        ],
+    }
 
 
 def test_a_path_in_the_home_folder_is_shown_from_the_tilde(
