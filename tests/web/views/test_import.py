@@ -639,6 +639,9 @@ async def test_a_row_left_out_before_comes_back_crossed_out_and_can_be_included_
 ):
     await drop(user, SABADELL)
     await user.should_see("2 new / 3", marker="count-1", retries=30)
+    # Counted as left out, not as already in YNAB
+    await user.should_see(marker="files-left-out", content="1 left out")
+    await user.should_see(marker="files-in-ynab", content="0 already in YNAB")
     user.find(marker="review").click()
     show_every_row(user)
     await user.should_see(marker="row-status-1-0", content="left out", retries=20)

@@ -94,10 +94,10 @@ def _rows(
                 if status is RowStatus.MAYBE_IN_YNAB and row.twin is not None:
                     note = (twin_note(row.twin, formatter), f"row-twin-{key}-{index}")
                 _cells(row.transaction, formatter, note).mark(f"row-amount-{key}-{index}")
-                with ui.element("td").classes("r"):
+                with ui.element("td").classes("r c-status"):
                     _status(status).mark(f"row-status-{key}-{index}")
                 if actions is not None:
-                    with ui.element("td").classes("r"):
+                    with ui.element("td").classes("r c-act"):
                         _action(actions, row, status, f"{key}-{index}")
             set_class(tr, "dim", row.already_imported)
             set_class(tr, "out", status is RowStatus.EXCLUDED)
@@ -139,12 +139,12 @@ def transactions_table(transactions: Sequence[Transaction], formatter: Formatter
         for transaction in transactions:
             with ui.element("tr"):
                 _cells(transaction, formatter)
-                with ui.element("td").classes("r"):
+                with ui.element("td").classes("r c-status"):
                     ui.label("…").classes("yul-faint")
 
 
 def _header(actions: bool = False) -> None:
-    with ui.element("tr"):
+    with ui.element("tr").classes("head"):
         for title, align in (("Date", ""), ("Payee", ""), ("Amount", "r"), ("Status", "r")):
             with ui.element("th").classes(align):
                 ui.label(title)
@@ -155,13 +155,17 @@ def _header(actions: bool = False) -> None:
 def _cells(
     transaction: Transaction, formatter: Formatter, note: tuple[str, str] | None = None
 ) -> ui.label:
-    """The date, payee and amount (returned); `note` is a line under the payee and its marker."""
-    with ui.element("td").classes("num"):
+    """The date, payee and amount (returned); `note` is a line under the payee and its marker.
+
+    Each cell names its column (`c-date`, `c-payee`, ...): on a phone a row is laid out as
+    two lines by those names instead of as columns.
+    """
+    with ui.element("td").classes("num c-date"):
         ui.label(formatter.format_date(transaction.date))
-    with ui.element("td"):
+    with ui.element("td").classes("c-payee"):
         ui.label(transaction.payee)
         if note is not None:
             text, marker = note
             ui.label(text).classes("yul-imp-twin").mark(marker)
-    with ui.element("td").classes("r num"):
+    with ui.element("td").classes("r num c-amt"):
         return amount(transaction.amount, formatter)

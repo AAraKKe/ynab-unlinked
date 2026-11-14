@@ -146,6 +146,7 @@ def draw_account(flow: ImportFlow, item: ImportFile) -> None:
 def remove_button(flow: ImportFlow, item: ImportFile) -> None:
     remove = button(icon_name="x", kind="ghost", small=True, on_click=lambda: flow.remove(item))
     remove.props["title"] = "Remove"
+    remove.classes(add="yul-imp-remove")
     remove.mark(f"remove-{item.key}")
 
 

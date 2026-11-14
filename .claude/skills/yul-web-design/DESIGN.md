@@ -140,6 +140,15 @@ table counts the rest: "Hidden: 12 already in YNAB, 1 left out" ("Nothing to imp
 at once (the toast and the count say where it went); "Include again" is on it with the
 switch off. Counts (new / total, "n left out", the footers) always count every row.
 
+On a phone (under 640px) nothing is squeezed into columns. The switch is a row of its own
+under the steps, its label on the left. A file on Files keeps its name, the remove button
+and the arrow on the first line, with what was detected (bank, options, account, count)
+wrapping under it. A file's card in Review reads like a list item: the bank and its counts
+on the first line, the account and the file name under the bank. A row of a table is two
+lines, the payee and the amount, then the date, the tag and what to do with it ("Leave
+out"), with no header row. A flow's footer (Import, Reconcile) puts what it counts on a line
+of its own and the buttons under it, the primary one as wide as the space left.
+
 1. **Files**. Dropzone (large until the first file, then compact at the top). Each file
    appears as a row with a type badge, name, size and a live detection state: scanning
    spinner -> loader pill with confidence and the account it maps to -> count of new vs
