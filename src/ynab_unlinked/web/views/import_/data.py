@@ -14,6 +14,7 @@ from typing import Any
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.core.accounts import AccountState, account_state
 from ynab_unlinked.core.detect import Candidate, Detection
+from ynab_unlinked.core.imported_files import Imported, Removal, shown
 from ynab_unlinked.core.importing import (
     ImportPlan,
     ImportResult,
@@ -25,7 +26,7 @@ from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import Transaction, milliunits
 from ynab_unlinked.store import ExcludedRow, StoredAccount
-from ynab_unlinked.text import import_message
+from ynab_unlinked.text import import_message, name_list
 from ynab_unlinked.web.wording import plural
 
 STEPS = ("Files", "Review", "Done")
@@ -318,6 +319,58 @@ def done_summary(
     if failed:
         lede += f" {plural(failed, 'file')} failed, see above."
     return lede
+
+
+def imported_files(done: Sequence[ImportFile], files: Sequence[ImportFile]) -> list[Imported]:
+    """What to look for on this computer once `done` are imported: those files, and the
+    ones of `files` greyed out as a second copy of one of them (the same bytes under
+    another name are as imported as the first)."""
+    digests = {item.digest for item in done if item.digest}
+    found = (
+        Imported(item.name, item.digest, item.size) for item in files if item.digest in digests
+    )
+    return list(dict.fromkeys(found))
+
+
+REMOVE_COPIES = "Some of them are in more than one place, so yul asks before removing them."
+REMOVE_REMEMBER = "Don't ask again"
+SETTING_HINT = "Settings › Data & privacy changes it."
+REMOVE_REMEMBER_HINT = f"yul does the same after every import from now on. {SETTING_HINT}"
+REMOVE_FAILED = "The imported files could not be looked for on this computer."
+
+
+def remove_title(count: int) -> str:
+    return "Remove the imported file?" if count == 1 else "Remove the imported files?"
+
+
+def remove_lede(count: int) -> str:
+    """What removing means, under the title of the dialog that asks."""
+    if count == 1:
+        return (
+            "It is in YNAB now. Removing deletes it from this computer for good: it does not "
+            "go to the Trash."
+        )
+    return (
+        "They are in YNAB now. Removing deletes them from this computer for good: they do not "
+        "go to the Trash."
+    )
+
+
+def missing_line(names: Sequence[str]) -> str:
+    """The files of the import that were not found, so not offered for removal."""
+    one = len(names) == 1
+    return (
+        f"{name_list(names)} {'was' if one else 'were'} not found on this computer, so yul "
+        f"could not remove {'it' if one else 'them'}."
+    )
+
+
+def removed_line(removal: Removal) -> str:
+    return f"Removed {name_list([path.name for path in removal.removed])} from this computer."
+
+
+def not_removed_lines(removal: Removal) -> list[str]:
+    return [f"Could not remove {shown(path)}: {why}." for path, why in removal.failed]
 
 
 def import_log(

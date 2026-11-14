@@ -1,0 +1,1 @@
+After an import, yul offers to remove the statement files from your computer, in the app (a dialog with "Don't ask again") and in `yul load` (yes, no, always, never); Settings › Data & privacy and `yul config set imported_files` change the choice.

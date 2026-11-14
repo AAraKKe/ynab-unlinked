@@ -39,7 +39,8 @@ src/ynab_unlinked/
                      reconcile, loader detection, balances and net worth, history, finance
                      (where a period's money came from: income, spending, assets), the plan
                      (those months carried forward), update (a newer yul on PyPI, and how
-                     this install is upgraded).
+                     this install is upgraded), imported files (finding the statements of
+                     an import on disk and removing them).
                      Never imports typer, rich, textual or nicegui.
   entities/          One package per bank (bbva, cobee, sabadell). `registry.py` discovers
                      their `LoaderSpec`s; `_sniff.py` has helpers for `sniff()`.

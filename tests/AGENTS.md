@@ -99,6 +99,11 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
 - `yul_home` (root conftest, autouse) sets `YUL_HOME` to a folder under `tmp_path` for every
   test, so no test reaches the real config, budget copy, preferences or keychain item, even
   without the fixtures below. `keychain.service_name()` follows it; never cache it.
+- `downloads` (root conftest, autouse) keeps the search for the files of an import
+  (`core.imported_files`) off the real computer, where a file found could be removed:
+  Spotlight answers nothing and the only folder searched is the scratch folder it returns.
+  A test that removes a file through `yul load` imports a copy under `tmp_path`, never one
+  of `tests/assets`.
 - `config_files` (root conftest) points every config path into a scratch directory and returns
   the `ConfigFiles` paths. `config` writes the asset for `@pytest.mark.version("V1".."V4")` there
   and yields the version; `"missing"` leaves it empty. Use `"V4"` (the latest) unless the test is

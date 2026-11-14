@@ -18,6 +18,7 @@ from ynab_unlinked.cli.context_object import YnabUnlinkedContext
 from ynab_unlinked.cli.utils import split_quoted_string
 from ynab_unlinked.config import ConfigV3, ConfigV4, get_config
 from ynab_unlinked.config.paths import HOME_ENV, web_storage_dir
+from ynab_unlinked.core import imported_files
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.main import app
 from ynab_unlinked.store import store_path
@@ -39,6 +40,17 @@ def yul_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv(HOME_ENV, str(home))
     monkeypatch.delenv(keychain.SERVICE_ENV, raising=False)
     return home
+
+
+@pytest.fixture(autouse=True)
+def downloads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Tests never look for statements on the real computer, where a file found could be
+    removed: Spotlight answers nothing and the only folder searched is this scratch one."""
+    folder = tmp_path / "Downloads"
+    folder.mkdir()
+    monkeypatch.setattr(imported_files, "spotlight", lambda name: [])
+    monkeypatch.setattr(imported_files, "common_folders", lambda: [folder])
+    return folder
 
 
 @pytest.fixture(autouse=True)

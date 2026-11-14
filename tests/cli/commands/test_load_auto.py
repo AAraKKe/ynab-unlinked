@@ -1,4 +1,6 @@
 import datetime as dt
+import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,7 @@ from tests.helpers.statements import cobee_export
 from tests.helpers.types import CliRunner
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.cli import display
+from ynab_unlinked.config import ImportedFiles, LatestConfig
 from ynab_unlinked.core.detect import resolve_options
 from ynab_unlinked.core.importing import ImportPlan
 from ynab_unlinked.entities.registry import loader
@@ -377,3 +380,145 @@ def test_the_options_saved_for_a_bank_are_used(
 
     assert result.exit_code == 0, result.output
     assert "25/04/2023" in result.output
+
+
+# ---- removing the imported files ---------------------------------------------------------
+
+
+@pytest.fixture
+def statement(tmp_path: Path) -> Path:
+    """A copy of the Sabadell statement: these tests remove the file they import."""
+    return Path(shutil.copy(SABADELL, tmp_path / "movimientos.txt"))
+
+
+def imported_files_setting(config_files: ConfigFiles, choice: ImportedFiles) -> None:
+    saved = json.loads(config_files.read())
+    config_files.path().write_text(json.dumps(saved | {"imported_files": choice.value}))
+
+
+@pytest.mark.parametrize(
+    ("answer", "removed", "saved"),
+    [
+        pytest.param("yes", True, ImportedFiles.ASK, id="yes"),
+        pytest.param("no", False, ImportedFiles.ASK, id="no"),
+        pytest.param("", False, ImportedFiles.ASK, id="enter-keeps-it"),
+        pytest.param("always", True, ImportedFiles.REMOVE, id="always"),
+        pytest.param("never", False, ImportedFiles.KEEP, id="never"),
+    ],
+)
+def test_the_imported_files_are_removed_when_the_user_says_so(
+    yul: CliRunner,
+    accounts,
+    ynab: YnabClientStub,
+    statement: Path,
+    answer: str,
+    removed: bool,
+    saved: ImportedFiles,
+):
+    result = yul("load", "auto", str(statement), input=f"y\n{answer}\n", env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert "All done! 3 transactions imported." in result.output
+    assert "Remove movimientos.txt from this computer?" in result.output
+    assert statement.exists() is not removed
+    assert ("Removed" in result.output) is removed
+    # `always` and `never` are the setting from now on
+    assert LatestConfig.load().imported_files is saved
+
+
+def test_no_answer_to_the_question_keeps_the_files(
+    yul: CliRunner, accounts, ynab: YnabClientStub, statement: Path
+):
+    # The input ends after the confirmation: nobody is there to answer
+    result = yul("load", "auto", str(statement), input="y\n", env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert "All done! 3 transactions imported." in result.output
+    assert statement.exists()
+
+
+@pytest.mark.parametrize(
+    ("setting", "removed"),
+    [
+        pytest.param(ImportedFiles.ASK, False, id="ask"),
+        pytest.param(ImportedFiles.REMOVE, True, id="remove"),
+        pytest.param(ImportedFiles.KEEP, False, id="keep"),
+    ],
+)
+def test_yes_never_asks_and_removes_only_when_the_setting_says_so(
+    yul: CliRunner,
+    accounts,
+    config_files: ConfigFiles,
+    ynab: YnabClientStub,
+    statement: Path,
+    setting: ImportedFiles,
+    removed: bool,
+):
+    imported_files_setting(config_files, setting)
+
+    result = yul("load", "--yes", "auto", str(statement), env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert "from this computer?" not in result.output
+    assert statement.exists() is not removed
+
+
+def test_a_saved_choice_is_followed_without_asking(
+    yul: CliRunner, accounts, config_files: ConfigFiles, ynab: YnabClientStub, statement: Path
+):
+    imported_files_setting(config_files, ImportedFiles.REMOVE)
+    copy = Path(shutil.copy(statement, statement.with_name("movimientos (1).txt")))
+
+    result = yul("load", "auto", str(statement), str(copy), input="y\n", env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert "from this computer?" not in result.output
+    # The second copy holds the same bytes: it is as imported as the first
+    assert not statement.exists() and not copy.exists()
+
+
+def test_declining_the_import_keeps_the_files(
+    yul: CliRunner, accounts, config_files: ConfigFiles, ynab: YnabClientStub, statement: Path
+):
+    imported_files_setting(config_files, ImportedFiles.REMOVE)
+
+    result = yul("load", "auto", str(statement), input="n\n", env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert statement.exists()
+
+
+def test_a_file_already_in_ynab_is_offered_for_removal_too(
+    yul: CliRunner,
+    accounts,
+    config_files: ConfigFiles,
+    ynab: YnabClientStub,
+    statement: Path,
+    mocker,
+):
+    imported_files_setting(config_files, ImportedFiles.REMOVE)
+    mocker.patch(
+        "ynab_unlinked.core.importing.build_import_plan",
+        side_effect=lambda client, **kwargs: ImportPlan(
+            kwargs["entity_name"],
+            kwargs["account_id"],
+            kwargs["input_file"],
+            (ImportRowFactory(already_imported=True),),
+        ),
+    )
+
+    result = yul("load", "auto", str(statement), env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert "Nothing to do" in result.output
+    assert not statement.exists()
+
+
+def test_a_single_bank_load_offers_to_remove_its_file(
+    yul: CliRunner, accounts, ynab: YnabClientStub, statement: Path
+):
+    result = yul("load", "sabadell", str(statement), input="y\nyes\n", env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert "Remove movimientos.txt from this computer?" in result.output
+    assert not statement.exists()

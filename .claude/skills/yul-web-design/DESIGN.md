@@ -178,7 +178,16 @@ of its own and the buttons under it, the primary one as wide as the space left.
    file's body, and "n to check" on its row and in its footer.
 3. **Done**. Per file progress bars that fill as YNAB answers, then a success card:
    created count, anything YNAB rejected as duplicate, and two buttons: "Reconcile these
-   accounts" and "Import more".
+   accounts" and "Import more". Then the files: a dialog "Remove the imported files?" lists
+   where each one is on this computer ("~/Downloads/movimientos.txt"), says that removing
+   deletes them for good and not to the Trash, and has the checkbox "Don't ask again" with
+   one faint line under it, a ghost "Keep them" and a danger "Remove 2 files". Ticked, the
+   answer becomes the setting and later imports follow it without a dialog (a file found
+   in more than one place is still asked about, without the checkbox). What happened is
+   said in muted lines under the card, where it stays: "Removed movimientos.txt from this
+   computer.", "yul removes imported files from now on. Settings › Data & privacy changes
+   it.", and for a file yul could not find, "… was not found on this computer, so yul could
+   not remove it." Files whose import failed are never offered.
 
 ### Reconcile
 
@@ -469,7 +478,9 @@ and path), **Banks**, **Accounts**, **Net worth** (debt -> accounts mapping with
 picker, the goal), **Categories**, **Appearance** (the palette), **Data & privacy** (what is stored where, store size, last sync,
 "Updates": the "Look for new versions" switch, on by default, one line saying what is asked
 and that nothing about the user is sent, what is known ("yul 1.1.0 is the latest version.",
-"yul 1.2.0 is out. You have 1.1.0.") with "Check now" and, with a newer yul, "Update"; the
+"yul 1.2.0 is out. You have 1.1.0.") with "Check now" and, with a newer yul, "Update";
+"Imported files": a pill group "Ask each time", "Remove them", "Keep them" and one line
+saying how yul finds the files and that removing is for good; the
 rows left out of imports with "Include again" on each, "Resync from scratch", "Reset all
 data" with confirmation).
 

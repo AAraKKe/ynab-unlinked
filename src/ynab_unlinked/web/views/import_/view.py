@@ -6,7 +6,8 @@ directory owned by the flow, detected on its own (`core.detect`), mapped to its 
 compared with YNAB (`core.importing.build_import_plan`). The review lists what will be
 created; one click commits every file in turn (`commit_import_plan`) and logs it. A switch
 next to the stepper hides the rows that are not sent (already in YNAB, left out), on until
-the user turns it off, which the browser remembers.
+the user turns it off, which the browser remembers. Once the files are in YNAB they can be
+removed from this computer (`removal`).
 
 This is the twin of `yul load auto`, built on the same core calls. The model is in `data`,
 the file rows in `rows`, the tables in `tables`.
@@ -62,12 +63,14 @@ from ynab_unlinked.web.views.import_.data import (
     forget_gone_account,
     held_count,
     import_log,
+    imported_files,
     left_out_count,
     mark_repeated,
     problem_text,
     read_file,
     take_candidate,
 )
+from ynab_unlinked.web.views.import_.removal import offer_removal
 from ynab_unlinked.web.views.import_.rows import draw_row
 from ynab_unlinked.web.views.import_.tables import RowActions, status_legend
 from ynab_unlinked.web.wording import IMPORT_FAILED, left_out_entry, plural, ynab_error_message
@@ -547,17 +550,21 @@ class ImportFlow:
             return
         ready = [item for item in self.ready if item.plan is not None]
         self.committing = True
+        done: list[ImportFile] = []
         try:
             if await self.accounts_gone(ready):
                 return
-            await self.commit_files(ready)
+            done, removal = await self.commit_files(ready)
         except Exception:
             # The import button that started the commit is gone with the review
             assert self.content is not None
             with self.content:
                 shell.notify(IMPORT_FAILED, "error")
+            return
         finally:
             self.committing = False
+        # The import is over: what is left is a question about the files it read
+        await offer_removal(imported_files(done, self.files), removal)
 
     async def accounts_gone(self, ready: Sequence[ImportFile]) -> bool:
         """Check the saved accounts again before sending: a sync since the files were read
@@ -575,7 +582,11 @@ class ImportFlow:
         )
         return True
 
-    async def commit_files(self, ready: Sequence[ImportFile]) -> None:
+    async def commit_files(
+        self, ready: Sequence[ImportFile]
+    ) -> tuple[list[ImportFile], ui.element]:
+        """Send every file in turn. Returns the ones that are done (sent, or with nothing
+        new to send) and the element under the Done card for what happens to them next."""
         await self.save_accounts(ready)
         config, client = state().require()
         cleared = (
@@ -593,9 +604,11 @@ class ImportFlow:
                 assert item.plan is not None
                 progress[item.key] = progress_card(item, self.account_name(item.plan.account_id))
             done_area = ui.element("div")
+            removal = ui.element("div").classes("yul-imp-removal").mark("removal")
 
         store = state().store
         created = duplicates = skipped = failed = left_out = held = 0
+        done: list[ImportFile] = []
         for item in ready:
             assert item.plan is not None and item.candidate is not None
             plan = item.plan
@@ -605,6 +618,7 @@ class ImportFlow:
             held += held_count(plan)
             if not plan.new_rows:
                 card.nothing_new()
+                done.append(item)
                 continue
             card.running()
             try:
@@ -620,6 +634,7 @@ class ImportFlow:
             created += result.created
             duplicates += len(result.duplicate_import_ids)
             card.created(result)
+            done.append(item)
             await self.log(item, plan, result)
 
         self.close()
@@ -629,6 +644,7 @@ class ImportFlow:
             # Reconcile and Net worth sync before showing the store again
             state().invalidate()
             shell.notify(f"{plural(created, 'transaction')} created in YNAB")
+        return done, removal
 
     async def save_accounts(self, items: Sequence[ImportFile]) -> None:
         if not (chosen := chosen_accounts(items)):

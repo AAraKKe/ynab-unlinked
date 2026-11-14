@@ -46,6 +46,11 @@ def privacy_summary() -> None:
         "open, whether a newer version exists. That sends nothing about you or your budget, and "
         "Settings › Data & privacy turns it off."
     )
+    info(
+        "After an import, yul can remove the statement files from your computer. It asks "
+        "first unless you told it not to (yul config set imported_files), and removing "
+        "deletes them for good, not to the Trash."
+    )
 
     info("\n[bold]What is stored locally[/bold]")
     info(

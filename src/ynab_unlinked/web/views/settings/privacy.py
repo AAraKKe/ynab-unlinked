@@ -1,5 +1,6 @@
 """Settings › Data & privacy: what yul keeps on this computer, whether it looks for new
-versions, the rows left out of imports, resync, and reset everything."""
+versions, what becomes of the files it imported, the rows left out of imports, resync, and
+reset everything."""
 
 from __future__ import annotations
 
@@ -10,17 +11,17 @@ from nicegui import ui
 
 from ynab_unlinked import keychain
 from ynab_unlinked.__about__ import __version__
-from ynab_unlinked.config import LatestConfig
+from ynab_unlinked.config import ImportedFiles, LatestConfig
 from ynab_unlinked.local_data import local_data_paths
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import button
-from ynab_unlinked.web.components.controls import switch
+from ynab_unlinked.web.components.controls import pill_group, switch
 from ynab_unlinked.web.state import state
 from ynab_unlinked.web.update import Updates, updates
 from ynab_unlinked.web.update_dialog import out_line, update_dialog
 from ynab_unlinked.web.views.settings import left_out
 from ynab_unlinked.web.views.settings.common import current_config, kv
-from ynab_unlinked.web.wording import human_size, ynab_error_message
+from ynab_unlinked.web.wording import IMPORTED_FILES_SAVED, human_size, ynab_error_message
 
 if TYPE_CHECKING:
     from ynab_unlinked.web.views.settings import Settings
@@ -34,6 +35,16 @@ UPDATES_HINT = (
 LOOKING = "yul looks for new versions"
 NOT_LOOKING = "yul no longer looks for new versions"
 UNREACHABLE = "pypi.org could not be reached."
+IMPORTED_FILES = {
+    ImportedFiles.ASK.value: "Ask each time",
+    ImportedFiles.REMOVE.value: "Remove them",
+    ImportedFiles.KEEP.value: "Keep them",
+}
+IMPORTED_FILES_HINT = (
+    "Once statements are imported, yul can remove them from this computer. It looks for a "
+    "file with the same name and exactly the same content as each one, and deletes it for "
+    "good: it does not go to the Trash."
+)
 
 
 def token_wording() -> str:
@@ -82,6 +93,25 @@ def _updates(page: Settings) -> None:
                 )
 
 
+def _imported_files(page: Settings) -> None:
+    """What becomes of the statement files after an import: ask, remove them or keep them."""
+
+    async def save(key: str) -> None:
+        choice = ImportedFiles(key)
+
+        def change(config: LatestConfig) -> None:
+            config.imported_files = choice
+
+        if not await shell.save_config(change, IMPORTED_FILES_SAVED[choice]):
+            await page.rerender()
+
+    with ui.element("div").classes("yul-updates"):
+        pill_group(
+            IMPORTED_FILES, current_config().imported_files.value, save, marker="imported-files"
+        )
+        ui.label(IMPORTED_FILES_HINT).classes("yul-muted yul-small")
+
+
 async def render(page: Settings) -> None:
     current = state()
     current.require()
@@ -102,6 +132,8 @@ async def render(page: Settings) -> None:
         ui.label(token_wording()).mark("token-location")
         kv("Updates")
         _updates(page)
+        kv("Imported files")
+        _imported_files(page)
         kv("What is kept")
         with ui.element("div").classes("yul-muted yul-small"):
             ui.label("The budget, banks, account settings and adjustment settings.")
