@@ -906,7 +906,7 @@ body.yul-dragging .yul-dropover { display: grid; animation: yul-fade .15s ease b
 
 /* ---- import: stepper, file rows, review tables (views/import_) ---- */
 .yul-imp { width: 100%; }
-.yul-imp-stepper { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.yul-imp-stepper { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .yul-imp-st { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-weight: 500; font-size: 13px; }
 .yul-imp-st > .num { width: 24px; height: 24px; font-size: 12px; }
 .yul-imp-st.done > .num { background: color-mix(in oklab, var(--good) 20%, transparent); }
@@ -975,7 +975,13 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   justify-items: start; margin: 2px 2px 14px; color: var(--text-2); font-size: 12.5px;
 }
 .yul-imp-note { color: var(--text-2); font-size: 12.5px; margin-bottom: 8px; }
+.yul-imp-hidden { color: var(--text-3); font-size: 12.5px; margin: 8px 8px 0; }
 .yul-imp-card { margin-bottom: 10px; padding: 14px 16px; }
+.yul-imp-card-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 8px; }
+.yul-imp-card-main { display: flex; align-items: center; gap: 4px 10px; flex: 1 1 200px; min-width: 0; }
+.yul-imp-card-title { font-weight: 600; white-space: nowrap; }
+.yul-imp-card-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yul-imp-counts { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: none; }
 .yul-imp-done { text-align: center; padding: 28px; }
 
 /* ---- reconcile: account cards and their rows (views/reconcile) ---- */
@@ -1413,7 +1419,39 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   .yul-nwm-head > .yul-grow, .yul-nw-head > .yul-grow, .yul-rec-head > .yul-grow { flex-basis: 100%; }
   .yul-nwm-card > .yul-row { flex-wrap: wrap; gap: 2px 10px; }
   .yul-pills { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-  .yul-foot { bottom: calc(64px + env(safe-area-inset-bottom)); }
+  /* A flow's footer: what it counts on a line of its own, then the buttons, the primary one wide */
+  .yul-foot { bottom: calc(64px + env(safe-area-inset-bottom)); flex-wrap: wrap; gap: 10px; }
+  .yul-foot > .yul-grow { flex-basis: 100%; }
+  .yul-foot > .yul-btn.primary { flex: 1; justify-content: center; }
+  /* Import. The switch is a row of its own under the steps */
+  .yul-imp-stepper > .yul-rec-switch { flex-basis: 100%; justify-content: space-between; }
+  /* A file: its name, remove and the arrow on the first line, what was detected under it */
+  .yul-imp-head { flex-wrap: wrap; gap: 8px 10px; }
+  .yul-imp-head::after { content: ""; order: 2; flex-basis: 100%; }
+  .yul-imp-det { display: contents; }
+  .yul-imp-det > * { order: 3; }
+  .yul-imp-det > .yul-imp-remove, .yul-imp-arrow { order: 1; }
+  .yul-imp-reason { max-width: none; text-align: left; }
+  /* A file in Review: the bank and the counts, then the account and the file under the bank */
+  .yul-imp-card-head { align-items: flex-start; flex-wrap: nowrap; }
+  .yul-imp-card-main { flex-wrap: wrap; flex-basis: 0; }
+  .yul-imp-card-title { flex-basis: 100%; line-height: 30px; }
+  .yul-imp-counts { flex-wrap: wrap; justify-content: flex-end; padding-top: 4px; }
+  /* A row of a table is two lines: payee and amount, then the date, the tag and what to do */
+  .yul-imp .yul-imp-table { display: block; }
+  .yul-imp .yul-imp-table tr.head { display: none; }
+  .yul-imp .yul-imp-table tr {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 3px 10px;
+    grid-template-areas: "payee payee amt" "date status act"; padding: 10px 2px; border-bottom: 1px solid var(--hair);
+  }
+  .yul-imp .yul-imp-table tr:last-child { border-bottom: 0; }
+  .yul-imp .yul-imp-table td { padding: 0; border: 0; }
+  .yul-imp .yul-imp-table .c-payee { grid-area: payee; font-weight: 500; }
+  .yul-imp .yul-imp-table .c-amt { grid-area: amt; }
+  .yul-imp .yul-imp-table .c-date { grid-area: date; color: var(--text-3); font-size: 12px; }
+  .yul-imp .yul-imp-table .c-status { grid-area: status; text-align: left; }
+  .yul-imp .yul-imp-table .c-act { grid-area: act; }
+  .yul-imp-hidden { margin: 8px 2px 0; }
   .q-notifications__list--top { top: 58px; }
   .yul-wiz { grid-template-columns: 1fr; }
   .yul-rail { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--border); }

@@ -1543,6 +1543,12 @@ each category row with the marker, a dash and the category id.
 
 #### Import
 
+`hide-settled` is the switch next to the stepper (`data.HIDE_SETTLED`, `controls.switch`,
+`aria-checked`); `data.listed_rows(plan, hide_settled)` gives the rows a table lists with
+their index in the plan, so the markers below keep their numbers whatever is hidden, and
+`hidden-{file key}` is the line under a table counting what is (`data.hidden_note`). The
+choice is the browser preference `yul.import_show_all`.
+
 Review rows: `row-status-{file key}-{index}` (new, may be in YNAB, already in YNAB, matched in
 YNAB, left out; every one a pill), `row-amount-{file key}-{index}` (`components.amount`),
 `leave-out-{file key}-{index}` on a new row,

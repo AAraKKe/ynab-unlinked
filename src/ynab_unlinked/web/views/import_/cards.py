@@ -34,6 +34,8 @@ def files_footer(
     transactions = sum(len(item.plan.rows) for item in ready if item.plan)
     new = sum(len(item.plan.new_rows) for item in ready if item.plan)
     held = sum(held_count(item.plan) for item in ready if item.plan)
+    left_out = sum(left_out_count(item.plan) for item in ready if item.plan)
+    already = sum(item.plan.already_imported_count for item in ready if item.plan)
     with ui.element("div").classes("yul-foot").mark("files-footer"):
         with ui.element("div").classes("yul-grow yul-foot-stat"):
             ui.label(plural(len(active), "file"))
@@ -41,7 +43,9 @@ def files_footer(
             ui.label(f"{new} new").classes("yul-good")
             if held:
                 ui.label(f"{held} to check").classes("yul-warn").mark("files-held")
-            ui.label(f"{transactions - new - held} already in YNAB").classes("yul-muted")
+            ui.label(f"{already} already in YNAB").classes("yul-muted").mark("files-in-ynab")
+            if left_out:
+                ui.label(f"{left_out} left out").classes("yul-muted").mark("files-left-out")
             if unsupported := len(files) - len(active):
                 ui.label(f"{plural(unsupported, 'file')} skipped").classes("yul-faint")
         review = button(
@@ -84,25 +88,34 @@ def review_footer(
 
 
 def review_card(
-    item: ImportFile, account_name: str, formatter: Formatter, actions: RowActions
+    item: ImportFile,
+    account_name: str,
+    formatter: Formatter,
+    actions: RowActions,
+    *,
+    hide_settled: bool = False,
 ) -> None:
-    """A ready file in Review: its bank, account and file, the counts and its rows."""
+    """A ready file in Review: its bank, account and file, the counts and its rows (without
+    the ones `hide_settled` hides)."""
     assert item.plan is not None and item.candidate is not None
     with glass_card().classes("yul-imp-card").mark(f"review-{item.key}"):
-        with ui.element("div").classes("yul-row").style("margin-bottom:8px"):
+        # One line when wide. On a phone the bank and the counts share the first line, with
+        # the account and the file under the bank.
+        with ui.element("div").classes("yul-imp-card-head"):
             badge(item.suffix, small=True)
-            ui.label(item.candidate.loader.title).style("font-weight:600")
-            pill(f"→ {account_name}")
-            ui.label(item.name).classes("yul-faint yul-small")
-            ui.element("span").classes("yul-grow")
-            if held := held_count(item.plan):
-                pill(f"{held} to check", "warn").mark(f"review-held-{item.key}")
-            if left_out := left_out_count(item.plan):
-                pill(f"{left_out} left out").mark(f"review-left-out-{item.key}")
-            pill(f"{len(item.plan.new_rows)} new / {len(item.plan.rows)}", "acc").mark(
-                f"review-count-{item.key}"
-            )
-        plan_table(item.plan, formatter, item.key, actions)
+            with ui.element("div").classes("yul-imp-card-main"):
+                ui.label(item.candidate.loader.title).classes("yul-imp-card-title")
+                pill(f"→ {account_name}")
+                ui.label(item.name).classes("yul-imp-card-file yul-faint yul-small")
+            with ui.element("div").classes("yul-imp-counts"):
+                if held := held_count(item.plan):
+                    pill(f"{held} to check", "warn").mark(f"review-held-{item.key}")
+                if left_out := left_out_count(item.plan):
+                    pill(f"{left_out} left out").mark(f"review-left-out-{item.key}")
+                pill(f"{len(item.plan.new_rows)} new / {len(item.plan.rows)}", "acc").mark(
+                    f"review-count-{item.key}"
+                )
+        plan_table(item.plan, formatter, item.key, actions, hide_settled=hide_settled)
 
 
 @dataclass(frozen=True)

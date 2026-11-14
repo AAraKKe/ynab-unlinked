@@ -26,14 +26,20 @@ from tests.helpers.store import upsert
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.core.detect import Candidate, resolve_options
-from ynab_unlinked.core.importing import ImportPlan, ImportResult
+from ynab_unlinked.core.importing import ImportPlan, ImportResult, Twin
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
 from ynab_unlinked.models import assign_import_ids
 from ynab_unlinked.store import ExcludedRow, Store
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.state import AppState, state
-from ynab_unlinked.web.views.import_.data import ImportFile, forget_gone_account, import_log
+from ynab_unlinked.web.views.import_.data import (
+    ImportFile,
+    forget_gone_account,
+    hidden_note,
+    import_log,
+    listed_rows,
+)
 from ynab_unlinked.web.wording import IMPORT_FAILED
 
 pytestmark = pytest.mark.version("V4")
@@ -108,6 +114,11 @@ async def drop(user: User, *paths: Path) -> None:
         ]
     )
     await user.should_see(marker="import-files", retries=20)
+
+
+def show_every_row(user: User) -> None:
+    """Turn off the switch that hides the rows already in YNAB or left out."""
+    user.find(marker="hide-settled").click()
 
 
 def review_button(user: User) -> ui.button:
@@ -570,10 +581,11 @@ async def test_money_in_on_a_row_left_out_keeps_its_tone_on_the_crossed_out_row(
     await drop(user, SABADELL)
     await user.should_see("3 new / 3", marker="count-1", retries=30)
     user.find(marker="review").click()
+    show_every_row(user)
 
     user.find(marker="leave-out-1-1").click()
 
-    await user.should_see("left out", marker="row-status-1-1", retries=20)
+    await user.should_see(marker="row-status-1-1", content="left out", retries=20)
     label = user.find(marker="row-amount-1-1").elements.pop()
     row = label.parent_slot.parent.parent_slot.parent
     assert (label.text, "in" in label.classes, "out" in row.classes) == ("+12.50€", True, True)
@@ -602,7 +614,9 @@ async def test_a_row_left_out_in_the_review_is_never_sent_and_stays_left_out(
 
     user.find(marker="leave-out-1-0").click()
 
-    await user.should_see("left out", marker="row-status-1-0", retries=20)
+    # It is no longer a row to send: gone from the list, counted under it
+    await user.should_see(marker="hidden-1", content="Hidden: 1 left out", retries=20)
+    await user.should_not_see(marker="row-status-1-0")
     await user.should_see("1 left out", marker="review-left-out")
     await user.should_see("2 new transactions in 1 account", marker="review-summary")
     store = state().store
@@ -625,12 +639,16 @@ async def test_a_row_left_out_before_comes_back_crossed_out_and_can_be_included_
 ):
     await drop(user, SABADELL)
     await user.should_see("2 new / 3", marker="count-1", retries=30)
+    # Counted as left out, not as already in YNAB
+    await user.should_see(marker="files-left-out", content="1 left out")
+    await user.should_see(marker="files-in-ynab", content="0 already in YNAB")
     user.find(marker="review").click()
-    await user.should_see("left out", marker="row-status-1-0")
+    show_every_row(user)
+    await user.should_see(marker="row-status-1-0", content="left out", retries=20)
 
     user.find(marker="include-1-0").click()
 
-    await user.should_see("new", marker="row-status-1-0", retries=20)
+    await user.should_see(marker="row-status-1-0", content="new", retries=20)
     await user.should_see("3 new transactions in 1 account", marker="review-summary")
     store = state().store
     assert store.excluded(BUDGET_ID) == []
@@ -661,7 +679,8 @@ async def test_a_row_matched_onto_a_reconciled_transaction_is_shown_as_in_ynab(
 
     await user.should_see("2 new / 3", marker="count-1", retries=30)
     user.find(marker="review").click()
-    await user.should_see("matched in YNAB", marker="row-status-1-0")
+    show_every_row(user)
+    await user.should_see(marker="row-status-1-0", content="matched in YNAB", retries=20)
 
 
 @pytest.fixture
@@ -727,11 +746,13 @@ async def test_a_row_that_may_be_in_ynab_is_imported_anyway_or_left_out(
     await drop(user, SABADELL)
     await user.should_see("2 new / 3", marker="count-1", retries=30)
     user.find(marker="review").click()
-    await user.should_see("may be in YNAB", marker="row-status-1-0")
+    # Listed although the rows that are not sent are hidden: it waits for a choice
+    await user.should_see(marker="row-status-1-0", content="may be in YNAB")
+    show_every_row(user)
 
     user.find(marker=button).click()
 
-    await user.should_see(status, marker="row-status-1-0", retries=20)
+    await user.should_see(marker="row-status-1-0", content=status, retries=20)
     await user.should_see(summary, marker="review-summary")
     await user.should_not_see(marker="review-held")
     await user.should_not_see(marker="legend-maybe_in_ynab")
@@ -753,12 +774,128 @@ async def test_the_legend_explains_only_the_tags_on_screen(
     user.find(marker="review").click()
 
     await user.should_see("Sent to YNAB when you import.", marker="legend-new")
-    await user.should_see("Imported before. Never sent twice.", marker="legend-in_ynab")
+    # The rows already in YNAB are hidden, and so is their tag
+    await user.should_not_see(marker="legend-in_ynab")
+    show_every_row(user)
+    await user.should_see(marker="legend-in_ynab", content="Never sent twice.", retries=20)
     await user.should_not_see(marker="legend-excluded")
 
     user.find(marker="leave-out-1-1").click()
 
     await user.should_see("You left it out.", marker="legend-excluded", retries=20)
+
+
+@pytest.fixture
+def first_row_in_ynab(ynab: YnabClientStub) -> None:
+    """YNAB already holds the first Sabadell row."""
+    ynab.api("transactions").get_transactions_by_account.return_value.data.transactions = [
+        TransactionDetailFactory(import_id=import_ids("sabadell", SABADELL)[0])
+    ]
+
+
+async def test_rows_that_are_not_sent_are_hidden_until_the_switch_is_turned_off(
+    accounts: LatestConfig, ynab: YnabClientStub, first_row_in_ynab: None, user: User
+):
+    await drop(user, SABADELL)
+    await user.should_see("2 new / 3", marker="count-1", retries=30)
+
+    # In the file's body on Files, and in Review
+    for step in ("files", "review"):
+        if step == "review":
+            user.find(marker="review").click()
+            await user.should_see(marker="review-1")
+        await user.should_see(marker="hidden-1", content="Hidden: 1 already in YNAB")
+        await user.should_not_see(marker="row-status-1-0")
+        await user.should_see(marker="row-status-1-1", content="new")
+        await user.should_see(marker="row-status-1-2", content="new")
+    await user.should_see(marker="review-count-1", content="2 new / 3")
+
+    show_every_row(user)
+
+    await user.should_see(marker="row-status-1-0", content="already in YNAB", retries=20)
+    await user.should_not_see(marker="hidden-1")
+    user.find(marker="back").click()
+    await user.should_see(marker="files-footer", retries=20)
+    await user.should_see(marker="row-status-1-0", content="already in YNAB")
+
+    user.find(marker="hide-settled").click()
+
+    await user.should_see(marker="hidden-1", content="Hidden: 1 already in YNAB", retries=20)
+    await user.should_not_see(marker="row-status-1-0")
+
+
+async def test_the_browser_remembers_that_every_row_is_shown(
+    accounts: LatestConfig, ynab: YnabClientStub, first_row_in_ynab: None, user: User
+):
+    await drop(user, SABADELL)
+    await user.should_see("2 new / 3", marker="count-1", retries=30)
+    show_every_row(user)
+    await user.should_see(marker="row-status-1-0", content="already in YNAB", retries=20)
+
+    await drop(user, SABADELL)
+
+    await user.should_see(marker="count-1", content="2 new / 3", retries=30)
+    await user.should_see(marker="row-status-1-0", content="already in YNAB")
+    await user.should_not_see(marker="hidden-1")
+
+
+async def test_the_switch_is_there_only_while_rows_are_listed(
+    accounts: LatestConfig, ynab: YnabClientStub, user: User
+):
+    await user.open(shell.IMPORT_PATH)
+    await user.should_not_see(marker="hide-settled")
+
+    await drop(user, SABADELL)
+    await user.should_see("3 new / 3", marker="count-1", retries=30)
+    await user.should_see(marker="hide-settled")
+
+    user.find(marker="review").click()
+    await user.should_see(marker="hide-settled")
+    user.find(marker="import").click()
+
+    await user.should_see("3 transactions imported", retries=30)
+    await user.should_not_see(marker="hide-settled")
+
+
+def _plan(*rows: Any) -> ImportPlan:
+    return ImportPlan(entity_name="sabadell", account_id=ORO, input_file=SABADELL, rows=rows)
+
+
+def test_hiding_keeps_the_rows_to_send_and_to_check_with_their_place_in_the_file():
+    plan = _plan(
+        ImportRowFactory(import_id="YNAB:-1:x:1", already_imported=True),
+        ImportRowFactory(import_id="YNAB:-2:x:1"),
+        ImportRowFactory(import_id="YNAB:-3:x:1", already_imported=True, matched=True),
+        ImportRowFactory(import_id="YNAB:-4:x:1", excluded=True),
+        ImportRowFactory(
+            import_id="YNAB:-5:x:1", twin=Twin(payee="Japan trip", date=dt.date(2026, 10, 17))
+        ),
+    )
+
+    # The row that may be in YNAB stays: it waits for a choice
+    assert [index for index, _ in listed_rows(plan, hide_settled=True)] == [1, 4]
+    assert [index for index, _ in listed_rows(plan, hide_settled=False)] == [0, 1, 2, 3, 4]
+    assert hidden_note(plan) == "Hidden: 2 already in YNAB, 1 left out"
+
+
+@pytest.mark.parametrize(
+    ("rows", "note"),
+    [
+        pytest.param([{}], None, id="nothing-hidden"),
+        pytest.param(
+            [{"already_imported": True}],
+            "Nothing to import. Hidden: 1 already in YNAB",
+            id="every-row-hidden",
+        ),
+        pytest.param([{"excluded": True}, {}], "Hidden: 1 left out", id="some-hidden"),
+    ],
+)
+def test_the_line_under_a_table_counts_what_is_hidden(rows: list[dict], note: str | None):
+    plan = _plan(
+        *(ImportRowFactory(import_id=f"YNAB:-{i}:x:1", **row) for i, row in enumerate(rows))
+    )
+
+    assert hidden_note(plan) == note
 
 
 async def test_what_an_import_created_is_kept_in_the_budget_copy_at_once(

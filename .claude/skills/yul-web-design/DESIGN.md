@@ -130,6 +130,25 @@ from the local store; Home never calls YNAB. Before the first sync a quiet banne
 
 A three step flow with a horizontal stepper at the top. Steps advance on their own.
 
+A statement usually repeats rows of the one before it, so the tables list only what the
+import will do something about. On the right of the stepper, while there is a table to
+filter (Files with a file, Review), the switch "Hide rows already in YNAB or left out" is on
+until the user turns it off, which the browser remembers. On, a table lists the new rows
+and the ones to check, the legend explains only those tags, and a faint line under the
+table counts the rest: "Hidden: 12 already in YNAB, 1 left out" ("Nothing to import. Hidden:
+…" with no table when that is every row). A row left out with the switch on leaves the list
+at once (the toast and the count say where it went); "Include again" is on it with the
+switch off. Counts (new / total, "n left out", the footers) always count every row.
+
+On a phone (under 640px) nothing is squeezed into columns. The switch is a row of its own
+under the steps, its label on the left. A file on Files keeps its name, the remove button
+and the arrow on the first line, with what was detected (bank, options, account, count)
+wrapping under it. A file's card in Review reads like a list item: the bank and its counts
+on the first line, the account and the file name under the bank. A row of a table is two
+lines, the payee and the amount, then the date, the tag and what to do with it ("Leave
+out"), with no header row. A flow's footer (Import, Reconcile) puts what it counts on a line
+of its own and the buttons under it, the primary one as wide as the space left.
+
 1. **Files**. Dropzone (large until the first file, then compact at the top). Each file
    appears as a row with a type badge, name, size and a live detection state: scanning
    spinner -> loader pill with confidence and the account it maps to -> count of new vs

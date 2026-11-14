@@ -16,6 +16,8 @@ from ynab_unlinked.web.views.import_.data import (
     STATUS_LABELS,
     STATUS_MEANINGS,
     file_color,
+    hidden_note,
+    listed_rows,
     statuses_shown,
     twin_note,
 )
@@ -45,9 +47,9 @@ class RowActions:
     send_anyway: Callable[[ImportRow], Awaitable[None]]
 
 
-def status_legend(plans: Sequence[ImportPlan]) -> None:
-    """What each tag of the rows of `plans` means, only the ones they show."""
-    if not (statuses := statuses_shown(plans)):
+def status_legend(plans: Sequence[ImportPlan], hide_settled: bool = False) -> None:
+    """What each tag of the rows of `plans` means, only the ones the tables list."""
+    if not (statuses := statuses_shown(plans, hide_settled)):
         return
     with ui.element("div").classes("yul-imp-legend").mark("status-legend"):
         for status in statuses:
@@ -56,27 +58,46 @@ def status_legend(plans: Sequence[ImportPlan]) -> None:
 
 
 def plan_table(
-    plan: ImportPlan, formatter: Formatter, key: int, actions: RowActions | None = None
+    plan: ImportPlan,
+    formatter: Formatter,
+    key: int,
+    actions: RowActions | None = None,
+    *,
+    hide_settled: bool = False,
 ) -> None:
-    """Every row of the file `key` with its status; with `actions`, the control to change it.
+    """The rows of the file `key` with their status; with `actions`, the control to change it.
 
     Every row is tagged (`status_legend` says what the tags mean): rows already in YNAB (by
     import id or through a match) are dimmed, rows left out crossed out, and a row that may
-    be in YNAB names the transaction there it looks like.
+    be in YNAB names the transaction there it looks like. With `hide_settled` those dimmed
+    and crossed out rows are not listed, and a line under the table counts them.
     """
+    rows = listed_rows(plan, hide_settled)
+    if rows or not hide_settled:
+        _rows(rows, formatter, key, actions)
+    if hide_settled and (note := hidden_note(plan)) is not None:
+        ui.label(note).classes("yul-imp-hidden").mark(f"hidden-{key}")
+
+
+def _rows(
+    rows: Sequence[tuple[int, ImportRow]],
+    formatter: Formatter,
+    key: int,
+    actions: RowActions | None,
+) -> None:
     with ui.element("table").classes("yul-imp-table"):
         _header(actions is not None)
-        for index, row in enumerate(plan.rows):
+        for index, row in rows:
             status = row.status
             with ui.element("tr") as tr:
                 note = None
                 if status is RowStatus.MAYBE_IN_YNAB and row.twin is not None:
                     note = (twin_note(row.twin, formatter), f"row-twin-{key}-{index}")
                 _cells(row.transaction, formatter, note).mark(f"row-amount-{key}-{index}")
-                with ui.element("td").classes("r"):
+                with ui.element("td").classes("r c-status"):
                     _status(status).mark(f"row-status-{key}-{index}")
                 if actions is not None:
-                    with ui.element("td").classes("r"):
+                    with ui.element("td").classes("r c-act"):
                         _action(actions, row, status, f"{key}-{index}")
             set_class(tr, "dim", row.already_imported)
             set_class(tr, "out", status is RowStatus.EXCLUDED)
@@ -118,12 +139,12 @@ def transactions_table(transactions: Sequence[Transaction], formatter: Formatter
         for transaction in transactions:
             with ui.element("tr"):
                 _cells(transaction, formatter)
-                with ui.element("td").classes("r"):
+                with ui.element("td").classes("r c-status"):
                     ui.label("…").classes("yul-faint")
 
 
 def _header(actions: bool = False) -> None:
-    with ui.element("tr"):
+    with ui.element("tr").classes("head"):
         for title, align in (("Date", ""), ("Payee", ""), ("Amount", "r"), ("Status", "r")):
             with ui.element("th").classes(align):
                 ui.label(title)
@@ -134,13 +155,17 @@ def _header(actions: bool = False) -> None:
 def _cells(
     transaction: Transaction, formatter: Formatter, note: tuple[str, str] | None = None
 ) -> ui.label:
-    """The date, payee and amount (returned); `note` is a line under the payee and its marker."""
-    with ui.element("td").classes("num"):
+    """The date, payee and amount (returned); `note` is a line under the payee and its marker.
+
+    Each cell names its column (`c-date`, `c-payee`, ...): on a phone a row is laid out as
+    two lines by those names instead of as columns.
+    """
+    with ui.element("td").classes("num c-date"):
         ui.label(formatter.format_date(transaction.date))
-    with ui.element("td"):
+    with ui.element("td").classes("c-payee"):
         ui.label(transaction.payee)
         if note is not None:
             text, marker = note
             ui.label(text).classes("yul-imp-twin").mark(marker)
-    with ui.element("td").classes("r num"):
+    with ui.element("td").classes("r num c-amt"):
         return amount(transaction.amount, formatter)
