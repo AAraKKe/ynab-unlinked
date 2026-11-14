@@ -24,6 +24,7 @@ from tests.factories import (
 from tests.helpers import assets
 from tests.helpers.statements import bbva_sheet, write_xls
 from tests.helpers.store import upsert
+from tests.helpers.web import eventually
 from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import ImportedFiles, LatestConfig, LoaderConfig
 from ynab_unlinked.core import imported_files
@@ -977,6 +978,7 @@ async def test_the_imported_file_is_offered_for_removal_and_removed(
     # Asked again next time: the box was not ticked
     assert LatestConfig.load().imported_files is ImportedFiles.ASK
     # Home says which file went, and the log keeps the bytes it held
+    await eventually(lambda: bool(state().store.activity(BUDGET_ID, kind="remove")))
     [entry] = state().store.activity(BUDGET_ID, kind="remove")
     assert entry.message == f"Removed {statement} from this computer"
     assert entry.details == {
@@ -1061,6 +1063,9 @@ async def test_dont_ask_again_saves_the_answer_and_the_next_import_follows_it(
         marker="removal-saved", content=f"{said}. Settings › Data & privacy changes it.", retries=20
     )
     assert LatestConfig.load().imported_files is saved
+    if removed:
+        # The line is drawn once the file is gone
+        await user.should_see(marker="removal-done", retries=20)
     assert statement.exists() is not removed
 
     card = Path(shutil.copy(bbva_file, downloads / "tarjeta.xlsx"))
