@@ -162,7 +162,7 @@ def draw_body(flow: ImportFlow, item: ImportFile) -> None:
         return
     ui.label(f"Matched because: {candidate.reason}.").classes("yul-imp-note")
     if item.plan is not None:
-        status_legend([item.plan])
-        plan_table(item.plan, flow.formatter(), item.key)
+        status_legend([item.plan], flow.hide_settled)
+        plan_table(item.plan, flow.formatter(), item.key, hide_settled=flow.hide_settled)
     elif candidate.transactions is not None:
         transactions_table(candidate.transactions, flow.formatter())

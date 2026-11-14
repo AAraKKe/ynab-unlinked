@@ -84,9 +84,15 @@ def review_footer(
 
 
 def review_card(
-    item: ImportFile, account_name: str, formatter: Formatter, actions: RowActions
+    item: ImportFile,
+    account_name: str,
+    formatter: Formatter,
+    actions: RowActions,
+    *,
+    hide_settled: bool = False,
 ) -> None:
-    """A ready file in Review: its bank, account and file, the counts and its rows."""
+    """A ready file in Review: its bank, account and file, the counts and its rows (without
+    the ones `hide_settled` hides)."""
     assert item.plan is not None and item.candidate is not None
     with glass_card().classes("yul-imp-card").mark(f"review-{item.key}"):
         with ui.element("div").classes("yul-row").style("margin-bottom:8px"):
@@ -102,7 +108,7 @@ def review_card(
             pill(f"{len(item.plan.new_rows)} new / {len(item.plan.rows)}", "acc").mark(
                 f"review-count-{item.key}"
             )
-        plan_table(item.plan, formatter, item.key, actions)
+        plan_table(item.plan, formatter, item.key, actions, hide_settled=hide_settled)
 
 
 @dataclass(frozen=True)

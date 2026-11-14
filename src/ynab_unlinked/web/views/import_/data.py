@@ -231,9 +231,44 @@ STATUS_MEANINGS = {
 """What each tag means, as the legend above the rows says it."""
 
 
-def statuses_shown(plans: Sequence[ImportPlan]) -> list[RowStatus]:
-    """The statuses the rows of these plans have, in the legend's order."""
-    present = {row.status for plan in plans for row in plan.rows}
+SETTLED = frozenset({RowStatus.IN_YNAB, RowStatus.MATCHED, RowStatus.EXCLUDED})
+"""The rows an import never sends and that ask nothing of the user: `HIDE_SETTLED` hides them.
+A row that may be in YNAB is not one of them, it waits for a choice."""
+
+HIDE_SETTLED = "Hide rows already in YNAB or left out"
+"""The switch over the tables, on until the user turns it off."""
+
+
+def listed_rows(plan: ImportPlan, hide_settled: bool) -> list[tuple[int, ImportRow]]:
+    """The rows of `plan` a table lists, each with its place in the plan (what its markers
+    are numbered with, whatever is hidden): all of them, or without the `SETTLED` ones."""
+    return [
+        (index, row)
+        for index, row in enumerate(plan.rows)
+        if not (hide_settled and row.status in SETTLED)
+    ]
+
+
+def hidden_note(plan: ImportPlan) -> str | None:
+    """What `HIDE_SETTLED` hides of `plan`: "Hidden: 12 already in YNAB, 1 left out". It starts
+    with "Nothing to import." when that is every row. None when it hides nothing."""
+    parts = [
+        f"{count} {label}"
+        for count, label in (
+            (plan.already_imported_count, STATUS_LABELS[RowStatus.IN_YNAB]),
+            (left_out_count(plan), STATUS_LABELS[RowStatus.EXCLUDED]),
+        )
+        if count
+    ]
+    if not parts:
+        return None
+    note = f"Hidden: {', '.join(parts)}"
+    return note if listed_rows(plan, True) else f"Nothing to import. {note}"
+
+
+def statuses_shown(plans: Sequence[ImportPlan], hide_settled: bool = False) -> list[RowStatus]:
+    """The statuses of the rows of these plans that are listed, in the legend's order."""
+    present = {row.status for plan in plans for _, row in listed_rows(plan, hide_settled)}
     return [status for status in STATUS_LABELS if status in present]
 
 

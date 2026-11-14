@@ -130,6 +130,16 @@ from the local store; Home never calls YNAB. Before the first sync a quiet banne
 
 A three step flow with a horizontal stepper at the top. Steps advance on their own.
 
+A statement usually repeats rows of the one before it, so the tables list only what the
+import will do something about. On the right of the stepper, while there is a table to
+filter (Files with a file, Review), the switch "Hide rows already in YNAB or left out" is on
+until the user turns it off, which the browser remembers. On, a table lists the new rows
+and the ones to check, the legend explains only those tags, and a faint line under the
+table counts the rest: "Hidden: 12 already in YNAB, 1 left out" ("Nothing to import. Hidden:
+…" with no table when that is every row). A row left out with the switch on leaves the list
+at once (the toast and the count say where it went); "Include again" is on it with the
+switch off. Counts (new / total, "n left out", the footers) always count every row.
+
 1. **Files**. Dropzone (large until the first file, then compact at the top). Each file
    appears as a row with a type badge, name, size and a live detection state: scanning
    spinner -> loader pill with confidence and the account it maps to -> count of new vs

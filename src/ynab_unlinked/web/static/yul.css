@@ -906,7 +906,7 @@ body.yul-dragging .yul-dropover { display: grid; animation: yul-fade .15s ease b
 
 /* ---- import: stepper, file rows, review tables (views/import_) ---- */
 .yul-imp { width: 100%; }
-.yul-imp-stepper { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.yul-imp-stepper { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .yul-imp-st { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-weight: 500; font-size: 13px; }
 .yul-imp-st > .num { width: 24px; height: 24px; font-size: 12px; }
 .yul-imp-st.done > .num { background: color-mix(in oklab, var(--good) 20%, transparent); }
@@ -975,6 +975,7 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   justify-items: start; margin: 2px 2px 14px; color: var(--text-2); font-size: 12.5px;
 }
 .yul-imp-note { color: var(--text-2); font-size: 12.5px; margin-bottom: 8px; }
+.yul-imp-hidden { color: var(--text-3); font-size: 12.5px; margin: 8px 8px 0; }
 .yul-imp-card { margin-bottom: 10px; padding: 14px 16px; }
 .yul-imp-done { text-align: center; padding: 28px; }
 

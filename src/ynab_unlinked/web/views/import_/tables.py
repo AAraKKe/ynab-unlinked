@@ -16,6 +16,8 @@ from ynab_unlinked.web.views.import_.data import (
     STATUS_LABELS,
     STATUS_MEANINGS,
     file_color,
+    hidden_note,
+    listed_rows,
     statuses_shown,
     twin_note,
 )
@@ -45,9 +47,9 @@ class RowActions:
     send_anyway: Callable[[ImportRow], Awaitable[None]]
 
 
-def status_legend(plans: Sequence[ImportPlan]) -> None:
-    """What each tag of the rows of `plans` means, only the ones they show."""
-    if not (statuses := statuses_shown(plans)):
+def status_legend(plans: Sequence[ImportPlan], hide_settled: bool = False) -> None:
+    """What each tag of the rows of `plans` means, only the ones the tables list."""
+    if not (statuses := statuses_shown(plans, hide_settled)):
         return
     with ui.element("div").classes("yul-imp-legend").mark("status-legend"):
         for status in statuses:
@@ -56,17 +58,36 @@ def status_legend(plans: Sequence[ImportPlan]) -> None:
 
 
 def plan_table(
-    plan: ImportPlan, formatter: Formatter, key: int, actions: RowActions | None = None
+    plan: ImportPlan,
+    formatter: Formatter,
+    key: int,
+    actions: RowActions | None = None,
+    *,
+    hide_settled: bool = False,
 ) -> None:
-    """Every row of the file `key` with its status; with `actions`, the control to change it.
+    """The rows of the file `key` with their status; with `actions`, the control to change it.
 
     Every row is tagged (`status_legend` says what the tags mean): rows already in YNAB (by
     import id or through a match) are dimmed, rows left out crossed out, and a row that may
-    be in YNAB names the transaction there it looks like.
+    be in YNAB names the transaction there it looks like. With `hide_settled` those dimmed
+    and crossed out rows are not listed, and a line under the table counts them.
     """
+    rows = listed_rows(plan, hide_settled)
+    if rows or not hide_settled:
+        _rows(rows, formatter, key, actions)
+    if hide_settled and (note := hidden_note(plan)) is not None:
+        ui.label(note).classes("yul-imp-hidden").mark(f"hidden-{key}")
+
+
+def _rows(
+    rows: Sequence[tuple[int, ImportRow]],
+    formatter: Formatter,
+    key: int,
+    actions: RowActions | None,
+) -> None:
     with ui.element("table").classes("yul-imp-table"):
         _header(actions is not None)
-        for index, row in enumerate(plan.rows):
+        for index, row in rows:
             status = row.status
             with ui.element("tr") as tr:
                 note = None

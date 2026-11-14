@@ -4,7 +4,9 @@ Files arrive from the drop zone on this page, from the shell's pending uploads (
 another page) and from drops while the view is on screen. Each one is saved into a temporary
 directory owned by the flow, detected on its own (`core.detect`), mapped to its account and
 compared with YNAB (`core.importing.build_import_plan`). The review lists what will be
-created; one click commits every file in turn (`commit_import_plan`) and logs it.
+created; one click commits every file in turn (`commit_import_plan`) and logs it. A switch
+next to the stepper hides the rows that are not sent (already in YNAB, left out), on until
+the user turns it off, which the browser remembers.
 
 This is the twin of `yul load auto`, built on the same core calls. The model is in `data`,
 the file rows in `rows`, the tables in `tables`.
@@ -37,9 +39,10 @@ from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import ExcludedRow, StoredAccount
 from ynab_unlinked.web import shell
 from ynab_unlinked.web.components import set_class
+from ynab_unlinked.web.components.controls import switch
 from ynab_unlinked.web.components.dropzone import dropzone
 from ynab_unlinked.web.state import state
-from ynab_unlinked.web.storage import tab_storage
+from ynab_unlinked.web.storage import tab_storage, user_storage
 from ynab_unlinked.web.views.import_.cards import (
     Progress,
     done_card,
@@ -49,6 +52,7 @@ from ynab_unlinked.web.views.import_.cards import (
     review_footer,
 )
 from ynab_unlinked.web.views.import_.data import (
+    HIDE_SETTLED,
     STEPS,
     ImportFile,
     Status,
@@ -69,6 +73,16 @@ from ynab_unlinked.web.views.import_.tables import RowActions, status_legend
 from ynab_unlinked.web.wording import IMPORT_FAILED, left_out_entry, plural, ynab_error_message
 
 _FLOW_KEY = "yul.import_flow"
+_SHOW_ALL_KEY = "yul.import_show_all"
+
+
+def _hide_settled() -> bool:
+    """Whether the tables hide the rows that are not sent: yes until the user turned it off
+    (or outside a browser session)."""
+    try:
+        return user_storage().get(_SHOW_ALL_KEY) is not True
+    except RuntimeError:
+        return True
 
 
 class ImportFlow:
@@ -81,6 +95,8 @@ class ImportFlow:
         self.step = 0
         self.committing = False
         self.reconciled = False
+        self.hide_settled = _hide_settled()
+        """The tables list only the rows to send or to check (`data.HIDE_SETTLED`)."""
         self.next_key = 1
         self.account_names: dict[str, str] | None = None
         self.accounts: list[StoredAccount] | None = None
@@ -94,6 +110,7 @@ class ImportFlow:
         self.footer: ui.element | None = None
         self.review_boxes: dict[int, ui.element] = {}
         self.legend: ui.element | None = None
+        self.filter: ui.element | None = None
 
     # ---- lifecycle -----------------------------------------------------------------------
 
@@ -107,6 +124,9 @@ class ImportFlow:
                         ui.label(str(index + 1)).classes("num")
                         ui.label(title)
                     self.stepper.append(st)
+                ui.element("span").classes("yul-grow")
+                self.filter = switch(HIDE_SETTLED, self.hide_settled, self.set_hide_settled)
+                self.filter.mark("hide-settled")
             self.content = ui.element("div")
         self.show_files()
         return root
@@ -132,6 +152,23 @@ class ImportFlow:
         for index, element in enumerate(self.stepper):
             set_class(element, "on", index == step)
             set_class(element, "done", index < step)
+        self.show_filter()
+
+    def show_filter(self) -> None:
+        """The switch is there while there are tables to filter: Files with a file, Review."""
+        if self.filter is not None:
+            self.filter.set_visibility(self.step < 2 and bool(self.files))
+
+    def set_hide_settled(self, on: bool) -> None:
+        self.hide_settled = on
+        user_storage()[_SHOW_ALL_KEY] = not on
+        if self.step == 0:
+            for item in self.files:
+                draw_row(self, item)
+        elif self.step == 1:
+            for item in self.ready:
+                self.draw_review_card(item)
+            self.draw_review_legend()
 
     def formatter(self) -> Formatter:
         return state().require_formatter()
@@ -381,6 +418,7 @@ class ImportFlow:
         if self.footer is None or self.step != 0:
             return
         self.footer.clear()
+        self.show_filter()
         if not self.files:
             return
         with self.footer:
@@ -418,7 +456,9 @@ class ImportFlow:
             return
         self.legend.clear()
         with self.legend:
-            status_legend([item.plan for item in self.ready if item.plan is not None])
+            status_legend(
+                [item.plan for item in self.ready if item.plan is not None], self.hide_settled
+            )
 
     def draw_review_card(self, item: ImportFile) -> None:
         if (box := self.review_boxes.get(item.key)) is None or item.plan is None:
@@ -430,7 +470,13 @@ class ImportFlow:
             send_anyway=lambda row: self.send_anyway(item, row),
         )
         with box:
-            review_card(item, self.account_name(item.plan.account_id), self.formatter(), actions)
+            review_card(
+                item,
+                self.account_name(item.plan.account_id),
+                self.formatter(),
+                actions,
+                hide_settled=self.hide_settled,
+            )
 
     def draw_review_footer(self) -> None:
         if self.footer is None or self.step != 1:
