@@ -44,3 +44,8 @@ jobs:
 
       - name: Run Unit Tests
         run: uv run --no-sync poe cov
+
+      # A web test that reads the page before the work it waits for has finished passes on
+      # a fast machine and fails now and then on a busy one. Slowed, it fails every time.
+      - name: Run web tests with slow off-loop work
+        run: uv run --no-sync poe races

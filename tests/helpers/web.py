@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from nicegui import ui
+from nicegui import ElementFilter, ui
 from nicegui.testing import User as NiceGUIUser
 from nicegui.testing.general import nicegui_reset_globals
 from pytest_mock import MockerFixture
@@ -84,7 +84,57 @@ class User(NiceGUIUser):
     NiceGUI checks `retries` times, 100 ms apart (50 ms for `should_not_see`): the wait before
     failing is then a guess of how long the page takes, which flakes on a slow runner. Here
     `retries` is accepted for NiceGUI's signature but every check waits the same, long time.
+
+    A text with a marker, `should_see("3 new / 7", marker="count-1")`, is the element marked
+    `count-1` showing that text, itself or in something it holds. NiceGUI drops the marker
+    there and looks for the text anywhere on the page, so the check passes on a toast or on
+    another card: too early for what the test reads next, or for the wrong reason altogether.
+    A text with `kind` or `content` cannot be honoured and is refused.
     """
+
+    def _sees(
+        self,
+        target: str | type[ui.element] | None = None,
+        kind: type[ui.element] | None = None,
+        marker: str | list[str] | None = None,
+        content: str | list[str] | None = None,
+    ) -> bool:
+        if isinstance(target, str) and (kind is not None or content is not None):
+            raise TypeError(
+                "A text target takes a marker only: NiceGUI would ignore kind= and content= "
+                "here. Pass marker= and content= without a target instead."
+            )
+        if isinstance(target, str) and marker is not None:
+            return self._marked_shows(target, marker)
+        return super()._sees(target, kind, marker, content)
+
+    def _marked_shows(self, text: str, marker: str | list[str]) -> bool:
+        """Whether a visible element with `marker` shows `text`, itself or in a descendant."""
+        scope = self._current_scope()
+
+        def visible(**filters: Any) -> ElementFilter[ui.element]:
+            found = ElementFilter(only_visible=True, local_scope=False, **filters)
+            return found.within(instance=scope) if scope is not None else found
+
+        with self._client:
+            showing = set(visible(content=text))
+            return any(
+                element in showing or any(e in showing for e in element.descendants())
+                for element in visible(marker=marker)
+            )
+
+    def _build_error_message(
+        self,
+        target: str | type[ui.element] | None = None,
+        kind: type[ui.element] | None = None,
+        marker: str | list[str] | None = None,
+        content: str | list[str] | None = None,
+    ) -> str:
+        message = super()._build_error_message(target, kind, marker, content)
+        if isinstance(target, str) and marker is not None:
+            _, _, page = message.partition(" on the page:")
+            return f"element marked {marker!r} showing {target!r} on the page:{page}"
+        return message
 
     async def should_see(
         self,

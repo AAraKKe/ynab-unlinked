@@ -27,6 +27,36 @@ def test_something(today: datetime.datetime):
     assert today == datetime.datetime.now()
 ```
 
+## No flaky tests
+
+A hard rule of the project (`AGENTS.md`): a test passes every time, on every machine and
+in any order. A failure that comes and goes is a bug in the test or in the code, and is
+fixed at its cause. Rerunning, a longer timeout, a sleep, a skip or a retry marker are not
+fixes. What keeps the suite that way:
+
+- **Wait for the thing you read.** After a click, wait for the element or the state that
+  only exists once the work is done, then assert. A line drawn before the work ends (a
+  "saved" note ahead of a removal that runs off the loop) proves nothing about what comes
+  after it. For state with nothing on screen (a file, the store, the config), wait with
+  `eventually(lambda: ...)`.
+- **`uv run poe races`** runs the web tests with every `run.io_bound` call slowed
+  (`YUL_TEST_SLOW_IO=0.05`). A test that reads the page or the disk before the work it
+  depends on has finished then fails every time instead of now and then on a busy runner.
+  CI runs it on every PR. Run it before pushing a change under `tests/web` or `web/`.
+- **A text with a marker checks both.** `should_see("3 new / 7", marker="count-1")` is the
+  element marked `count-1` showing that text, itself or in something it holds
+  (`tests.helpers.web.User`). NiceGUI's own `User` drops the marker and finds the text
+  anywhere on the page, a toast included, so the check returned too early or passed for
+  the wrong reason. A text with `kind=` or `content=` is refused.
+- **No real time, no real machine.** Dates come from `today`, intervals are module
+  constants a test patches down, and the autouse fixtures keep every test off the real
+  config, keychain, PyPI and disk (`yul_home`, `no_keychain`, `no_newer_yul`).
+- **No order.** A test sets up what it needs and leaves nothing behind; the suite passes
+  in any order.
+
+When a flaky test shows that one of these tools is missing or too weak, the change that
+fixes the test adds the tool, a test of the tool, and a line here.
+
 ## What a test must do
 
 A test exists to catch a regression in *our* logic. Before writing one, ask what bug it would
@@ -111,7 +141,9 @@ is almost always waiting for a fixed interval, not working. Measure before you a
   `WAIT_SECONDS` (10 s) whatever `retries` says: `await user.open("/")`, `user.find(marker=...)`,
   `await user.should_see(...)`. A passing check returns as soon as the page is right, so the
   long ceiling costs nothing; a short one is a guess of how fast a runner is, and flakes. Mark
-  elements in the views with `.mark("name")` and find them by marker rather than by text.
+  elements in the views with `.mark("name")` and find them by marker rather than by text;
+  `should_see("text", marker="name")` asks for that text in that element (see "No flaky
+  tests").
 - After a click that goes to another page, check the address with `await arrived(user, path)`
   (`tests/helpers/web.py`), never `assert user.back_history[-1] == path`: the page is on screen
   one turn of the event loop before the browser has its address, so the assert fails now and
@@ -119,9 +151,10 @@ is almost always waiting for a fixed interval, not working. Measure before you a
 - Never `user.find(...)` an element you have not waited for: wait for that element, not for
   another one drawn before it. Views read what they need first and draw a page in one go, so
   a page is never half drawn around an `await`.
-- `YUL_TEST_SLOW_IO=0.3 uv run pytest tests/web` delays every `run.io_bound` call, as a busy
-  CI runner does. A test that passes only without it reads the page before the work it waits
-  for has finished: fix the wait, or the view if it draws around an await.
+- `uv run poe races` (`YUL_TEST_SLOW_IO=0.05 pytest tests/web`, also a CI step) delays every
+  `run.io_bound` call, as a busy CI runner does. A test that passes only without it reads
+  the page before the work it waits for has finished: fix the wait, or the view if it
+  draws around an await. A longer delay (`YUL_TEST_SLOW_IO=0.3`) shows the same failures.
 - Request every fixture that changes the config or the store before `user`, which loads the
   app state from them. A test that changes the config afterwards calls `state().reload()`.
 - `tests/web/conftest.py` resets the `AppState` global for every test, so a sync a view
