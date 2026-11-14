@@ -50,7 +50,8 @@ fixes. What keeps the suite that way:
   the wrong reason. A text with `kind=` or `content=` is refused.
 - **No real time, no real machine.** Dates come from `today`, intervals are module
   constants a test patches down, and the autouse fixtures keep every test off the real
-  config, keychain, PyPI and disk (`yul_home`, `no_keychain`, `no_newer_yul`).
+  config, keychain, PyPI and disk (`yul_home`, `no_keychain`, `no_newer_yul`,
+  `downloads`).
 - **No order.** A test sets up what it needs and leaves nothing behind; the suite passes
   in any order.
 
