@@ -113,8 +113,11 @@ same change. Never update a document to describe something you did not build.
 - YNAB is the `ynab_api` stub (`tests/helpers/ynab_api.py`). The store is filled through
   `Store.sync` with the stub (see `seed` in `test_reconcile.py`). The keychain is a fail
   backend by default; `memory_keychain` when a test needs one.
-- Run `uv run pytest -q tests/web` while iterating, the whole suite and
-  `uv run poe check` (ty, strict on src) before you finish.
+- Run `uv run pytest -q tests/web` while iterating, the whole suite,
+  `uv run poe races` (the web tests with slowed off-loop work: a test that reads the page
+  too early fails every time) and `uv run poe check` (ty, strict on src) before you finish.
+- No flaky tests, ever (`AGENTS.md`, hard rules): wait for the element or state that only
+  exists once the work is done, never for one drawn before it.
 
 ## Looking at it
 
@@ -148,5 +151,5 @@ budget and takes a picture of every page.
 - [ ] `ARCHITECTURE.md` and `DESIGN.md` in this folder describe what you built.
 - [ ] A changelog fragment exists for the branch, named `<pr-number>.<type>.md`: open the PR,
       then rename the `+<slug>` fragment to its number (`uv run poe tc-check` fails until then).
-- [ ] `uv run poe check` clean, `uv run pytest -q` green.
+- [ ] `uv run poe check` clean, `uv run pytest -q` and `uv run poe races` green.
 - [ ] Commit message plain, no trailers.

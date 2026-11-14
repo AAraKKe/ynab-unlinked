@@ -1,0 +1,1 @@
+No flaky tests and root causes over consequences are now hard rules in AGENTS.md; CI runs the web tests a second time with slowed off-loop work (`uv run poe races`) so a test that reads the page too early fails every time, and a text checked with a marker is now checked in that element.

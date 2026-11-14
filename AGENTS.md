@@ -4,6 +4,20 @@
 ("entity"), skips the transactions already in YNAB (by import id), and creates the rest
 through the YNAB API. `yul app` serves the same features as a local web app.
 
+## Hard rules
+
+Two rules hold whatever else is going on. Neither is traded for speed or for a green check.
+
+- **No flaky tests.** A test passes every time, on every machine, in any order, or it is
+  broken. One that fails now and then is fixed before anything else merges, never rerun
+  until green, skipped, marked, given a longer timeout or a sleep. If it cannot be made to
+  fail every time, or cannot be written properly, with the tools the suite has, the tool
+  is what is missing: build it in the same change (`tests/AGENTS.md`, "No flaky tests").
+- **Fix root causes, not consequences.** When something breaks, find why it could break
+  and close that, so the whole class of failure is gone: the helper that let the mistake
+  through, the check CI did not run, the contract that was not written down. A change that
+  only makes this one symptom go away is not a fix.
+
 ## Layout
 
 ```
@@ -102,6 +116,7 @@ Tasks are `[tool.poe.tasks]` in `pyproject.toml` (`uv run poe` lists them).
 
 ```bash
 uv run poe cov               # tests with coverage, accepts pytest args (-k name)
+uv run poe races             # web tests with slowed off-loop work: a race fails every time
 uv run poe check             # lint + format check + ty (strict on src); check-all for a full report
 uv run poe fix               # ruff format + autofix
 uv run poe tc-check          # verify a changelog fragment exists for the branch, named after its PR
@@ -109,7 +124,7 @@ uv run yul app               # run the web app from the checkout
 uv run --with playwright python scripts/readme_screenshots.py  # README screenshots, made-up budget
 ```
 
-CI runs the same four things on every PR, after `uv sync --locked`. See `tests/AGENTS.md` for test conventions.
+CI runs the checks, the changelog check and both test runs on every PR, after `uv sync --locked`. See `tests/AGENTS.md` for test conventions.
 
 ## Web app
 
