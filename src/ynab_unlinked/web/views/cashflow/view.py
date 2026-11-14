@@ -90,14 +90,16 @@ class CashFlowView:
         with glass_card().classes("yul-nwm-card"):
             ui.label("Income and spending").classes("yul-nwm-title")
             chart(
-                income_spending_options(flow.months, palette, config.budget.currency_format),
+                income_spending_options(
+                    flow.months, palette, config.budget.currency_format, flow.notes
+                ),
                 FLOW_HEIGHT,
             ).mark("cf-chart")
         with glass_card().classes("yul-nwm-card"):
             ui.label("Savings rate").classes("yul-nwm-title")
-            chart(rate_options(flow.months, palette, flow.savings_rate), RATE_HEIGHT).mark(
-                "cf-rate-chart"
-            )
+            chart(
+                rate_options(flow.months, palette, flow.savings_rate, flow.notes), RATE_HEIGHT
+            ).mark("cf-rate-chart")
         with glass_card().classes("yul-nwm-card").mark("cf-sources"):
             with ui.element("div").classes("yul-row"):
                 ui.label("Came in from").classes("yul-nwm-title yul-grow")

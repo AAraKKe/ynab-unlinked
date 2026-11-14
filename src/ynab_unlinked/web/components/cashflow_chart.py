@@ -5,7 +5,7 @@
   in its income sits over the income bar and what stood out in its spending over the spending
   bar. A month with both sends them apart, income to the left and spending to the right, each
   tied to its bar by a line. A label that would cover another one is hidden; the tooltip of
-  the month always says what stood out.
+  the month always says what stood out, under the whole note.
 - `rate_options`: the savings rate of each complete month, with its average dashed. A chart of
   its own: a rate never shares an axis with amounts.
 - `volatility_options`: one dot per category, average monthly spending across (log scale)
@@ -14,9 +14,10 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import html
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from nicegui import ui
@@ -24,7 +25,13 @@ from nicegui import ui
 from ynab_unlinked.config.models.v2 import CurrencyFormat
 from ynab_unlinked.core.cashflow import CategoryTrend, FlowMonth
 from ynab_unlinked.web.components.flow_chart import MONTH_JS
-from ynab_unlinked.web.components.history_chart import compact_js, money_js
+from ynab_unlinked.web.components.history_chart import (
+    compact_js,
+    money_js,
+    note_html,
+    note_js,
+    tooltip_block,
+)
 from ynab_unlinked.web.theme import Palette
 
 FLOW_HEIGHT = 240
@@ -101,20 +108,26 @@ def _legend(palette: Palette) -> dict[str, Any]:
     }
 
 
-def _told(month: FlowMonth) -> list[str]:
-    """What the tooltip of a month says about it, escaped: the chart may hide a label that
-    would cover another one, and on a long range it is hard to tell which month one is over."""
-    told = [month.note] if month.note else []
+def _told(month: FlowMonth, notes: Mapping[dt.date, str]) -> list[str]:
+    """What the tooltip of a month says about it, as HTML: its whole note (the bar carries the
+    first line, cut) and what stood out. The chart may hide a label that would cover another
+    one, and on a long range it is hard to tell which month one is over."""
+    note = notes.get(month.month) or month.note
+    told = [note_html(note)] if note else []
     if month.income_label:
-        told.append(f"{month.income_label} brought more than usual")
+        told.append(html.escape(f"{month.income_label} brought more than usual"))
     if month.spending_label:
-        told.append(f"{month.spending_label} spent more than usual")
-    return [html.escape(line) for line in told]
+        told.append(html.escape(f"{month.spending_label} spent more than usual"))
+    return told
 
 
 def income_spending_options(
-    months: Sequence[FlowMonth], palette: Palette, currency_format: CurrencyFormat
+    months: Sequence[FlowMonth],
+    palette: Palette,
+    currency_format: CurrencyFormat,
+    notes: Mapping[dt.date, str] | None = None,
 ) -> dict[str, Any]:
+    """`notes` holds the whole note of each month, which its tooltip writes."""
     keys = [month.month.strftime("%Y-%m") for month in months]
 
     def bars(
@@ -181,7 +194,7 @@ def income_spending_options(
     ]
     income = [m.income for m in months]
     spending = [m.spending for m in months]
-    told = json.dumps([_told(m) for m in months])
+    told = json.dumps([_told(m, notes or {}) for m in months])
     tooltip_js = (
         "(params) => {"
         "const ps = Array.isArray(params) ? params : [params];"
@@ -198,8 +211,7 @@ def income_spending_options(
         " rows += row('Saved', money(saved) + (income.value > 0 ? ' · '"
         " + Math.round(saved / income.value * 100) + '%' : '')); }"
         f"const told = {told}[ps[0].dataIndex];"
-        "if (told.length) rows += '<div style=\"margin-top:6px;padding-top:6px;border-top:1px solid"
-        f" {palette.hair};color:{palette.text_2};max-width:240px;white-space:normal\">'"
+        f"if (told.length) rows += {json.dumps(tooltip_block(palette))}"
         " + told.join('<br>') + '</div>';"
         f"return '<div style=\"color:{palette.text_3};margin-bottom:4px\">' + title + '</div>' + rows;"
         "}"
@@ -227,7 +239,10 @@ def income_spending_options(
 
 
 def rate_options(
-    months: Sequence[FlowMonth], palette: Palette, average: float | None
+    months: Sequence[FlowMonth],
+    palette: Palette,
+    average: float | None,
+    notes: Mapping[dt.date, str] | None = None,
 ) -> dict[str, Any]:
     keys = [month.month.strftime("%Y-%m") for month in months]
     rates = [
@@ -275,7 +290,8 @@ def rate_options(
             ":formatter": (
                 "(params) => { const p = Array.isArray(params) ? params[0] : params;"
                 f" return ({MONTH_JS})(p.name, 1, true) + ': '"
-                " + (p.value == null ? 'still running' : p.value + '%'); }"
+                " + (p.value == null ? 'still running' : p.value + '%')"
+                f" + ({note_js(notes, keys, palette)})(p.name); }}"
             ),
         },
         "xAxis": _month_axis(palette, keys),
@@ -389,10 +405,12 @@ def category_months_options(
     currency_format: CurrencyFormat,
     mean: float,
     line: str = "Average",
+    notes: Mapping[dt.date, str] | None = None,
 ) -> dict[str, Any]:
     """One category's spending each month (`YYYY-MM` keys) and its average as a dashed line.
 
-    `line` names the dashed line in the legend: a lumpy category's is what to set aside.
+    `line` names the dashed line in the legend: a lumpy category's is what to set aside. The
+    tooltip of a month ends with its note in `notes` (`note_js`).
     """
     money = money_js(currency_format)
     return {
@@ -417,7 +435,8 @@ def category_months_options(
                 "(params) => { const ps = Array.isArray(params) ? params : [params];"
                 f" const money = {money};"
                 f" return ({MONTH_JS})(ps[0].name, 1, true) + '<br>' + ps.map((p) =>"
-                " p.seriesName + ' ' + money(p.value)).join('<br>'); }"
+                " p.seriesName + ' ' + money(p.value)).join('<br>')"
+                f" + ({note_js(notes, months, palette)})(ps[0].name); }}"
             ),
         },
         "xAxis": _month_axis(palette, months),
@@ -450,12 +469,15 @@ def histogram_options(
 ) -> dict[str, Any]:
     """How many months fell in each slice (low, high, months) of a category's monthly amounts.
 
-    The slices are written in whole units and slanted, so close ones stay apart and readable.
+    The slices are written in whole units and slanted, so close ones stay apart and readable;
+    with the budget's decimals when a slice is narrower than a unit, or its ends would read
+    the same.
     """
     keys = [f"{low / 1000}|{high / 1000}" for low, high, _ in bins]
+    digits = 0 if all(high - low >= 1000 for low, high, _ in bins) else None
     slice_js = (
         f"(value) => {{ const [low, high] = String(value).split('|').map(Number);"
-        f" const m = {money_js(currency_format, 0)}; return m(low) + '–' + m(high); }}"
+        f" const m = {money_js(currency_format, digits)}; return m(low) + '–' + m(high); }}"
     )
     return {
         "animationDuration": 400,

@@ -89,7 +89,10 @@ ORDER = ("steady", "variable", "spiky", "lumpy")
 """The words in the order the legend, the filters and the group mix list them."""
 UNRATED = "unrated"
 """The mix's part of categories without enough months for a word."""
-BINS = 6
+FEWEST_BINS = 5
+MOST_BINS = 20
+MAX_EMPTY = 3
+"""How many slices of the histogram may hold no month."""
 
 
 def matches(trend: CategoryTrend, group: str | None, label: str | None) -> bool:
@@ -136,20 +139,36 @@ class Bin:
     months: int
 
 
-def histogram(values: Sequence[int], bins: int = BINS) -> list[Bin]:
-    """How many months fell in each of `bins` equal slices from the lowest month to the highest."""
+def _counts(values: Sequence[int], bins: int) -> list[int]:
+    """How many of `values` (not all the same) fall in each of `bins` equal slices."""
+    low = min(values)
+    width = (max(values) - low) / bins
+    counts = [0] * bins
+    for value in values:
+        counts[min(int((value - low) / width), bins - 1)] += 1
+    return counts
+
+
+def histogram(values: Sequence[int], bins: int | None = None) -> list[Bin]:
+    """How many months fell in each equal slice from the lowest month to the highest.
+
+    As many slices as show the shape: the most, from `FEWEST_BINS` to `MOST_BINS`, that leave
+    no more than `MAX_EMPTY` of them empty. `bins` asks for a number instead.
+    """
     if not values:
         return []
     low, high = min(values), max(values)
     if low == high:
         return [Bin(low, high, len(values))]
+    if bins is None:
+        # The fewest always pass: two different amounts fill two slices
+        bins = max(
+            n for n in range(FEWEST_BINS, MOST_BINS + 1) if _counts(values, n).count(0) <= MAX_EMPTY
+        )
     width = (high - low) / bins
-    counts = [0] * bins
-    for value in values:
-        counts[min(int((value - low) / width), bins - 1)] += 1
     return [
         Bin(round(low + i * width), round(low + (i + 1) * width), count)
-        for i, count in enumerate(counts)
+        for i, count in enumerate(_counts(values, bins))
     ]
 
 

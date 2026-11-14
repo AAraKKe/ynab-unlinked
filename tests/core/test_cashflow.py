@@ -136,6 +136,8 @@ def test_a_month_far_above_the_usual_is_labelled_by_what_stood_out_or_by_its_not
         # Far above in both: each says what stood out in it, income does not hide spending
         (None, "Stock sale", "🏝 Vacation"),
     ]
+    # The label is the first line; the whole note stays for the month's tooltip
+    assert flow.notes == notes
 
 
 def test_core_spending_leaves_out_one_offs(store: Store):

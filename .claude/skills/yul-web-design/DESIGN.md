@@ -199,7 +199,8 @@ without the ceremony.
 - **Hero chart** first: net worth figure and delta at the top left, range pills
   `1M 3M 6M YTD 1Y All`, grouping select `Total · By type · By account`, and a 320px
   ECharts area chart with a vertical gradient fill (accent at 35% to transparent), 2px
-  line, hairline grid, crosshair tooltip listing every series. Account grouping shows the
+  line, hairline grid, crosshair tooltip listing every series and, under them, the note of
+  the day's month (see "Month notes" in section 4). Account grouping shows the
   four largest accounts and a row of toggle chips, one per account, to pick up to six;
   "Accounts · 3 of 6" above them. A picked chip carries the swatch of its series; at the
   limit the others are dimmed with "Remove one to add another". Pick up to N with chips,
@@ -253,7 +254,7 @@ is about today's balances, leaves them out.
   (series 5) and, only when there is some, Other (text-3), stacked up and down from zero.
   Segments meet square and only the two ends of a month's bar are rounded, so it reads as one
   bar split into parts. A line with dots (text colour) joins the net changes, one tooltip per
-  month. When Other shows, a faint line under the chart says what it is.
+  month, ending with the month's note. When Other shows, a faint line under the chart says what it is.
 - **Period panel**, under the chart (no dialog): with no month selected it shows the whole
   range; a click anywhere in a month's column, or on its name, shows that month (the other
   months fade); clicking the same month again, a click anywhere else on the page (the panel
@@ -306,8 +307,9 @@ asks for a longer range.
   more than usual, the spending bar the category that spent more than usual. A month with both
   sends them apart, income to the left and spending to the right, each tied to its bar by a
   thin angled line. A label that would cover another one is hidden; the tooltip always lists
-  them ("Datadog brought more than usual", "🏝 Vacation spent more than usual"). "Savings rate": its own line chart (never a second axis), the
-  average dashed with "average 60.2%". "Came in from": the top six payees of the range as
+  them ("Datadog brought more than usual", "🏝 Vacation spent more than usual") under the
+  whole note of the month. "Savings rate": its own line chart (never a second axis), the
+  average dashed with "average 60.2%", the month's note in its tooltip too. "Came in from": the top six payees of the range as
   bars.
 - **Spending**: three tiles (Spending a month, Core, One-offs), then side by side "By group"
   and "Steady or swingy?". A filter (a group, a word) redraws only the group highlight, the
@@ -343,9 +345,12 @@ asks for a longer range.
     how they spend), with the dashed line "Set aside a month", and no histogram.
   - **Category detail** (in the chart's card): a back arrow, "Group / Category" (the range is
     the page's), "288.94€ a month" over the months from its first spending to its last, the word with "moves 6%" and its sentence;
-    "Each month" (bars, series 1, a dashed "Average" line, both in the legend); the numbers
+    "Each month" (bars, series 1, a dashed "Average" line, both in the legend, the month's
+    note in its tooltip); the numbers
     in a row (average, median, lowest month, highest month, spread); "How the months spread"
-    (a histogram in six slices, whole unit labels slanted 45°, series 5). A new range updates
+    (a histogram, whole unit labels slanted 45°, series 5: as many slices as show the shape,
+    the most from five to twenty that leave no more than three of them empty). A new range
+    updates
     it in place; the back arrow, or a click on a group or a word, brings the chart back.
   - **How it moves**: a card with the four words as tiles, each its pill and a sentence with
     examples and its threshold ("Moves under 25%."); a click shows only that kind (the tile
@@ -618,6 +623,13 @@ from the table above, assigned by entity and never recycled. Status colours neve
 for series. The accent of a single series line (net worth, the Home sparkline) is the
 palette's chart accent (`theme.palette()`), drawn on the server: a palette change shows on
 the next render, and Net worth restyles its charts within a second.
+
+**Month notes.** Every chart with months on its axis (Net worth's history, its account
+drawer and Months; Cash flow's two charts; a category's months in Spending) ends the tooltip
+of a month, or of a day of it, with the note written on that month in YNAB: under a
+hairline, in `--text-2`, wrapped at 240px, its lines kept and the blank ones left out, cut at
+300 characters. A month without a note adds nothing. Only Cash flow's "Income and spending"
+also writes the note (first line) on the chart itself.
 
 ### Amounts in a list
 

@@ -13,6 +13,9 @@ from ynab import (
     AccountResponseData,
     AccountsResponse,
     AccountsResponseData,
+    MonthSummariesResponse,
+    MonthSummariesResponseData,
+    MonthSummary,
     TransactionClearedStatus,
     TransactionsResponse,
     TransactionsResponseData,
@@ -119,6 +122,34 @@ def serve(ynab_api: YnabClientStub, rows: list[tuple[str, int, int, str]]) -> No
         )
     )
     serve_live(ynab_api, balances)
+
+
+def serve_note(ynab_api: YnabClientStub, store: Store, note: str) -> None:
+    """Make YNAB answer with this note on the month running, and copy the budget again."""
+    ynab_api.api("months").get_plan_months.return_value = MonthSummariesResponse(
+        data=MonthSummariesResponseData(
+            months=[
+                MonthSummary(
+                    month=today().replace(day=1),
+                    note=note,
+                    income=0,
+                    budgeted=0,
+                    activity=0,
+                    to_be_budgeted=0,
+                    deleted=False,
+                )
+            ],
+            server_knowledge=1,
+        )
+    )
+    store.clear(BUDGET_ID)
+    store.sync(Client("api-key"), BUDGET_ID)
+
+
+def tooltip(user: User, marker: str) -> str:
+    chart = user.find(marker=marker).elements.pop()
+    assert isinstance(chart, ui.echart)
+    return chart.options["tooltip"][":formatter"]
 
 
 def serve_live(ynab_api: YnabClientStub, balances: dict[str, int]) -> None:
@@ -628,6 +659,25 @@ async def test_range_pills_change_the_chart_dates(seeded: Store, no_sync, user: 
     assert data[-1] == [today().isoformat(), 82_180.0]
     first = dt.date.fromisoformat(data[0][0])
     assert texts(user, "nw-delta") == f"▲ 22,180.00€ since {first.day} {first:%b %Y}"
+
+
+async def test_a_day_says_the_note_of_its_month_in_the_chart_and_in_the_drawer(
+    seeded: Store, ynab_api: YnabClientStub, no_sync, user: User
+):
+    serve_note(ynab_api, seeded, "Sold the car")
+    await open_networth(user)
+
+    assert "Sold the car" in tooltip(user, "nw-chart")
+
+    # Another range draws the chart again: the note stays
+    start = range_start("1M", today(), ago(400))
+    user.find(marker="range-1M").click()
+    await eventually(lambda: len(chart_series(user)[0]["data"]) == (today() - start).days + 1)
+    assert "Sold the car" in tooltip(user, "nw-chart")
+
+    user.find(marker=f"name-{INDEXA}").click()
+    await user.should_see(marker="nw-drawer", retries=20)
+    assert "Sold the car" in tooltip(user, "drawer-chart")
 
 
 async def test_the_account_drawer_lists_its_transactions(seeded: Store, no_sync, user: User):

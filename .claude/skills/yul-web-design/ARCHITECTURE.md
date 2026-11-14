@@ -786,6 +786,8 @@ class CategoryTrend: category_id; name; group; spent: tuple[int, ...]; volatilit
 @dataclass(frozen=True)
 class CashFlow:
     start; end; months; categories (most spent first); income (PayeeIncome, most first)
+    notes: Mapping[dt.date, str]   # the whole note of every month of the budget with one,
+                                   # those before the range too: what the tooltips say
     complete, mean_income, median_income, mean_spending, savings_rate, core_spending(), groups()
 
 def cash_flow(store, budget_id, rules, start, end, *, categories=None, notes=None) -> CashFlow
@@ -989,9 +991,16 @@ web/
     controls.py        pill_group(options, value, on_change, marker=None) (yul-pills: Reconcile's
                        scope, Net worth's ranges), switch(label, value, on_change) (yul-rec-switch:
                        Reconcile's "include uncleared")
-    history_chart.py   ChartSeries, history_options() / history_chart() / set_options(),
+    history_chart.py   ChartSeries, history_options(series, palette, currency_format,
+                       notes=None) / history_chart(..., notes=None) / set_options(),
                        money_js(): the ECharts history line chart
-    flow_chart.py      months_options(months, palette, currency_format, selected=None),
+                       note_js(notes, months, palette): the JavaScript `(month) => html` every
+                       chart with months ends a tooltip with, the note of that month (a
+                       `YYYY-MM` key or a day of it) from `notes` (keyed by the month's first
+                       day, only those of `months` sent); note_html(note) (escaped, lines
+                       kept, cut at NOTE_LENGTH), tooltip_block(palette) (the block's tag)
+    flow_chart.py      months_options(months, palette, currency_format, selected=None,
+                       notes=None),
                        months_chart(..., on_pick(index), selected=None): Net worth › Months'
                        stacked bars, net line, a transparent column per month for clicks
                        bridge_options(steps, labels, palette, currency_format) / bridge_chart:
@@ -1001,7 +1010,7 @@ web/
     cashflow_chart.py  income_spending_options, rate_options, volatility_options,
                        category_months_options (bars and a dashed Average line),
                        histogram_options (slanted whole unit slices), chart(): the charts of
-                       Cash flow and Spending
+                       Cash flow and Spending; the three with months take `notes=None`
     plan_chart.py      worth_options (so far, the plan, as measured dashed, the range as a
                        band), types_options (stacked by bucket), goal_options (to its target
                        line): the Plan's charts, each series given one value per day of a
@@ -1058,7 +1067,9 @@ web/
     spending/          /spending    tiles, by group, steady or swingy, categories
       data.py          DEFAULT_RANGE, SHOWN, WORDS (Word: text, pill kind, hint), ORDER,
                        UNRATED, load, word, spark, share, matches, filtered, MixPart,
-                       group_mix, plotted (the chart's dots, in order), Bin, histogram, Life
+                       group_mix, plotted (the chart's dots, in order), Bin, histogram
+                       (values, bins=None: the most slices, FEWEST_BINS to MOST_BINS, that
+                       leave no more than MAX_EMPTY empty), Life
                        (months, spent), life, Stats, stats
       view.py          SpendingView (filters redraw only what they change, legend, clicks,
                        the detail in the chart's card) and the view
@@ -1078,7 +1089,8 @@ web/
                                     updates, drawer), Months (chart and period panel) and Movers,
                                     from one core.finance.Period
       data.py          RANGES, MAX_PICKED, range_start, by_hand_pill, assign_slots,
-                       Snapshot, load_snapshot, table_order, default_picked, parse_balance,
+                       Snapshot (notes: every month's note, for the charts' tooltips),
+                       load_snapshot, table_order, default_picked, parse_balance,
                        set_balance / set_balances (the one write: live balances, build and
                        create the adjustments in one batch), adjustment_entry (the activity
                        entry), plain_amount, Drafts, read_drafts, diff_label, changed_count,
@@ -1099,7 +1111,7 @@ web/
                        the bridge, accounts, came in from, spent most on
       table.py         AccountsTable: the accounts card, its inline balance editor and the
                        "Update balances" mode
-      drawer.py        account_drawer(...) -> its chart
+      drawer.py        account_drawer(..., notes, ...) -> its chart
     settings/          /settings    one module per tab, each with render(page: Settings):
       __init__.py      Settings (tab row, panel, rerender()), TABS, RENDERERS, tab_from_slug, the view
       common.py        current_config(), kv(key), all_accounts() (closed ones too), open_accounts() (open budget accounts, the

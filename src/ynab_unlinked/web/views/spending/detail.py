@@ -75,7 +75,13 @@ def category_detail(
         keys = [month.strftime("%Y-%m") for month in told.life.months]
         chart(
             category_months_options(
-                keys, told.life.spent, palette, currency_format, told.line_value, line=told.line
+                keys,
+                told.life.spent,
+                palette,
+                currency_format,
+                told.line_value,
+                line=told.line,
+                notes=flow.notes,
             ),
             DETAIL_HEIGHT,
         ).mark("detail-chart")
