@@ -6,6 +6,20 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.4.0 (2026-11-15)
+
+### Fresh Out of the Feature Oven
+* [[#162](https://github.com/AAraKKe/ynab-unlinked/issues/162)] After an import, yul offers to remove the statement files from your computer, in the app (a dialog with "Don't ask again") and in `yul load` (yes, no, always, never); only a file with exactly the bytes that were imported is removed, Home's recent activity lists what went, and Settings › Data & privacy or `yul config set imported_files` change the choice.
+
+### Polished Until It Shines
+* [[#163](https://github.com/AAraKKe/ynab-unlinked/issues/163)] A category in Spending draws how its months spread in up to twenty slices instead of six: the most that leave no more than three of them empty, so the shape shows.
+* [[#163](https://github.com/AAraKKe/ynab-unlinked/issues/163)] Hovering a month in Net worth, Cash flow or a category of Spending shows the note written on that month in YNAB.
+* [[#160](https://github.com/AAraKKe/ynab-unlinked/issues/160)] The app looks for a new version every half hour instead of once a day, so an open app offers a release within the hour it came out.
+* [[#161](https://github.com/AAraKKe/ynab-unlinked/issues/161)] The Import tables list only the rows to import or to check: a switch next to the steps, on by default and remembered, hides the rows already in YNAB or left out and counts them under each table.
+
+### For the Builders: Dev Experience Upgrades
+* [[#164](https://github.com/AAraKKe/ynab-unlinked/issues/164)] No flaky tests and root causes over consequences are now hard rules in AGENTS.md; CI runs the web tests a second time with slowed off-loop work (`uv run poe races`) so a test that reads the page too early fails every time, and a text checked with a marker is now checked in that element.
+
 ## ynab-unlinked 1.3.4 (2026-11-12)
 
 ### Polished Until It Shines
