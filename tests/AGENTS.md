@@ -113,7 +113,10 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
   Tests may save, migrate and reset freely; the assets under `tests/assets/config_*` are never
   written to.
 - `yul` runs the CLI (`yul("load --show test", input="y\n")`); `ynab_api` stubs the YNAB client
-  with one MagicMock per API (`ynab_api.api("transactions")`); `load_entity` registers a stub
+  with one MagicMock per API (`ynab_api.api("transactions")`).
+  `ynab_api.refuse_import_ids(*ids)` makes creating transactions answer as YNAB does for an
+  import id it had before (a transaction imported, then deleted there): the rows sent with
+  one of those ids come back as duplicates, the others are created as real transactions; `load_entity` registers a stub
   entity as `yul load test`; `today` freezes time to 2025-05-15.
 - `tests/factories.py` builds domain and SDK objects: `TransactionFactory`,
   `PendingImportFactory`, `ImportRowFactory`, `TransactionDetailFactory`, `AccountFactory`,

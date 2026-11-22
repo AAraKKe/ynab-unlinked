@@ -22,6 +22,7 @@ from ynab_unlinked.core.importing import (
     Twin,
     build_import_plan,
     commit_import_plan,
+    import_entry,
     unique_files,
 )
 from ynab_unlinked.models import PendingImport, Transaction, assign_import_ids
@@ -39,11 +40,6 @@ def ynab_holds(ynab_api: YnabClientStub, import_ids: list[str]) -> None:
         TransactionDetailFactory(id=f"ynab-{i}", import_id=import_id)
         for i, import_id in enumerate(import_ids)
     ]
-
-
-def ynab_rejects(ynab_api: YnabClientStub, import_ids: list[str]) -> None:
-    api = ynab_api.api("transactions")
-    api.create_transaction.return_value.data.duplicate_import_ids = import_ids
 
 
 def plan_of(*rows) -> ImportPlan:
@@ -132,7 +128,7 @@ def test_build_import_plan_of_an_empty_export_never_reaches_ynab(
 def test_commit_import_plan_creates_only_the_new_rows(
     client: Client, ynab_api: YnabClientStub, cleared: TransactionClearedStatus
 ):
-    ynab_rejects(ynab_api, [])
+    ynab_api.refuse_import_ids()
     plan = plan_of(
         ImportRowFactory(payee="Coffee Shop", import_id="YNAB:-1:x:1", already_imported=True),
         ImportRowFactory(payee="Bakery", import_id="YNAB:-2:x:1"),
@@ -140,7 +136,7 @@ def test_commit_import_plan_creates_only_the_new_rows(
 
     result = commit_import_plan(client, BUDGET_ID, plan, cleared)
 
-    assert result == ImportResult(created=1, duplicate_import_ids=())
+    assert result == ImportResult(created=1)
     call = ynab_api.api("transactions").create_transaction.call_args
     assert call.args[0] == BUDGET_ID
     assert [
@@ -149,18 +145,21 @@ def test_commit_import_plan_creates_only_the_new_rows(
     ] == [(ACCOUNT_ID, "Bakery", "YNAB:-2:x:1", cleared)]
 
 
-def test_commit_import_plan_reports_the_rows_ynab_rejected_as_duplicates(
-    client: Client, ynab_api: YnabClientStub
+def test_commit_import_plan_returns_the_rows_ynab_refused_as_imported_before(
+    client: Client, ynab_api: YnabClientStub, store: Store
 ):
-    ynab_rejects(ynab_api, ["YNAB:-1:x:1"])
-    plan = plan_of(
-        ImportRowFactory(payee="Coffee Shop", import_id="YNAB:-1:x:1"),
-        ImportRowFactory(payee="Bakery", import_id="YNAB:-2:x:1"),
+    # Coffee Shop was imported once and deleted in YNAB: YNAB keeps its import id for good
+    ynab_api.refuse_import_ids("YNAB:-1:x:1")
+    coffee = ImportRowFactory(payee="Coffee Shop", import_id="YNAB:-1:x:1")
+    bakery = ImportRowFactory(payee="Bakery", import_id="YNAB:-2:x:1")
+
+    result = commit_import_plan(
+        client, BUDGET_ID, plan_of(coffee, bakery), TransactionClearedStatus.CLEARED, store=store
     )
 
-    result = commit_import_plan(client, BUDGET_ID, plan, TransactionClearedStatus.CLEARED)
-
-    assert result == ImportResult(created=1, duplicate_import_ids=("YNAB:-1:x:1",))
+    assert result == ImportResult(created=1, refused=(coffee,))
+    assert result.refused_import_ids == ("YNAB:-1:x:1",)
+    assert [t.import_id for t in store.transactions(BUDGET_ID)] == ["YNAB:-2:x:1"]
 
 
 def test_commit_import_plan_with_nothing_new_never_reaches_ynab(
@@ -170,7 +169,7 @@ def test_commit_import_plan_with_nothing_new_never_reaches_ynab(
 
     result = commit_import_plan(client, BUDGET_ID, plan, TransactionClearedStatus.CLEARED)
 
-    assert result == ImportResult(created=0, duplicate_import_ids=())
+    assert result == ImportResult(created=0)
     ynab_api.api("transactions").create_transaction.assert_not_called()
 
 
@@ -413,7 +412,7 @@ def test_a_row_that_may_be_in_ynab_is_sent_only_once_the_user_says_so(
     client: Client, ynab_api: YnabClientStub, store: Store
 ):
     ynab_answers(ynab_api, [survivor()])
-    ynab_rejects(ynab_api, [])
+    ynab_api.refuse_import_ids()
     plan = build_import_plan(
         client, BUDGET_ID, ACCOUNT_ID, "test", EXPORT, [MAYA, BAKERY], store=store
     )
@@ -479,7 +478,7 @@ def test_a_copy_that_cannot_be_written_does_not_fail_an_import_ynab_took(
         store=store,
     )
 
-    assert result == ImportResult(created=1, duplicate_import_ids=())
+    assert result == ImportResult(created=1)
     assert "could not be saved on this computer" in progress.warn.call_args.args[0]
 
 
@@ -527,7 +526,7 @@ def test_a_row_included_again_is_sent_and_left_out_again_is_not(
     client: Client, ynab_api: YnabClientStub, store: Store
 ):
     ynab_holds(ynab_api, [])
-    ynab_rejects(ynab_api, [])
+    ynab_api.refuse_import_ids()
     left_out(store, MAYA_ID)
     plan = build_import_plan(client, BUDGET_ID, ACCOUNT_ID, "test", EXPORT, [MAYA], store=store)
 
@@ -548,5 +547,63 @@ def test_commit_import_plan_never_sends_a_row_left_out(client: Client, ynab_api:
 
     result = commit_import_plan(client, BUDGET_ID, plan, TransactionClearedStatus.CLEARED)
 
-    assert result == ImportResult(created=0, duplicate_import_ids=())
+    assert result == ImportResult(created=0)
     ynab_api.api("transactions").create_transaction.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("created", "message"),
+    [
+        pytest.param(1, "Imported 1 transaction to 💳 Oro from movements.txt", id="one"),
+        pytest.param(2, "Imported 2 transactions to 💳 Oro from movements.txt", id="two"),
+    ],
+)
+def test_the_log_line_of_an_import_counts_in_words(created: int, message: str):
+    result = ImportResult(created=created)
+
+    logged, _ = import_entry("sabadell", "movements.txt", "💳 Oro", plan_of(), result)
+
+    assert logged == message
+
+
+def test_the_log_line_of_an_import_says_how_many_rows_were_left_out():
+    plan = plan_of(
+        ImportRowFactory(import_id="YNAB:-1:x:1", already_imported=True, matched=True),
+        ImportRowFactory(import_id="YNAB:-2:x:1", excluded=True),
+        ImportRowFactory(import_id="YNAB:-3:x:1"),
+    )
+
+    logged, details = import_entry(
+        "sabadell", "movements.txt", "💳 Oro", plan, ImportResult(created=1)
+    )
+
+    assert logged == "Imported 1 transaction to 💳 Oro from movements.txt · 1 left out"
+    assert (details["skipped"], details["matched"], details["excluded"]) == (1, 1, 1)
+    assert (details["duplicates"], details["refused"]) == (0, [])
+
+
+def test_the_log_line_of_an_import_names_the_rows_ynab_did_not_take():
+    refused = ImportRowFactory(
+        import_id="YNAB:-7990:2025-11-02:1",
+        date=dt.date(2025, 11, 2),
+        payee="Google Play",
+        amount=-7.99,
+    )
+    plan = plan_of(refused, ImportRowFactory(import_id="YNAB:-2:x:1", excluded=True))
+
+    logged, details = import_entry(
+        "sabadell", "movements.txt", "💳 Oro", plan, ImportResult(created=0, refused=(refused,))
+    )
+
+    assert logged == (
+        "Imported 0 transactions to 💳 Oro from movements.txt · YNAB did not take 1 · 1 left out"
+    )
+    assert details["duplicates"] == 1
+    assert details["refused"] == [
+        {
+            "import_id": "YNAB:-7990:2025-11-02:1",
+            "date": "2025-11-02",
+            "amount": -7990,
+            "payee": "Google Play",
+        }
+    ]

@@ -12,7 +12,7 @@ from nicegui import ui
 from ynab_unlinked.core.importing import ImportResult
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.web import shell
-from ynab_unlinked.web.components import button, check, glass_card, pill, spinner
+from ynab_unlinked.web.components import button, check, glass_card, icon, pill, spinner
 from ynab_unlinked.web.views.import_.data import (
     ImportFile,
     done_summary,
@@ -149,10 +149,12 @@ class Progress:
         self.fill.style("width:100%")
         self.status.clear()
         with self.status:
-            text = f"{result.created} created"
-            if result.duplicate_import_ids:
-                text += f" · {plural(len(result.duplicate_import_ids), 'duplicate')}"
-            ui.label(text).classes("yul-good")
+            ui.label(f"{result.created} created").classes("yul-good")
+            if result.refused:
+                ui.label("·").classes("yul-faint")
+                ui.label(f"YNAB did not take {len(result.refused)}").classes("yul-warn").mark(
+                    f"commit-refused-{self.key}"
+                )
 
 
 def progress_card(item: ImportFile, account_name: str) -> Progress:
@@ -176,7 +178,7 @@ def progress_card(item: ImportFile, account_name: str) -> Progress:
 
 def done_card(
     created: int,
-    duplicates: int,
+    refused: int,
     skipped: int,
     failed: int,
     left_out: int,
@@ -185,11 +187,16 @@ def done_card(
 ) -> None:
     """What the commit did, with Reconcile next and "Import more"."""
     with glass_card().classes("yul-imp-done").mark("done-card"):
-        check(big=True)
+        if created or not refused:
+            check(big=True)
+        else:
+            # Nothing went in: no check that says it all worked
+            with ui.element("div").classes("yul-imp-done-alert").mark("done-alert"):
+                icon("alert", 44)
         ui.label(f"{plural(created, 'transaction')} imported").classes("yul-h2").mark("done-title")
-        ui.label(done_summary(duplicates, skipped, failed, left_out, held)).classes(
-            "yul-lede"
-        ).mark("done-summary")
+        ui.label(done_summary(refused, skipped, failed, left_out, held)).classes("yul-lede").mark(
+            "done-summary"
+        )
         with ui.element("div").classes("yul-imp-done-acts"):
             button(
                 "Reconcile these accounts",

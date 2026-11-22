@@ -29,7 +29,7 @@ from tests.helpers.ynab_api import YnabClientStub
 from ynab_unlinked.config import ImportedFiles, LatestConfig, LoaderConfig
 from ynab_unlinked.core import imported_files
 from ynab_unlinked.core.detect import Candidate, resolve_options
-from ynab_unlinked.core.importing import ImportPlan, ImportResult, Twin, file_digest
+from ynab_unlinked.core.importing import ImportPlan, Twin, file_digest
 from ynab_unlinked.entities.registry import LoaderSpec, loader
 from ynab_unlinked.entities.sabadell.sabadell import SabadellParser
 from ynab_unlinked.models import assign_import_ids
@@ -40,7 +40,6 @@ from ynab_unlinked.web.views.import_.data import (
     ImportFile,
     forget_gone_account,
     hidden_note,
-    import_log,
     listed_rows,
 )
 from ynab_unlinked.web.wording import IMPORT_FAILED
@@ -149,17 +148,9 @@ async def test_statements_are_detected_reviewed_and_imported(
         response.data.transactions = known
         return response
 
-    def create(budget_id: str, data: Any) -> MagicMock:
-        response = MagicMock()
-        ids = [t.import_id for t in data.transactions]
-        # YNAB still holds one BBVA row the account read did not return
-        response.data.duplicate_import_ids = (
-            ids[:1] if str(data.transactions[0].account_id) == MAXIMA else []
-        )
-        return response
-
+    # YNAB still holds one BBVA row the account read did not return
+    ynab.refuse_import_ids(bbva_ids[0])
     api.get_transactions_by_account.side_effect = ynab_transactions
-    api.create_transaction.side_effect = create
 
     await drop(user, SABADELL, bbva_file)
 
@@ -179,7 +170,10 @@ async def test_statements_are_detected_reviewed_and_imported(
     user.find(marker="import").click()
 
     await user.should_see("4 transactions imported", retries=30)
-    await user.should_see("YNAB rejected 1 as duplicate. 1 was already there and was skipped.")
+    await user.should_see(
+        "YNAB did not take 1, see below. 1 was already there and was skipped.",
+        marker="done-summary",
+    )
     # Reconcile and Net worth sync before showing the store again
     invalidate.assert_called_once()
     sent = created(ynab)
@@ -201,7 +195,7 @@ async def test_statements_are_detected_reviewed_and_imported(
     )
     assert logged == [
         (
-            "Imported 2 transactions to 💳 Maxima from tarjeta_maxima.xlsx",
+            "Imported 2 transactions to 💳 Maxima from tarjeta_maxima.xlsx · YNAB did not take 1",
             "BBVA Credit Card",
             2,
             1,
@@ -528,7 +522,7 @@ async def test_a_failed_commit_leaves_the_flow_open_to_new_drops(
         )
     else:
         mocker.patch(
-            "ynab_unlinked.web.views.import_.view.import_log", side_effect=RuntimeError("boom")
+            "ynab_unlinked.web.views.import_.view.import_entry", side_effect=RuntimeError("boom")
         )
     notify = mocker.spy(shell, "notify")
 
@@ -542,22 +536,6 @@ async def test_a_failed_commit_leaves_the_flow_open_to_new_drops(
     await drop(user, SABADELL)
     await user.should_see("3 new / 3", marker="count-1", retries=30)
     assert all("Wait for the import" not in str(call.args[0]) for call in notify.call_args_list)
-
-
-@pytest.mark.parametrize(
-    ("created", "message"),
-    [
-        pytest.param(1, "Imported 1 transaction to 💳 Oro from movements.txt", id="one"),
-        pytest.param(2, "Imported 2 transactions to 💳 Oro from movements.txt", id="two"),
-    ],
-)
-def test_the_log_line_of_an_import_counts_in_words(created: int, message: str):
-    plan = ImportPlan(entity_name="sabadell", account_id=ORO, input_file=SABADELL, rows=())
-    result = ImportResult(created=created, duplicate_import_ids=())
-
-    logged, _ = import_log("sabadell", "movements.txt", "💳 Oro", plan, result)
-
-    assert logged == message
 
 
 async def test_the_review_shows_money_in_with_a_plus_in_the_good_tone(
@@ -916,25 +894,6 @@ async def test_what_an_import_created_is_kept_in_the_budget_copy_at_once(
 
     await user.should_see("3 transactions imported", retries=30)
     assert state().store.import_ids(BUDGET_ID, ["created-by-yul"]) == {"created-by-yul": first}
-
-
-def test_the_log_line_of_an_import_says_how_many_rows_were_left_out():
-    plan = ImportPlan(
-        entity_name="sabadell",
-        account_id=ORO,
-        input_file=SABADELL,
-        rows=(
-            ImportRowFactory(import_id="YNAB:-1:x:1", already_imported=True, matched=True),
-            ImportRowFactory(import_id="YNAB:-2:x:1", excluded=True),
-            ImportRowFactory(import_id="YNAB:-3:x:1"),
-        ),
-    )
-    result = ImportResult(created=1, duplicate_import_ids=())
-
-    logged, details = import_log("sabadell", "movements.txt", "💳 Oro", plan, result)
-
-    assert logged == "Imported 1 transaction to 💳 Oro from movements.txt · 1 left out"
-    assert (details["skipped"], details["matched"], details["excluded"]) == (1, 1, 1)
 
 
 # ---- removing the imported files ---------------------------------------------------------

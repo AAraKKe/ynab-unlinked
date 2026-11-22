@@ -15,6 +15,7 @@ from ynab_unlinked.core.accounts import AccountState, account_state
 from ynab_unlinked.core.imported_files import Original, remove_originals, shown
 from ynab_unlinked.core.importing import (
     ImportPlan,
+    ImportRow,
     RowStatus,
     build_import_plan,
     commit_import_plan,
@@ -24,7 +25,7 @@ from ynab_unlinked.entities.registry import loaders
 from ynab_unlinked.exceptions import ParsingError
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store, store_path
-from ynab_unlinked.text import name_list, plural
+from ynab_unlinked.text import name_list, plural, refused_why
 from ynab_unlinked.ynab_api.client import Client
 
 
@@ -127,6 +128,37 @@ def plan_notes(plan: ImportPlan, formatter: Formatter) -> None:
             )
             for row in held
             if row.twin is not None
+        )
+    )
+
+
+def refused_notes(refused: Sequence[tuple[str, Sequence[ImportRow]]], formatter: Formatter) -> None:
+    """Name the rows YNAB did not take (`ImportResult.refused`), say why, and where to leave
+    them out so yul stops sending them. Each group is (title, rows): the file and account
+    when several files were imported, an empty title otherwise."""
+    groups = [(title, rows) for title, rows in refused if rows]
+    if not (count := sum(len(rows) for _, rows in groups)):
+        return
+    display.warning(f"YNAB did not take {plural(count, 'row')} yul sent:")
+    for title, rows in groups:
+        if title:
+            console().print(escape(title))
+        console().print(
+            bullet_list(
+                # Bank text, never markup
+                escape(
+                    f"{formatter.format_date(row.transaction.date)} {row.transaction.payee} "
+                    f"{formatter.format_amount(row.transaction.amount)}"
+                )
+                for row in rows
+            )
+        )
+    one = count == 1
+    console().print(
+        escape(
+            f"{refused_why(count)} To stop yul sending {'it' if one else 'them'} on every "
+            f"import, leave {'it' if one else 'them'} out in the review of an import in "
+            "`yul app`."
         )
     )
 
@@ -282,24 +314,8 @@ def process_transactions(
             store=store,
         )
 
-    if result.duplicate_import_ids:
-        display.warning(
-            f"YNAB rejected {len(result.duplicate_import_ids)} of them as already imported:"
-        )
-        console().print(bullet_list(result.duplicate_import_ids))
-
-    log_import(
-        config,
-        loader=entity.name(),
-        account_id=account_id,
-        file=input_file.name,
-        created=result.created,
-        duplicates=len(result.duplicate_import_ids),
-        skipped=plan.already_imported_count,
-        matched=len(plan.with_status(RowStatus.MATCHED)),
-        excluded=left_out,
-        held=held,
-    )
+    refused_notes([("", result.refused)], context.formatter)
+    log_import(config, loader=entity.name(), plan=plan, result=result)
 
     created = result.created
     display.success(f"🎉 All done! {created} transaction{'' if created == 1 else 's'} imported.")

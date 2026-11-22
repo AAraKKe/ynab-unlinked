@@ -285,18 +285,23 @@ def test_yes_keeps_the_rows_left_out_of_every_file(
     assert len(created(ynab)[OTHER_ACCOUNT_ID]) == 2
 
 
-def test_transactions_ynab_rejects_are_reported_across_files(
+def test_the_rows_ynab_refuses_are_named_under_their_file_and_account(
     yul: CliRunner, accounts, ynab: YnabClientStub
 ):
-    api = ynab.api("transactions")
-    api.create_transaction.return_value.data.duplicate_import_ids = ["YNAB:-1000:2025-05-01:1"]
+    # One row of each file was imported and deleted in YNAB since
+    ynab.refuse_import_ids("YNAB:-48000:2026-04-25:1", "YNAB:-2500:2025-05-02:1")
 
     result = yul("load", "--yes", "auto", SABADELL, COBEE, env=WIDE)
 
     assert result.exit_code == 0, result.output
-    # One rejected per file: 5 sent, 3 created
-    assert "YNAB rejected 2 of them as already imported" in result.output
-    assert "All done! 3 transactions imported." in result.output
+    output = " ".join(result.output.split())
+    assert (
+        f"YNAB did not take 2 rows yul sent: movements.txt → {ACCOUNT_ID} "
+        f"• 25/04/2026 Barberia Docklands -48.00€ transactions.html → {OTHER_ACCOUNT_ID} "
+        "• 02/05/2025 Cafeteria Lolina -2.50€ YNAB answered that they were imported before."
+    ) in output
+    assert output.count("deleted in YNAB") == 1
+    assert "All done! 3 transactions imported." in output
 
 
 def test_each_imported_file_is_noted_in_the_activity_log(

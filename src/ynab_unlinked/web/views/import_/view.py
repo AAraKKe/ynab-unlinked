@@ -34,6 +34,7 @@ from ynab_unlinked.core.importing import (
     build_import_plan,
     commit_import_plan,
     file_digest,
+    import_entry,
 )
 from ynab_unlinked.entities.registry import loaders
 from ynab_unlinked.formatter import Formatter
@@ -62,7 +63,6 @@ from ynab_unlinked.web.views.import_.data import (
     excluded_row,
     forget_gone_account,
     held_count,
-    import_log,
     imported_files,
     left_out_count,
     mark_repeated,
@@ -70,6 +70,7 @@ from ynab_unlinked.web.views.import_.data import (
     read_file,
     take_candidate,
 )
+from ynab_unlinked.web.views.import_.refused import RefusedCard, RefusedFile
 from ynab_unlinked.web.views.import_.removal import offer_removal
 from ynab_unlinked.web.views.import_.rows import draw_row
 from ynab_unlinked.web.views.import_.tables import RowActions, status_legend
@@ -607,8 +608,9 @@ class ImportFlow:
             removal = ui.element("div").classes("yul-imp-removal").mark("removal")
 
         store = state().store
-        created = duplicates = skipped = failed = left_out = held = 0
+        created = skipped = failed = left_out = held = 0
         done: list[ImportFile] = []
+        refused: list[RefusedFile] = []
         for item in ready:
             assert item.plan is not None and item.candidate is not None
             plan = item.plan
@@ -632,14 +634,27 @@ class ImportFlow:
                 shell.notify(f"{item.name}: {message}", "error")
                 continue
             created += result.created
-            duplicates += len(result.duplicate_import_ids)
             card.created(result)
             done.append(item)
             await self.log(item, plan, result)
+            if result.refused:
+                refused.append(
+                    RefusedFile(
+                        key=item.key,
+                        bank=item.candidate.loader.title,
+                        account_id=plan.account_id,
+                        account_name=self.account_name(plan.account_id),
+                        file=item.name,
+                        rows=result.refused,
+                    )
+                )
 
         self.close()
         with done_area:
-            done_card(created, duplicates, skipped, failed, left_out, held, self.reset)
+            count = sum(len(file.rows) for file in refused)
+            done_card(created, count, skipped, failed, left_out, held, self.reset)
+            if refused:
+                RefusedCard(refused, self.formatter(), self.note_left_out)
         if created:
             # Reconcile and Net worth sync before showing the store again
             state().invalidate()
@@ -661,7 +676,7 @@ class ImportFlow:
     async def log(self, item: ImportFile, plan: ImportPlan, result: ImportResult) -> None:
         config, _ = state().require()
         assert item.candidate is not None
-        message, details = import_log(
+        message, details = import_entry(
             item.candidate.loader.name,
             item.name,
             self.account_name(plan.account_id),

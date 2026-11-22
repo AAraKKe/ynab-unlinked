@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from ynab_unlinked.cli.context_object import YnabUnlinkedContext
     from ynab_unlinked.core.detect import Candidate, Detection
-    from ynab_unlinked.core.importing import ImportPlan
+    from ynab_unlinked.core.importing import ImportPlan, ImportResult
     from ynab_unlinked.models import Transaction
 
 load = typer.Typer(
@@ -137,6 +137,7 @@ def auto(
         open_store,
         originals,
         plan_notes,
+        refused_notes,
     )
     from ynab_unlinked.cli.utils import display_import_table, display_transaction_table
     from ynab_unlinked.core.detect import detect_loaders
@@ -261,7 +262,7 @@ def auto(
         TransactionClearedStatus.RECONCILED if ctx.reconcile else TransactionClearedStatus.CLEARED
     )
     created: dict[str, int] = {}
-    duplicates: list[str] = []
+    committed: list[tuple[ImportPlan, ImportResult]] = []
     for plan, (_, candidate) in zip(plans, chosen, strict=True):
         if not plan.new_rows:
             continue
@@ -274,24 +275,23 @@ def auto(
                 progress=progress,
                 store=store,
             )
-        log_import(
-            ctx.config,
-            loader=candidate.loader.name,
-            account_id=plan.account_id,
-            file=plan.input_file.name,
-            created=result.created,
-            duplicates=len(result.duplicate_import_ids),
-            skipped=plan.already_imported_count,
-            matched=len(plan.with_status(RowStatus.MATCHED)),
-            excluded=len(plan.with_status(RowStatus.EXCLUDED)),
-            held=len(plan.with_status(RowStatus.MAYBE_IN_YNAB)),
-        )
+        log_import(ctx.config, loader=candidate.loader.name, plan=plan, result=result)
         created[plan.account_id] = created.get(plan.account_id, 0) + result.created
-        duplicates.extend(result.duplicate_import_ids)
+        committed.append((plan, result))
 
-    if duplicates:
-        display.warning(f"YNAB rejected {len(duplicates)} of them as already imported:")
-        display.console().print(display.bullet_list(duplicates))
+    several = len(to_import) > 1
+    refused_notes(
+        [
+            (
+                f"{plan.input_file.name} → {_account_name(plan.account_id, ctx)}"
+                if several
+                else "",
+                result.refused,
+            )
+            for plan, result in committed
+        ],
+        ctx.formatter,
+    )
 
     total = sum(created.values())
     display.success(f"🎉 All done! {plural(total, 'transaction')} imported.")

@@ -179,9 +179,21 @@ the two buttons of the success card sit one over the other, as wide as the card.
    "1 to check" in amber, and the button "Import 29 transactions". Options: import as
    cleared (default) or reconciled. The Files step shows the same legend and tags in a
    file's body, and "n to check" on its row and in its footer.
-3. **Done**. Per file progress bars that fill as YNAB answers, then a success card:
-   created count, anything YNAB rejected as duplicate, and two buttons: "Reconcile these
-   accounts" and "Import more". Then the files: a dialog "Remove the imported files?" lists
+3. **Done**. Per file progress bars that fill as YNAB answers ("2 created · YNAB did not
+   take 1" in amber), then a success card: created count, how many YNAB did not take ("see
+   below"), and two buttons: "Reconcile these accounts" and "Import more". When YNAB took
+   nothing and refused some, the card has an amber warning sign instead of the green check.
+   Under it, when YNAB refused rows, an amber tinted card "YNAB did not take 2 rows": one
+   lede says the user asked for them, yul sent them, and YNAB answered they were imported
+   before, which happens when a transaction was imported and then deleted in YNAB, so it
+   will not take them now or later, and every import offers them as new until they are
+   left out. Then the rows per file (bank, "→ account", file name; date, payee, amount)
+   with a ghost "Don't import again" each and, for two rows or more, a bordered "Don't
+   import any of them again". A chosen row is crossed out with "Will not be imported again"
+   and a ghost "Undo" in place; once every row is chosen, a muted line says later imports
+   list them as left out with Include again. It is the same "left out" as Review, saved on
+   this computer at once (status line, no dialog). On a phone the rows are the two line
+   rows of Review and the button for all is as wide as the card. Then the files: a dialog "Remove the imported files?" lists
    where each one is on this computer ("~/Downloads/movimientos.txt"), says that removing
    deletes them for good and not to the Trash, and has the checkbox "Don't ask again" with
    one faint line under it, a ghost "Keep them" and a danger "Remove 2 files". Ticked, the

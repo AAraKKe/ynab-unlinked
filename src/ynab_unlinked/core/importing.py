@@ -8,12 +8,14 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from ynab import TransactionClearedStatus, TransactionDetail
 
 from ynab_unlinked.core.progress import NO_PROGRESS, Progress
 from ynab_unlinked.models import PendingImport, Transaction, assign_import_ids, milliunits
 from ynab_unlinked.store import Store
+from ynab_unlinked.text import import_message
 from ynab_unlinked.ynab_api.client import Client
 
 IMPORT_BUFFER_DAYS = 15
@@ -121,7 +123,49 @@ class ImportPlan:
 @dataclass(frozen=True)
 class ImportResult:
     created: int
-    duplicate_import_ids: tuple[str, ...]
+    refused: tuple[ImportRow, ...] = ()
+    """The rows sent that YNAB did not take: it already had their import id.
+
+    YNAB keeps the import id of every transaction it ever imported, deleted ones too, and
+    refuses it for good. yul reads only live transactions, so a row whose transaction was
+    deleted in YNAB is offered as new on every import and refused every time, until the
+    user leaves it out (`Store.exclude`). Both frontends list these rows and offer that.
+    """
+
+    @property
+    def refused_import_ids(self) -> tuple[str, ...]:
+        return tuple(row.import_id for row in self.refused)
+
+
+def import_entry(
+    loader: str, file: str, account_name: str, plan: ImportPlan, result: ImportResult
+) -> tuple[str, dict[str, Any]]:
+    """The message and details of the `import` activity entry of one committed file, the
+    same from both frontends (ARCHITECTURE 3.4). `loader` is the config key of the bank."""
+    excluded = len(plan.with_status(RowStatus.EXCLUDED))
+    details: dict[str, Any] = {
+        "loader": loader,
+        "account_id": plan.account_id,
+        "account_name": account_name,
+        "file": file,
+        "created": result.created,
+        "duplicates": len(result.refused),
+        "refused": [
+            {
+                "import_id": row.import_id,
+                "date": row.transaction.date.isoformat(),
+                "amount": milliunits(row.transaction.amount),
+                "payee": row.transaction.payee,
+            }
+            for row in result.refused
+        ],
+        "skipped": plan.already_imported_count,
+        "matched": len(plan.with_status(RowStatus.MATCHED)),
+        "excluded": excluded,
+        "held": len(plan.with_status(RowStatus.MAYBE_IN_YNAB)),
+    }
+    message = import_message(result.created, account_name, file, excluded, len(result.refused))
+    return message, details
 
 
 def file_digest(input_file: Path) -> str:
@@ -274,7 +318,8 @@ def commit_import_plan(
     progress: Progress = NO_PROGRESS,
     store: Store | None = None,
 ) -> ImportResult:
-    """Create the rows YNAB does not hold yet and report the ones it rejected anyway.
+    """Create the rows YNAB does not hold yet and report the ones it refused anyway
+    (`ImportResult.refused`: imported before and deleted in YNAB since).
 
     The transactions YNAB created go into `store`, the budget copy, at once. A match made in
     YNAB before the next sync hides the imported transaction from every later answer: saved
@@ -282,7 +327,7 @@ def commit_import_plan(
     """
     to_create = plan.new_rows
     if not to_create:
-        return ImportResult(created=0, duplicate_import_ids=())
+        return ImportResult(created=0)
 
     progress.start("Creating transactions...")
     created = client.create_transactions(
@@ -301,7 +346,6 @@ def commit_import_plan(
             # YNAB has them: the next sync brings them, unless they are matched before it
             progress.warn(f"The new transactions could not be saved on this computer: {error}")
 
-    duplicates = created.duplicate_import_ids
-    return ImportResult(
-        created=len(to_create) - len(duplicates), duplicate_import_ids=tuple(duplicates)
-    )
+    duplicates = frozenset(created.duplicate_import_ids)
+    refused = tuple(row for row in to_create if row.import_id in duplicates)
+    return ImportResult(created=len(to_create) - len(refused), refused=refused)

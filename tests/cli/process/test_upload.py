@@ -191,7 +191,7 @@ def test_an_import_is_noted_in_the_activity_log_the_app_reads(
     config_file: Path,
     yul: CliRunner,
     load_entity: LoadEntityCallback,
-    rejected_as_duplicates,
+    refused_by_ynab,
     store_file: Path,
 ):
     store = Store(store_file)
@@ -209,13 +209,16 @@ def test_an_import_is_noted_in_the_activity_log_the_app_reads(
             TransactionFactory(date=YESTERDAY, **BAKERY),
         ],
     )
-    rejected_as_duplicates([f"YNAB:-5000:{YESTERDAY:%Y-%m-%d}:1"])
+    refused_by_ynab([f"YNAB:-5000:{YESTERDAY:%Y-%m-%d}:1"])
 
     result = yul("load test", input="y\n")
 
     assert result.exit_code == 0, result.output
     [entry] = store.activity(BUDGET_ID)
-    assert (entry.kind, entry.message) == ("import", "Imported 1 transaction to 💶 Checking from ")
+    assert (entry.kind, entry.message) == (
+        "import",
+        "Imported 1 transaction to 💶 Checking from  · YNAB did not take 1",
+    )
     assert entry.details == {
         "loader": "test",
         "account_id": ACCOUNT_ID,
@@ -223,6 +226,14 @@ def test_an_import_is_noted_in_the_activity_log_the_app_reads(
         "file": "",
         "created": 1,
         "duplicates": 1,
+        "refused": [
+            {
+                "import_id": f"YNAB:-5000:{YESTERDAY:%Y-%m-%d}:1",
+                "date": YESTERDAY.isoformat(),
+                "amount": -5000,
+                "payee": BAKERY["payee"],
+            }
+        ],
         "skipped": 0,
         "matched": 0,
         "excluded": 0,

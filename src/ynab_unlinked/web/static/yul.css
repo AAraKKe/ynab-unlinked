@@ -993,6 +993,24 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-imp-removal { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 12px; text-align: center; }
 .yul-imp-originals { margin-bottom: 12px; word-break: break-all; }
 .yul-imp-remember { margin: 2px 0 16px 28px; }
+/* Done: the rows YNAB did not take (views/import_/refused.py) */
+.yul-imp-refused {
+  margin-top: 12px; padding: 16px 18px;
+  border-color: color-mix(in oklab, var(--warn) 45%, var(--border-2));
+  background: color-mix(in oklab, var(--warn) 6%, var(--surface));
+}
+.yul-imp-refused-head { display: flex; align-items: center; gap: 10px; color: var(--warn); }
+.yul-imp-refused-title { font-size: 16px; font-weight: 650; color: var(--text); }
+.yul-imp-refused-why { color: var(--text-2); font-size: 13px; line-height: 1.5; margin: 6px 0 4px; max-width: 76ch; }
+.yul-imp-refused-file { border-top: 1px solid var(--hair); margin-top: 12px; padding-top: 12px; }
+.yul-imp-refused-file > .yul-imp-card-main { margin-bottom: 4px; }
+.yul-imp-refused-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
+/* The payee takes the room left, so the amount and the button stay next to it */
+.yul-imp-refused .yul-imp-table td.c-payee { width: 100%; }
+.yul-imp-refused .yul-imp-table td.c-act { white-space: nowrap; }
+.yul-imp-refused .yul-imp-acts { flex-wrap: nowrap; align-items: center; gap: 10px; }
+.yul-imp-done-alert { display: flex; justify-content: center; color: var(--warn); margin: 0 auto 10px; }
+.yul-imp-refused-foot:empty { display: none; }
 
 /* ---- reconcile: account cards and their rows (views/reconcile) ---- */
 .yul-rec-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -1462,6 +1480,13 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   .yul-imp-done { padding: 24px 18px; }
   .yul-imp-done-acts { flex-direction: column; align-items: stretch; }
   .yul-imp-done-acts > .yul-btn { justify-content: center; }
+  /* The rows YNAB did not take: the bank over the account and the file, the button for all wide */
+  .yul-imp-refused { padding: 14px; }
+  .yul-imp-refused-file > .yul-imp-card-main { flex-wrap: wrap; }
+  .yul-imp-refused-file .yul-imp-card-title { flex-basis: auto; line-height: inherit; }
+  .yul-imp-refused-foot { justify-content: stretch; }
+  .yul-imp-refused-foot > .yul-btn { flex: 1; justify-content: center; }
+  .yul-imp-refused-foot > .yul-muted { text-align: left; }
   /* A row of a table is two lines: payee and amount, then the date, the tag and what to do */
   .yul-imp .yul-imp-table { display: block; }
   .yul-imp .yul-imp-table tr.head { display: none; }
