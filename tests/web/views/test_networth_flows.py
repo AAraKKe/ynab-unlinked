@@ -223,16 +223,18 @@ async def test_the_movers_tab_splits_each_account_into_your_money_and_assets(
     assert texts(user, f"mover-{CHECKING}").split() == [
         "💶",
         "Checking",
+        "now",
+        "8,600.00€",
         "+6,100.00€",
         "+6,100.00€",
         "—",
         "—",
     ]
     fund = texts(user, f"mover-{FUND}").split()
-    assert fund[:5] == ["📈", "Fund", "+600.00€", "+1,000.00€", "-400.00€"]
-    assert fund[5].startswith("−")
+    assert fund[:7] == ["📈", "Fund", "now", "40,600.00€", "+600.00€", "+1,000.00€", "-400.00€"]
+    assert fund[7].startswith("−")
     # It held money the whole range: no mark, no note about one
-    assert not fund[5].endswith("*")
+    assert not fund[7].endswith("*")
     await user.should_not_see(marker="part-note")
     assert texts(user, f"mover-{OLD}").split()[:5] == [
         "💰",
@@ -241,6 +243,48 @@ async def test_the_movers_tab_splits_each_account_into_your_money_and_assets(
         "closed",
         "-5,000.00€",
     ]
+    # Closed and empty: the pill says it, no "now 0.00€" under it
+    await user.should_not_see(marker=f"held-{OLD}")
+
+
+async def test_the_movers_header_reads_change_as_your_money_plus_growth(
+    synced: Store, no_sync, user: User
+):
+    await user.open("/networth?tab=movers")
+    await user.should_see(marker="movers-head", retries=20)
+
+    head = user.find(marker="movers-head").elements.pop()
+    assert texts(user, "movers-head").split()[:7] == [
+        "Account",
+        "Change",
+        "=",
+        "Your",
+        "money",
+        "+",
+        "Growth",
+    ]
+    # The signs are drawn only; the sum is said once, for screen readers and on hover
+    assert head.props["title"] == "Change = Your money + Growth"
+    assert "Change = Your money + Growth" in texts(user, "movers-head")
+
+
+@pytest.mark.parametrize(
+    ("end", "balance", "closed", "expected"),
+    [
+        (dt.date(2026, 11, 22), 47_633_210, False, "now 47,633.21€"),
+        (dt.date(2026, 10, 31), 47_633_210, False, "on 31 Oct: 47,633.21€"),
+        (dt.date(2025, 12, 31), -915_620, False, "on 31 Dec 2025: -915.62€"),
+        (dt.date(2026, 11, 22), 0, False, "now 0.00€"),
+        (dt.date(2026, 11, 22), 0, True, None),
+    ],
+    ids=["range ends today", "ends earlier", "another year", "open and empty", "closed and empty"],
+)
+def test_what_an_account_held_at_the_end_of_the_range(end, balance, closed, expected):
+    move = AccountMove(FUND, 1_000_000, balance, Flows(), None)
+
+    held = flows.end_balance_text(move, end, dt.date(2026, 11, 22), FORMATTER, closed)
+
+    assert held == expected
 
 
 async def test_the_i_of_return_tells_how_it_and_growth_can_point_different_ways(

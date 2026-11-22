@@ -299,15 +299,22 @@ is about today's balances, leaves them out.
   "Came in from" (five payees: income is by payee) and "Spent most on" (five categories).
   One column under 860px. A sync that changes nothing does not redraw the tab.
 - **Movers**: one row per counted account (closed ones that held money in the range too),
-  largest change first: name, a bar around a centre line (series 1 up, series 2 down) with
-  the change, "Your money" (what went in or out: income, spending, transfers), "Growth" (good
-  or bad) and "Return", how much the money in the account grew or shrank on its own, day by
-  day (each day's gain on what it held, compounded), per year when it covers more than a year
+  largest change first: name, with a faint line under it saying what the account held at
+  the end of the range ("now 47,633.21€", "on 31 Oct: 47,633.21€" for a range that ends
+  earlier; a closed, empty account has its closed pill instead), a bar around a centre line
+  (series 1 up, series 2 down) with the change, "Your money" (what went in or out: income,
+  spending, transfers), "Growth" (good or bad) and "Return". The header "Change" sits right
+  aligned over the change figure, not over the bar, and the header reads as the sum it is:
+  "Change = Your money + Growth", each faint sign at the start of its column (drawn only;
+  the row's hover and a line for screen readers say the sum). "Return" is how much the money
+  in the account grew or shrank on its own, day by day (each day's gain on what it held,
+  compounded), per year when it covers more than a year
   ("+6.1%", "−8.9%/yr", "—" for an account whose return is not followed). It leaves out the
   days the account held nothing; a return that covers less than the range is marked
   "+32.8%*", its hover says "Held money on 205 of the 315 days of the range", and a second
   faint line explains the mark. A faint line under the card explains the three columns.
-  Under 860px the two middle columns hide.
+  Under 860px the two middle columns hide, their signs with them; under 640px the bar goes
+  too and its room goes to the name.
 - **How Return is measured**: the "i" next to Return opens a dialog (`dialog_box`, wider:
   560px) that tells a made-up account in four steps, Back (ghost) and Next (primary; Done on
   the last): 1,000 put in, it grows 50%, 8,500 more put in, it falls 20%. A chart shows what
