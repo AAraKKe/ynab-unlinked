@@ -218,18 +218,27 @@ def movers_tab(
 ) -> None:
     """One row per counted account, largest change first, with a bar around zero."""
     widest = words.spread(period.accounts) or 1
+    today = dt.date.today()
     with glass_card().classes("yul-nwm-card").mark("movers"):
-        with ui.element("div").classes("yul-nwm-row head"):
+        with ui.element("div").classes("yul-nwm-row head").mark("movers-head") as head:
+            head.props["title"] = words.CHANGE_SUM
             ui.label("Account")
-            ui.label("Change")
-            ui.label("Your money").classes("yul-nwm-r")
-            ui.label("Growth").classes("yul-nwm-r")
+            # Over the figure, not the bar; the signs read the row as a sum, which the columns
+            # hidden on a phone take with them
+            with ui.element("div").classes("yul-nwm-change"):
+                ui.element("div")
+                ui.label("Change").classes("yul-nwm-r").mark("head-change")
+            for sign, title in (("=", "Your money"), ("+", "Growth")):
+                with ui.element("div").classes("yul-nwm-r yul-nwm-term"):
+                    ui.label(sign).classes("yul-nwm-op").props('aria-hidden="true"')
+                    ui.label(title)
             with ui.element("div").classes("yul-nwm-r yul-row yul-info-row yul-nwm-info"):
                 ui.label("Return").props["title"] = (
                     "How the account itself did, shown per year when it covers more than a "
                     "year. Settings › Net worth picks the accounts."
                 )
                 explain_button(words.RETURN_TITLE, explain, marker="return-info")
+            ui.label(words.CHANGE_SUM).classes("yul-sr-only")
         for move in period.accounts:
             if not move.change and not move.start_balance and move.account_id in closed:
                 continue  # closed before the range: nothing to show
@@ -241,10 +250,18 @@ def movers_tab(
                 else f"left:{50 - width:.2f}%;width:{width:.2f}%"
             )
             with ui.element("div").classes("yul-nwm-row").mark(f"mover-{move.account_id}"):
-                with ui.element("div").classes("yul-nwm-name"):
-                    ui.label(names.get(move.account_id, "Account"))
-                    if move.account_id in closed:
-                        closed_pill()
+                with ui.element("div").classes("yul-nwm-acct"):
+                    with ui.element("div").classes("yul-nwm-name"):
+                        ui.label(names.get(move.account_id, "Account"))
+                        if move.account_id in closed:
+                            closed_pill()
+                    held = words.end_balance_text(
+                        move, period.end, today, formatter, move.account_id in closed
+                    )
+                    if held is not None:
+                        ui.label(held).classes("yul-nwm-held yul-num").mark(
+                            f"held-{move.account_id}"
+                        )
                 with ui.element("div").classes("yul-nwm-change"):
                     with ui.element("div").classes("yul-nwm-dbar"):
                         ui.element("i").classes("up" if up else "down").style(place)

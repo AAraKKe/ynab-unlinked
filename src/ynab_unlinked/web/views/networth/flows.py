@@ -26,6 +26,7 @@ from ynab_unlinked.store import Store
 from ynab_unlinked.web import finances
 from ynab_unlinked.web.finances import RANGE_MONTHS, months_range, period_title
 from ynab_unlinked.web.views.networth.data import Snapshot, signed
+from ynab_unlinked.web.wording import short_date
 
 TABS = {"overview": "Overview", "months": "Months", "movers": "Movers"}
 
@@ -96,6 +97,25 @@ def why(move: AccountMove, formatter: Formatter) -> str:
 def moved(period: Period, limit: int = TOP_ACCOUNTS) -> list[AccountMove]:
     """The accounts that moved most, either way; the ones that did not move are left out."""
     return [move for move in period.accounts if move.change or move.flows.transfers][:limit]
+
+
+CHANGE_SUM = "Change = Your money + Growth"
+"""The header row of Movers says it with signs between its titles; this is its hover and
+what a screen reader hears."""
+
+
+def end_balance_text(
+    move: AccountMove, end: dt.date, today: dt.date, formatter: Formatter, closed: bool
+) -> str | None:
+    """What the account held at the end of the range, under its name: `now 47,633.21€`, or
+    `on 31 Oct: 47,633.21€` for a range that ends before today. None for a closed account
+    left empty: its closed pill says it."""
+    if closed and not move.end_balance:
+        return None
+    amount = formatter.format_amount_milli(move.end_balance)
+    if end >= today:
+        return f"now {amount}"
+    return f"on {short_date(end, today)}: {amount}"
 
 
 PART_MARK = "*"

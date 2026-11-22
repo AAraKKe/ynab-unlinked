@@ -1507,7 +1507,8 @@ point by `dataIndex`, or the x axis by `value`, the month as `YYYY-MM`), `other-
 panel, and the picked month goes back to the whole range). Period
 panel: `period-panel`, `period-title` and `period-clear` (a picked month only), `bridge`,
 `step-{income|spending|assets|other|net}`, `moved-{account_id}`, `came-in`, `spent-on`.
-Movers: `movers`, `mover-{account_id}`.
+Movers: `movers`, `movers-head` (the header row), `head-change`, `mover-{account_id}`,
+`held-{account_id}` (what it held at the end of the range; none on a closed, empty account).
 Account drawer: `nw-drawer`, `drawer-chart`, `drawer-tx` (one per last transaction) and
 `drawer-amount` (its amount, `components.amount`).
 
