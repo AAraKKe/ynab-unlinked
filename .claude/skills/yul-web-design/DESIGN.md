@@ -291,7 +291,9 @@ is about today's balances, leaves them out.
   months fade); clicking the same month again, a click anywhere else on the page (the panel
   of the month keeps it), or the ghost "× Whole range" in the panel goes back. The panel has no head of its own (the tiles and the
   chart already give the range and its change): a picked month is named next to "Where the
-  change came from", with "× Whole range", and a quiet "i" next to that title. A vertical
+  change came from", with "× Whole range", and a quiet "i" next to that title. Under 640px
+  the month goes under the title as a line of its own: its name in the text colour (15px,
+  600) to the left, "× Whole range" to the right. A vertical
   waterfall (Income up from zero in series 1, Spending hanging from its top in series 2,
   Growth in series 5, Other in text-3, each starting where the one before ended and joined to
   the next by a dashed line, then Net as a text-2 bar from zero; each bar's value over it, and
@@ -299,8 +301,11 @@ is about today's balances, leaves them out.
   Growth are clickable bars, and a row of three buttons under the chart (a swatch and the
   word, the one picked in the accent pill style) does the same with Tab and Enter. One of the
   three is always picked, Income at first; its bar is outlined in the text colour and the
-  other two fade a little. Net and Other are not picked. The term stays picked when another
-  month is. Under it, two columns (one under 860px):
+  other two fade a little (a month with no bar for the picked term outlines none and fades
+  none). Net and Other are not picked. The term stays picked when another
+  month is. Reached with the keyboard, a button and a row show the app's focus ring, the
+  picked button over its accent colours and the narrowed row next to its accent edge.
+  Under it, two columns (one under 860px):
   - left, every row of the term (no top five), its share bar in the term's colour, the
     amount, and "62% · 6 transactions" ("<1%" for a sliver): Income by payee with "into
     Everyday" (the accounts it arrived in) faint under it; Spending by category; Growth by

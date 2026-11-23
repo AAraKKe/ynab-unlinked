@@ -1182,14 +1182,18 @@ web/
                        NiceGUI's getHtmlElement, never a hand built DOM id)
       view.py          NetWorthView (tabs, hero, ranges, chips, buckets, drawer loading) and the view
       periods.py       PeriodTabs (draws Months or Movers, the selected month and its panel,
-                       restyles), months_tab, movers_tab
+                       restyles), months_tab, movers_tab. A month is read off the loop:
+                       `asked` counts every pick, clear and change of range, and a month is
+                       shown only if nothing was asked while it was read
       return_story.py  show_return_story(formatter, currency_format, palette): the dialog
                        behind the "i" of Return (markers return-info, return-story, story-chart,
                        story-count, story-text, story-return, story-growth, story-end,
                        story-back, story-next, story-done)
       period_panel.py  PeriodPanel(period, names, formatter, palette, *, term, on_term,
                        selected, on_clear).draw(): the waterfall as the menu, the term's
-                       breakdown and its transactions (PeriodTabs keeps the term across months)
+                       breakdown and its transactions (PeriodTabs keeps the term across months);
+                       scroll_to_script(element_id), sent from the new list after a row
+                       narrows it (the clicked row is deleted by then: never from its context)
       table.py         AccountsTable: the accounts card, its inline balance editor and the
                        "Update balances" mode
       drawer.py        account_drawer(..., notes, ...) -> its chart

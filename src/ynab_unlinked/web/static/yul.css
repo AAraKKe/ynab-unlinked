@@ -1250,6 +1250,8 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 }
 .yul-nwp-term:hover, .yul-nwp-term:focus-visible { color: var(--text); background: var(--surface-2); outline: none; }
 .yul-nwp-term.on { background: var(--pill-acc-bg); color: var(--pill-acc-text); border-color: var(--pill-acc-border); }
+/* The picked one keeps its colours under the keyboard: the ring is what says where it is */
+.yul-nwp-term:focus-visible { box-shadow: 0 0 0 3px var(--ring); }
 .yul-nwp-below { margin-top: 12px; }
 .yul-nwp-colhead {
   display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size: 11.5px; font-weight: 600;
@@ -1264,6 +1266,7 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 }
 .yul-nwp-row:hover, .yul-nwp-row:focus-visible { background: var(--surface-2); outline: none; }
 .yul-nwp-row.on { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent-solid); }
+.yul-nwp-row.on:focus-visible { box-shadow: inset 2px 0 0 var(--accent-solid), 0 0 0 3px var(--ring); }
 .yul-nwp-row-top { align-items: flex-start; gap: 10px; }
 .yul-nwp-name { display: flex; flex-direction: column; min-width: 0; }
 .yul-nwp-name > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1514,6 +1517,10 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   .yul-tab { white-space: nowrap; }
   .yul-nwm-head > .yul-grow, .yul-nw-head > .yul-grow, .yul-rec-head > .yul-grow { flex-basis: 100%; }
   .yul-nwm-card > .yul-row { flex-wrap: wrap; gap: 2px 10px; }
+  /* A picked month goes under the title, its name to the left of the way back */
+  .yul-nwp-head { flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .yul-nwp-head > .yul-grow { flex-basis: 100%; }
+  .yul-nwp-month { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--text); }
   /* Movers: a bar a few pixels wide says nothing; its room goes to the name */
   .yul-nwm-row { grid-template-columns: minmax(0, 1fr) auto 64px; }
   .yul-nwm-change { grid-template-columns: auto; }
