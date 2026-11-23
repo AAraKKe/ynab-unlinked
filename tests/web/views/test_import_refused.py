@@ -59,7 +59,7 @@ async def test_the_rows_ynab_did_not_take_are_listed_and_said_why(
     await user.should_see("YNAB did not take 1 row", marker="refused-title")
     await user.should_see(
         "You asked for it to be imported and yul sent it, but YNAB answered that it was "
-        "imported before. That happens when a transaction was imported and then deleted in "
+        "imported before. That usually happens when a transaction was imported and then deleted in "
         "YNAB",
         marker="refused-why",
     )

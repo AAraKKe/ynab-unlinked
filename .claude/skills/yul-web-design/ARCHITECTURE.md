@@ -183,7 +183,9 @@ def commit_import_plan(
     # the rows sent with one of those ids are `refused`. YNAB keeps the import id of every
     # transaction it imported, deleted ones too, and never takes it again; yul reads only
     # live transactions and never asks for deleted ones (a budget has many), so such a row
-    # is planned NEW every time and learnt about only when YNAB refuses it. Both frontends
+    # is planned NEW every time and learnt about only when YNAB refuses it. That is the
+    # usual cause, not the only one (YNAB also refuses a row it holds live where yul did not
+    # read it, its date moved far from the file's), so the words say "usually". Both frontends
     # list the refused rows with why (`text.refused_why`) and how to stop it: leaving them
     # out (`Store.exclude`), from the app's Done step or its Review; the CLI has no way to
     # leave a row out and points at the app. Nothing is left out without the user.

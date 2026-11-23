@@ -32,10 +32,14 @@ def import_message(
 
 
 def refused_why(count: int) -> str:
-    """Why YNAB did not take rows yul sent, for the import screens of both frontends."""
+    """Why YNAB did not take rows yul sent, for the import screens of both frontends.
+
+    The usual cause, not the only one: YNAB also turns away a row it still holds when yul
+    could not see it there (its date was moved in YNAB far from the one in the file).
+    """
     one = count == 1
     return (
-        f"YNAB answered that {'it was' if one else 'they were'} imported before. That happens "
-        f"when a transaction was imported and then deleted in YNAB: YNAB will not take "
-        f"{'it' if one else 'them'} again, now or on any later import."
+        f"YNAB answered that {'it was' if one else 'they were'} imported before. That usually "
+        f"happens when a transaction was imported and then deleted in YNAB: YNAB will not "
+        f"take {'it' if one else 'them'} again, now or on any later import."
     )

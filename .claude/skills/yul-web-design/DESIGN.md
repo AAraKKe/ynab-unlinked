@@ -187,7 +187,7 @@ the two buttons of the success card sit one over the other, as wide as the card.
    nothing and refused some, the card has an amber warning sign instead of the green check.
    Under it, when YNAB refused rows, an amber tinted card "YNAB did not take 2 rows": one
    lede says the user asked for them, yul sent them, and YNAB answered they were imported
-   before, which happens when a transaction was imported and then deleted in YNAB, so it
+   before, which usually happens when a transaction was imported and then deleted in YNAB, so it
    will not take them now or later, and every import offers them as new until they are
    left out. Then the rows per file (bank, "→ account", file name; date, payee, amount)
    with a ghost "Don't import again" each and, for two rows or more, a bordered "Don't

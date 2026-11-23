@@ -95,7 +95,10 @@ def test_the_rows_ynab_refuses_are_named_with_why_instead_of_their_import_ids(
     assert result.exit_code == 0, result.output
     output = " ".join(result.output.split())
     assert "YNAB did not take 1 row yul sent: • 12/05/2025 Coffee Shop -12.34€" in output
-    assert "imported and then deleted in YNAB: YNAB will not take it again" in output
+    assert (
+        "That usually happens when a transaction was imported and then deleted in YNAB: "
+        "YNAB will not take it again"
+    ) in output
     assert "leave it out in the review of an import in `yul app`" in output
     assert rejected not in output
     assert "1 transaction imported" in output
