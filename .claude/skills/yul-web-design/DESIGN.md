@@ -178,7 +178,9 @@ the two buttons of the success card sit one over the other, as wide as the card.
    without asking. A summary bar sticks to the bottom: "29 new transactions in 3 accounts",
    "1 to check" in amber, and the button "Import 29 transactions". Options: import as
    cleared (default) or reconciled. The Files step shows the same legend and tags in a
-   file's body, and "n to check" on its row and in its footer.
+   file's body, and "n to check" on its row and in its footer. A row two files have for
+   the same account is new in both and counted once in the totals: it goes with the first
+   file, and Done counts it among the rows already there for the second.
 3. **Done**. Per file progress bars that fill as YNAB answers ("2 created · YNAB did not
    take 1" in amber), then a success card: created count, how many YNAB did not take ("see
    below"), and two buttons: "Reconcile these accounts" and "Import more". When YNAB took

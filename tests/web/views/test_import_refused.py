@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from tests.helpers.statements import bbva_sheet, write_xls
+from tests.factories import TransactionDetailFactory
+from tests.helpers.statements import bbva_sheet, sabadell_statement, write_xls
 from tests.helpers.web import User
 from tests.helpers.ynab_api import YnabClientStub
 from tests.web.views.test_import import (  # noqa: F401 (fixtures)
@@ -130,20 +131,24 @@ async def test_a_row_not_to_import_again_comes_back_left_out_on_the_next_import(
     user.find(marker="never-1-0").click()
     await user.should_see(marker="never-done-1-0", retries=20)
     sent = len(created(ynab_api)[ORO])
+    # YNAB holds the two it took
+    listing = ynab_api.api("transactions").get_transactions_by_account
+    listing.return_value.data.transactions = [
+        TransactionDetailFactory(import_id=import_id) for import_id in rest
+    ]
 
     # A drop opens a new import
     await drop(user, SABADELL)
 
-    await user.should_see("2 new / 3", marker="count-1", retries=30)
+    await user.should_see("0 new / 3", marker="count-1", retries=30)
     await user.should_see("1 left out", marker="files-left-out")
     user.find(marker="review").click()
     show_every_row(user)
     await user.should_see("left out", marker="row-status-1-0", retries=20)
     await user.should_see("Include again", marker="include-1-0")
-    user.find(marker="import").click()
-    await user.should_see("2 transactions imported", marker="done-title", retries=30)
-    assert [t.import_id for t in created(ynab_api)[ORO][sent:]] == rest
-    await user.should_not_see(marker="refused")
+    # Nothing is left to send: the row YNAB would refuse again is not offered
+    await user.should_see("0 new transactions in 0 accounts", marker="review-summary")
+    assert len(created(ynab_api)[ORO]) == sent
 
 
 async def test_every_row_of_every_file_is_left_out_at_once(
@@ -197,3 +202,83 @@ async def test_no_check_says_it_worked_when_ynab_took_nothing(ynab_api: YnabClie
 
     await user.should_see(marker="done-alert")
     await user.should_see("YNAB did not take 3 rows", marker="refused-title")
+
+
+@pytest.fixture
+def overlapping(tmp_path: Path) -> tuple[Path, Path]:
+    """Two Sabadell exports for Oro that share the refund of the 20th."""
+    barber = "25/04|BARBERIA DOCKLANDS|MADRID|48,00EUR"
+    refund = "20/04|DEVOLUCION COMPRA|MADRID|-12,50EUR"
+    japan = "19/04|VIAJE A JAPON|TOKIO|1.212,16EUR"
+    first, second = tmp_path / "april.txt", tmp_path / "april_later.txt"
+    first.write_text(sabadell_statement([barber, refund]), encoding="cp1252")
+    second.write_text(sabadell_statement([refund, japan]), encoding="cp1252")
+    return first, second
+
+
+async def test_a_row_two_files_share_is_sent_once_and_not_said_to_be_refused(
+    ynab_api: YnabClientStub, user: User, overlapping: tuple[Path, Path]
+):
+    # Both files are compared with YNAB before anything is sent, so both have the refund as
+    # new. Sent again with the second, YNAB answers it as a duplicate of the one just created.
+    ynab_api.refuse_import_ids()
+    first, second = overlapping
+    barber, refund = import_ids("sabadell", first)
+    _, japan = import_ids("sabadell", second)
+
+    await drop(user, first, second)
+    await user.should_see("2 new / 2", marker="count-1", retries=30)
+    await user.should_see("2 new / 2", marker="count-2", retries=30)
+    user.find(marker="review").click()
+    await user.should_see("3 new transactions in 1 account", marker="review-summary")
+    await user.should_see("Import 3 transactions", marker="import")
+    user.find(marker="import").click()
+
+    await user.should_see("3 transactions imported", marker="done-title", retries=30)
+    await user.should_see("1 was already there and was skipped.", marker="done-summary")
+    await user.should_see("1 transaction · april_later.txt", marker="progress-2")
+    await user.should_not_see(marker="refused")
+    await user.should_not_see(marker="commit-refused-2")
+    assert [t.import_id for t in created(ynab_api)[ORO]] == [barber, refund, japan]
+    entries = state().store.activity(BUDGET_ID, kind="import")
+    assert sorted(
+        (e.details["file"], e.details["created"], e.details["repeated"], e.details["duplicates"])
+        for e in entries
+    ) == [("april.txt", 2, 0, 0), ("april_later.txt", 1, 1, 0)]
+
+
+async def test_a_row_ynab_did_not_take_is_listed_once_when_two_files_share_it(
+    ynab_api: YnabClientStub, user: User, overlapping: tuple[Path, Path]
+):
+    first, second = overlapping
+    refund = import_ids("sabadell", first)[1]
+    # The refund was imported and deleted in YNAB since
+    ynab_api.refuse_import_ids(refund)
+
+    await import_all(user, first, second, created="2 transactions imported")
+
+    await user.should_see(
+        "YNAB did not take 1, see below. 0 were already there and were skipped.",
+        marker="done-summary",
+    )
+    await user.should_see("YNAB did not take 1 row", marker="refused-title")
+    await user.should_see("12.50€", marker="refused-amount-1-0")
+    await user.should_not_see(marker="refused-file-2")
+    await user.should_not_see(marker="commit-refused-2")
+    store = state().store
+
+    user.find(marker="never-1-0").click()
+
+    # Nothing else on the card still offers the row
+    await user.should_see(
+        "Later imports list it as left out, with Include again to bring it back.",
+        marker="never-all-done",
+        retries=20,
+    )
+    assert left_out(store) == [refund]
+
+    user.find(marker="undo-never-1-0").click()
+
+    await user.should_see("Don't import again", marker="never-1-0", retries=20)
+    await user.should_not_see("Will not be imported again")
+    assert left_out(store) == []

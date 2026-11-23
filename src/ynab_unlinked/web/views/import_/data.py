@@ -19,6 +19,7 @@ from ynab_unlinked.core.importing import (
     ImportRow,
     RowStatus,
     Twin,
+    rows_to_send,
 )
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
 from ynab_unlinked.formatter import Formatter
@@ -279,6 +280,13 @@ def left_out_count(plan: ImportPlan) -> int:
 def held_count(plan: ImportPlan) -> int:
     """Rows not sent because they may be in YNAB, until the user decides."""
     return len(plan.with_status(RowStatus.MAYBE_IN_YNAB))
+
+
+def send_counts(ready: Sequence[ImportFile]) -> list[int]:
+    """How many rows each of these files sends, in the order they are committed: a row two
+    files share goes to an account with the first of them only (`core.importing.rows_to_send`)."""
+    plans = [item.plan for item in ready if item.plan is not None]
+    return [len(rows_to_send(plan, plans[:index])) for index, plan in enumerate(plans)]
 
 
 def twin_note(twin: Twin, formatter: Formatter) -> str:

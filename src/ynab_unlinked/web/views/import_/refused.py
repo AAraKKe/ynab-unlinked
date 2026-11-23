@@ -43,7 +43,12 @@ class RefusedFile:
 
 
 class RefusedCard:
-    """The warning under the Done card, redrawn in place after each choice."""
+    """The warning under the Done card, redrawn in place after each choice.
+
+    A row is in it once, under the first file that has it: a file never sends a row an
+    earlier file of the import sent to the same account (`core.importing.rows_to_send`), so
+    what is left out or brought back here is all there is of that row on the card.
+    """
 
     def __init__(self, files: Sequence[RefusedFile], formatter: Formatter, save: Save) -> None:
         self.files = list(files)

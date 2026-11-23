@@ -131,10 +131,29 @@ class ImportResult:
     deleted in YNAB is offered as new on every import and refused every time, until the
     user leaves it out (`Store.exclude`). Both frontends list these rows and offer that.
     """
+    repeated: tuple[ImportRow, ...] = ()
+    """The new rows not sent: a file of the same import sent them to the account before
+    this one (`rows_to_send`)."""
 
-    @property
-    def refused_import_ids(self) -> tuple[str, ...]:
-        return tuple(row.import_id for row in self.refused)
+
+def rows_to_send(plan: ImportPlan, earlier: Sequence[ImportPlan] = ()) -> tuple[ImportRow, ...]:
+    """The rows a commit of `plan` sends: its new rows, without the ones a file of the same
+    import sent to the account before it. `earlier` are the plans of the import committed
+    so far, or, before anything is sent, the ones that come before this one.
+
+    Every plan of an import is built before anything is sent, so two exports that overlap
+    (not two copies of one file: `unique_files`) both have the shared rows as new. Sent
+    again, YNAB answers them as duplicates, since it holds them from the first file, and
+    they would be reported as refused (`ImportResult.refused`) although nothing is wrong
+    with them. A row the first file sent and YNAB did refuse is reported once, by that file.
+    """
+    sent = {
+        row.import_id
+        for other in earlier
+        if other.account_id == plan.account_id
+        for row in other.new_rows
+    }
+    return tuple(row for row in plan.new_rows if row.import_id not in sent)
 
 
 def import_entry(
@@ -160,6 +179,7 @@ def import_entry(
             for row in result.refused
         ],
         "skipped": plan.already_imported_count,
+        "repeated": len(result.repeated),
         "matched": len(plan.with_status(RowStatus.MATCHED)),
         "excluded": excluded,
         "held": len(plan.with_status(RowStatus.MAYBE_IN_YNAB)),
@@ -317,17 +337,23 @@ def commit_import_plan(
     cleared: TransactionClearedStatus,
     progress: Progress = NO_PROGRESS,
     store: Store | None = None,
+    earlier: Sequence[ImportPlan] = (),
 ) -> ImportResult:
     """Create the rows YNAB does not hold yet and report the ones it refused anyway
-    (`ImportResult.refused`: imported before and deleted in YNAB since).
+    (`ImportResult.refused`: most often imported before and deleted in YNAB since).
+
+    `earlier` are the plans of the same import committed before this one: the rows they
+    sent to the account are not sent again (`rows_to_send`, `ImportResult.repeated`).
 
     The transactions YNAB created go into `store`, the budget copy, at once. A match made in
     YNAB before the next sync hides the imported transaction from every later answer: saved
     here, the copy can still name it (`build_import_plan`) the next time the row is in a file.
     """
-    to_create = plan.new_rows
+    to_create = rows_to_send(plan, earlier)
+    sending = {row.import_id for row in to_create}
+    repeated = tuple(row for row in plan.new_rows if row.import_id not in sending)
     if not to_create:
-        return ImportResult(created=0)
+        return ImportResult(created=0, repeated=repeated)
 
     progress.start("Creating transactions...")
     created = client.create_transactions(
@@ -348,4 +374,4 @@ def commit_import_plan(
 
     duplicates = frozenset(created.duplicate_import_ids)
     refused = tuple(row for row in to_create if row.import_id in duplicates)
-    return ImportResult(created=len(to_create) - len(refused), refused=refused)
+    return ImportResult(created=len(to_create) - len(refused), refused=refused, repeated=repeated)

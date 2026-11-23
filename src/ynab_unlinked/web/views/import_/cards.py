@@ -18,6 +18,7 @@ from ynab_unlinked.web.views.import_.data import (
     done_summary,
     held_count,
     left_out_count,
+    send_counts,
 )
 from ynab_unlinked.web.views.import_.tables import RowActions, badge, plan_table
 from ynab_unlinked.web.wording import plural
@@ -32,7 +33,7 @@ def files_footer(
     """The sticky footer of Files: what is ready, and Review once every file is settled."""
     blocked = any(item.blocking for item in files)
     transactions = sum(len(item.plan.rows) for item in ready if item.plan)
-    new = sum(len(item.plan.new_rows) for item in ready if item.plan)
+    new = sum(send_counts(ready))
     held = sum(held_count(item.plan) for item in ready if item.plan)
     left_out = sum(left_out_count(item.plan) for item in ready if item.plan)
     already = sum(item.plan.already_imported_count for item in ready if item.plan)
@@ -64,7 +65,7 @@ def review_footer(
     on_import: Callable[[], Any],
 ) -> None:
     """The sticky footer of Review: the totals, "import as reconciled", Back and Import."""
-    new = sum(len(item.plan.new_rows) for item in ready if item.plan)
+    new = sum(send_counts(ready))
     left_out = sum(left_out_count(item.plan) for item in ready if item.plan)
     held = sum(held_count(item.plan) for item in ready if item.plan)
     accounts = {item.account_id for item in ready if item.plan and item.plan.new_rows}
@@ -157,20 +158,20 @@ class Progress:
                 )
 
 
-def progress_card(item: ImportFile, account_name: str) -> Progress:
-    """A file's card in Done, waiting (or "nothing new") until its turn comes."""
-    assert item.plan is not None
+def progress_card(item: ImportFile, account_name: str, sending: int) -> Progress:
+    """A file's card in Done, waiting (or "nothing new") until its turn comes to send its
+    `sending` rows."""
     with glass_card().classes("yul-imp-card").mark(f"progress-{item.key}"):
         # One line when wide. On a phone the account and the status share the first line and
         # the file goes under them.
         with ui.element("div").classes("yul-imp-prog-head"):
             ui.label(account_name).classes("yul-imp-prog-account")
-            ui.label(f"{plural(len(item.plan.new_rows), 'transaction')} · {item.name}").classes(
+            ui.label(f"{plural(sending, 'transaction')} · {item.name}").classes(
                 "yul-imp-prog-file yul-muted"
             )
             status = ui.element("div").classes("yul-imp-prog-status yul-row yul-small")
         with status:
-            ui.label("waiting" if item.plan.new_rows else "nothing new").classes("yul-muted")
+            ui.label("waiting" if sending else "nothing new").classes("yul-muted")
         with ui.element("div").classes("yul-prog") as bar:
             fill = ui.element("i").style("width:0%")
     return Progress(key=item.key, status=status, bar=bar, fill=fill)
