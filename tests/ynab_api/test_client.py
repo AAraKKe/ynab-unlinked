@@ -20,6 +20,7 @@ from ynab_unlinked.ynab_api.errors import YNAB_ERRORS, timed_out
 
 BUDGET_ID = "00000000-0000-0000-0000-000000000001"
 ACCOUNT_ID = "00000000-0000-0000-0000-00000000000a"
+OTHER_ACCOUNT_ID = "00000000-0000-0000-0000-00000000000b"
 
 
 @pytest.fixture
@@ -243,6 +244,25 @@ def test_create_transactions_returns_the_import_ids_ynab_rejected(
     )
 
     assert list(created.duplicate_import_ids) == expected
+
+
+def test_the_stub_refuses_an_import_id_it_created_in_the_account_as_ynab_does(
+    client: Client, ynab_api: YnabClientStub
+):
+    # What a test of two files sharing a row stands on (`refuse_import_ids`)
+    ynab_api.refuse_import_ids("YNAB:-9:x:1")
+    coffee = PendingImportFactory(import_id="YNAB:-1:x:1")
+    deleted = PendingImportFactory(import_id="YNAB:-9:x:1")
+
+    def create(account_id: str) -> tuple[list[str | None], list[str]]:
+        created = client.create_transactions(
+            budget_id=BUDGET_ID, account_id=account_id, transactions=[coffee, deleted]
+        )
+        return [t.import_id for t in created.transactions], list(created.duplicate_import_ids)
+
+    assert create(ACCOUNT_ID) == (["YNAB:-1:x:1"], ["YNAB:-9:x:1"])
+    assert create(ACCOUNT_ID) == ([], ["YNAB:-1:x:1", "YNAB:-9:x:1"])
+    assert create(OTHER_ACCOUNT_ID) == (["YNAB:-1:x:1"], ["YNAB:-9:x:1"])
 
 
 @pytest.mark.parametrize(

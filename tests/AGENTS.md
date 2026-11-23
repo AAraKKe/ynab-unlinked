@@ -114,9 +114,15 @@ a regression being pinned, a workaround. Test names carry the intent; keep them 
   written to.
 - `yul` runs the CLI (`yul("load --show test", input="y\n")`); `ynab_api` stubs the YNAB client
   with one MagicMock per API (`ynab_api.api("transactions")`).
-  `ynab_api.refuse_import_ids(*ids)` makes creating transactions answer as YNAB does for an
-  import id it had before (a transaction imported, then deleted there): the rows sent with
-  one of those ids come back as duplicates, the others are created as real transactions; `load_entity` registers a stub
+  `ynab_api.refuse_import_ids(*ids)` makes creating transactions answer as YNAB does, which
+  never takes an import id twice: the rows sent with one of those ids (a transaction
+  imported, then deleted there) come back as duplicates, and so does a row whose id an
+  earlier request of the test created in the same account (YNAB holds it: two files of one
+  import sharing a row, the same file imported again); the others are created as real
+  transactions. Call it, with no ids if none is refused, in every test that sends more than
+  one file or imports twice: the bare mock takes anything. It does not change what YNAB
+  lists: a second import in a test sets the listing to what the first one created.
+  `load_entity` registers a stub
   entity as `yul load test`; `today` freezes time to 2025-05-15.
 - `tests/factories.py` builds domain and SDK objects: `TransactionFactory`,
   `PendingImportFactory`, `ImportRowFactory`, `TransactionDetailFactory`, `AccountFactory`,
