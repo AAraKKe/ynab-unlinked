@@ -123,6 +123,7 @@ uv run poe fix               # ruff format + autofix
 uv run poe tc-check          # verify a changelog fragment exists for the branch, named after its PR
 uv run yul app               # run the web app from the checkout
 uv run --with playwright python scripts/readme_screenshots.py  # README screenshots, made-up budget
+uv run python scripts/readme_screenshots.py --demo            # the app on that budget, to click around
 ```
 
 CI runs the checks, the changelog check and both test runs on every PR, after `uv sync --locked`. See `tests/AGENTS.md` for test conventions.

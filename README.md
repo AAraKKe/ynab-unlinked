@@ -83,8 +83,10 @@ is instant, and it syncs with YNAB on its own while it is open and after every c
     ![Net worth overview](https://raw.githubusercontent.com/AAraKKe/ynab-unlinked/main/docs/screenshots/networth-overview.png)
 
   - *Months*: how much net worth moved each month, split into what you saved, what your assets
-    did and the rest. Pick a month, or the whole range, to see where the change came from,
-    which accounts moved and why, what came in and what went out (the picture at the top).
+    did and the rest. Pick a month, or the whole range, to see where the change came from:
+    pick Income, Spending or Growth on the waterfall for every payee, category or account
+    behind it and their transactions (the picture at the top). The "i" says what each word
+    counts.
   - *Movers*: every account's change, what you put in or took out, what it did on its own, and
     its return.
 

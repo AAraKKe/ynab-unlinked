@@ -9,6 +9,7 @@ from ynab_unlinked.core.finance import (
     Flows,
     Rules,
     annualised,
+    breakdowns,
     income_by_payee,
     months_between,
     period,
@@ -234,7 +235,13 @@ def test_a_period_explains_the_whole_change_of_net_worth(store: Store):
     assert moves[FUND].rate == pytest.approx(-400_000 / 11_000_000)
     assert moves[FUND].rate_days == 30
     assert moves[CHECKING].rate is None
-    assert [spend.category_id for spend in april.spending] == ["rent", "groceries"]
+    assert [group.key for group in april.breakdown("spending").groups] == ["rent", "groceries"]
+    # The rows and the lines behind them add up to the flows exactly
+    for kind in ("income", "spending", "assets"):
+        breakdown = april.breakdown(kind)
+        assert breakdown.total == getattr(april.flows, kind)
+        assert sum(entry.amount for entry in breakdown.entries) == breakdown.total
+        assert sum(group.count for group in breakdown.groups) == len(breakdown.entries)
 
 
 SAVINGS = "savings"
@@ -315,3 +322,61 @@ def test_a_return_is_only_given_for_followed_accounts(store: Store):
     assert followed.accounts[0].rate == pytest.approx(-0.04)
     assert not_followed.accounts[0].rate is None
     assert not_followed.flows.assets == -400_000
+
+
+def test_breakdowns_group_every_line_of_a_kind_and_add_up_to_its_flows():
+    lines = [
+        line(3_000_000, payee="Employer", category="ready-to-assign", day=1),
+        line(240_000, payee="Employer", category="travel", account=CARD, day=20),
+        line(160_000, payee="Cobee", category="ready-to-assign", day=2),
+        line(-240_000, payee="Airline", category="travel", account=CARD, day=12),
+        line(-90_000, payee="Landlord", category="rent", day=3),
+        line(-60_000, payee="Market", category="groceries", day=5),
+        line(-40_000, payee="Market", category="groceries", account=CARD, day=6),
+        line(-1_000_000, transfer=FUND, payee="Transfer : Fund", category=None),
+        line(1_000_000, account=FUND, transfer=CHECKING, payee="Transfer : Checking"),
+        line(300_000, account=FUND, payee="Market value", category=None, day=15),
+        line(-500_000, account=FUND, payee="Market value", category=None, day=25),
+        line(-500_000, category="broker", payee="Broker"),
+        line(0, payee="Nobody", category="ready-to-assign"),
+    ]
+
+    income, spending, assets = breakdowns(lines, RULES, {"travel": "✈️ Travel"})
+
+    totals: dict[str, int] = {}
+    for given in lines:
+        if (kind := RULES.kind(given)) is not None:
+            totals[kind] = totals.get(kind, 0) + given.amount
+    assert (income.total, spending.total, assets.total) == (
+        totals["income"],
+        totals["spending"],
+        totals["assets"],
+    )
+    # A reimbursement is income from whoever paid it, in the account it arrived in
+    assert [(g.name, g.amount, g.count, g.accounts) for g in income.groups] == [
+        ("Employer", 3_240_000, 2, (CHECKING, CARD)),
+        ("Cobee", 160_000, 1, (CHECKING,)),
+    ]
+    assert [(g.name, g.amount, g.count) for g in spending.groups] == [
+        ("✈️ Travel", -240_000, 1),
+        ("groceries", -100_000, 2),
+        ("rent", -90_000, 1),
+    ]
+    assert [(g.key, g.amount, g.count) for g in assets.groups] == [(FUND, -200_000, 2)]
+    # Newest first, and a line of no amount is not a transaction to list
+    assert [entry.date.day for entry in income.entries] == [20, 2, 1]
+    assert [entry.payee for entry in spending.entries_of("groceries")] == ["Market", "Market"]
+    assert len(spending.entries_of(None)) == 4
+
+
+def test_growth_rows_put_the_largest_move_first_whichever_way():
+    rules = Rules(on_budget={FUND: False, "shares": False})
+    lines = [
+        line(100_000, account=FUND, category=None),
+        line(-400_000, account="shares", category=None),
+    ]
+
+    (_, _, assets) = breakdowns(lines, rules)
+
+    assert [group.key for group in assets.groups] == ["shares", FUND]
+    assert assets.total == -300_000

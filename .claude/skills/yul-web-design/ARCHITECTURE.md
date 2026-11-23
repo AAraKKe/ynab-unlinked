@@ -734,8 +734,23 @@ class Period:
     start: dt.date; end: dt.date; flows: Flows; start_worth: int; end_worth: int
     months: tuple[tuple[dt.date, Flows], ...]   # every calendar month touched, oldest first
     accounts: tuple[AccountMove, ...] = ()      # largest change first
-    spending: tuple[CategorySpend, ...] = ()    # most spent first; refunds do not lower it
-    income: tuple[PayeeIncome, ...] = ()        # by payee, most first
+    breakdowns: tuple[Breakdown, ...] = ()      # income, spending, assets (`breakdowns`)
+    days; breakdown(kind) -> Breakdown          # empty when the kind has no lines
+
+@dataclass(frozen=True)
+class Entry:     # one line behind a breakdown, as a list of transactions shows it
+    transaction_id; date; payee; account_id; amount; category: str | None; group: str  # its Group.key
+@dataclass(frozen=True)
+class Group:     # a payee (income), a category (spending, key "" for none) or an account (assets)
+    key; name (assets: the account id, the caller names it); amount; count; accounts (most money first)
+@dataclass(frozen=True)
+class Breakdown:
+    kind; groups (income most first, spending most spent first, assets largest either way)
+    entries (newest first); total; entries_of(key | None) -> list[Entry]
+BREAKDOWN_KINDS = ("income", "spending", "assets")
+def breakdowns(lines, rules, names=None) -> tuple[Breakdown, ...]
+    # every line where Rules.kind puts it, so each adds up to its Flows field exactly; lines of
+    # no amount left out
 
 def period(store, budget_id, rules, start, end, names=None) -> Period   # blocking
 def flows_by_account(lines, rules) -> dict[str, Flows]
@@ -1056,8 +1071,11 @@ web/
                        notes=None),
                        months_chart(..., on_pick(index), selected=None, notes=None): Net worth › Months'
                        stacked bars, net line, a transparent column per month for clicks
-                       bridge_options(steps, labels, palette, currency_format) / bridge_chart:
-                       the period panel's waterfall
+                       bridge_options(steps, labels, palette, currency_format, selected=None)
+                       / bridge_chart(..., selected=None, on_pick(kind)=None): the period
+                       panel's waterfall, the `selected` step outlined and a click on one of
+                       PICKABLE (income, spending, assets) calling on_pick; step_colour(kind,
+                       palette)
                        story_options(labels, held, put_in, upto, palette, currency_format):
                        the Return explainer's bars and put in line, the steps after upto empty
     cashflow_chart.py  income_spending_options, rate_options, volatility_options,
@@ -1150,10 +1168,18 @@ web/
                        entry), plain_amount, Drafts, read_drafts, diff_label, changed_count,
                        save_label (the "Update balances" fields, their changes and footer)
       flows.py         pure: TABS, RANGE_MONTHS, months_range (whole months), rules, load_period,
-                       period_title, Step / bridge, why, moved, rate_text, partial,
+                       period_title, Step / bridge, rate_text, partial,
                        rate_title, PART_NOTE, months_up, best_month, month_bounds,
                        share_of_change, spread, StoryStep / return_story, RETURN_TITLE,
-                       RETURN_LEDE, RETURN_END, percent_text
+                       RETURN_LEDE, RETURN_END, percent_text; the panel's breakdown: TERMS,
+                       DEFAULT_TERM, BY, PAGE, MORE, count_text, share, row_caption, row_name,
+                       row_subtitle, list_head, more_count, empty_text
+      terms.py         pure: what the "i" of the waterfall says (TERMS_TITLE, Term /
+                       TERM_MEANINGS, refund_example) and GrowthPhase / GrowthStory /
+                       growth_story, deposit_label: the Growth animation's points and phases
+      terms_story.py   show_terms(formatter, currency_format): that dialog, the Growth chart as
+                       an inline SVG (chart_svg) and the script that plays it (found with
+                       NiceGUI's getHtmlElement, never a hand built DOM id)
       view.py          NetWorthView (tabs, hero, ranges, chips, buckets, drawer loading) and the view
       periods.py       PeriodTabs (draws Months or Movers, the selected month and its panel,
                        restyles), months_tab, movers_tab
@@ -1161,8 +1187,9 @@ web/
                        behind the "i" of Return (markers return-info, return-story, story-chart,
                        story-count, story-text, story-return, story-growth, story-end,
                        story-back, story-next, story-done)
-      period_panel.py  period_panel(period, names, closed, formatter, *, selected, on_clear):
-                       the bridge, accounts, came in from, spent most on
+      period_panel.py  PeriodPanel(period, names, formatter, palette, *, term, on_term,
+                       selected, on_clear).draw(): the waterfall as the menu, the term's
+                       breakdown and its transactions (PeriodTabs keeps the term across months)
       table.py         AccountsTable: the accounts card, its inline balance editor and the
                        "Update balances" mode
       drawer.py        account_drawer(..., notes, ...) -> its chart
@@ -1506,7 +1533,15 @@ point by `dataIndex`, or the x axis by `value`, the month as `YYYY-MM`), `other-
 `OUTSIDE_PROP` for a click outside the elements with `KEEP_PROP`, here the chart and the
 panel, and the picked month goes back to the whole range). Period
 panel: `period-panel`, `period-title` and `period-clear` (a picked month only), `bridge`,
-`step-{income|spending|assets|other|net}`, `moved-{account_id}`, `came-in`, `spent-on`.
+`step-{income|spending|assets|other|net}` (the waterfall's values, for screen readers; its
+`componentClick` with the `dataIndex` of Income, Spending or Growth picks it), `terms` and
+`term-{income|spending|assets}` (the buttons that pick the same, `on` when picked),
+`breakdown` with `breakdown-total` and `breakdown-row-{index}` (`on` when it narrows the
+list), `breakdown-empty`, `transactions` with `tx-head` ("31 transactions"), `tx-all` (a row
+narrows it), `tx-row` (one per transaction shown) and `tx-more` ("Show N more"). The "i":
+`terms-info`, its dialog `terms-dialog` (with `KEEP_PROP`, like the dialog itself),
+`term-meaning-{kind}`, `refund-example`, `growth-story`, `growth-steps` (the captions as a
+list, shown with reduced motion), `terms-done`.
 Movers: `movers`, `movers-head` (the header row), `head-change`, `mover-{account_id}`,
 `held-{account_id}` (what it held at the end of the range; none on a closed, empty account).
 Account drawer: `nw-drawer`, `drawer-chart`, `drawer-tx` (one per last transaction) and

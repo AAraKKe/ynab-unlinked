@@ -20,7 +20,7 @@ from tests.web.views.test_networth import serve_note, texts, tooltip
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import LatestConfig, TrackedAccount
 from ynab_unlinked.config.models.v2 import CurrencyFormat
-from ynab_unlinked.core.finance import AccountMove, Flows, Period
+from ynab_unlinked.core.finance import AccountMove, Flows
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store
 from ynab_unlinked.web import theme
@@ -128,6 +128,19 @@ def noted(synced: Store, ynab_api: YnabClientStub) -> Store:
     return synced
 
 
+def on(user: User, marker: str) -> bool:
+    return "on" in user.find(marker=marker).elements.copy().pop().classes
+
+
+def outlined(user: User) -> str:
+    """The step of the waterfall drawn as picked."""
+    options = user.find(marker="bridge").elements.copy().pop().options
+    names = options["xAxis"]["data"]
+    data = options["series"][0]["data"]
+    (picked,) = [n for n, p in zip(names, data, strict=True) if p["itemStyle"].get("borderWidth")]
+    return picked
+
+
 async def open_months(user: User) -> None:
     await user.open("/networth?tab=months")
     await user.should_see(marker="period-panel", retries=20)
@@ -171,11 +184,146 @@ async def test_the_panel_shows_the_whole_range_until_a_month_is_picked(
     assert texts(user, "step-income") == "+3,000.00€"
     assert texts(user, "step-spending") == "-900.00€"
     assert texts(user, "step-net") == "+1,700.00€"
-    assert "growth -400.00€" in texts(user, f"moved-{FUND}")
-    assert texts(user, f"moved-{OLD}").startswith("💰 Old savings closed")
-    assert texts(user, "came-in") == "Employer 3,000.00€"
     await user.should_not_see(marker="period-clear")
     await user.should_not_see(marker="period-title")
+
+
+async def test_the_panel_lists_income_by_payee_until_another_bar_is_picked(
+    synced: Store, no_sync, user: User
+):
+    await open_months(user)
+
+    assert on(user, "term-income")
+    assert texts(user, "breakdown-row-0").split() == [
+        "Employer",
+        "into",
+        "💶",
+        "Checking",
+        "+3,000.00€",
+        "100%",
+        "·",
+        "1",
+        "transaction",
+    ]
+    assert texts(user, "tx-head") == "1 transaction"
+    assert texts(user, "tx-row").split()[-4:] == ["Employer", "💶", "Checking", "+3,000.00€"]
+    assert outlined(user) == "Income"
+
+    user.find(marker="term-assets").click()
+
+    await user.should_see("1 value change", marker="tx-head")
+    assert on(user, "term-assets") and not on(user, "term-income")
+    fund = texts(user, "breakdown-row-0").split()
+    assert fund[:2] == ["📈", "Fund"] and fund[3:5] == ["return", "-400.00€"]
+    assert fund[-3:] == ["1", "value", "change"]
+    assert outlined(user) == "Growth"
+
+
+async def test_a_click_on_a_bar_of_the_waterfall_picks_it(synced: Store, no_sync, user: User):
+    await open_months(user)
+    chart = user.find(marker="bridge")
+    names = chart.elements.copy().pop().options["xAxis"]["data"]
+
+    chart.trigger("componentClick", {"componentType": "series", "dataIndex": names.index("Net")})
+    chart.trigger(
+        "componentClick", {"componentType": "series", "dataIndex": names.index("Spending")}
+    )
+
+    await user.should_see("Landlord", marker="tx-row")
+    assert on(user, "term-spending")
+    assert texts(user, "breakdown-total") == "-900.00€"
+
+
+@pytest.fixture
+def busy(synced: Store, ynab_api: YnabClientStub) -> Store:
+    """`synced` with thirty days of groceries on top of the rent."""
+    transactions = ynab_api.api("transactions").get_transactions.return_value.data.transactions
+    transactions += [
+        TransactionDetailFactory(
+            id=f"g{n}",
+            account_id=uuid.UUID(CHECKING),
+            var_date=ago(n),
+            amount=-50_000,
+            payee_name="Market",
+            category_id=uuid.UUID(int=300),
+            category_name="Groceries",
+        )
+        for n in range(1, 31)
+    ]
+    synced.sync(Client("api-key"), BUDGET_ID)
+    return synced
+
+
+async def test_a_row_narrows_the_transactions_and_a_long_list_shows_more(
+    busy: Store, no_sync, user: User
+):
+    await open_months(user)
+    user.find(marker="term-spending").click()
+    await user.should_see("31 transactions", marker="tx-head")
+    assert len(user.find(marker="tx-row").elements) == flows.PAGE
+    assert texts(user, "breakdown-row-0").startswith("Groceries -1,500.00€")
+
+    user.find(marker="tx-more").click()
+
+    await user.should_not_see(marker="tx-more")
+    assert len(user.find(marker="tx-row").elements) == 31
+
+    user.find(marker="breakdown-row-0").click()
+
+    await user.should_see("30 transactions", marker="tx-head")
+    assert on(user, "breakdown-row-0")
+    # Narrowing starts the list over
+    assert len(user.find(marker="tx-row").elements) == flows.PAGE
+    assert texts(user, "tx-more") == f"Show {30 - flows.PAGE} more"
+
+    user.find(marker="tx-all").click()
+
+    await user.should_see("31 transactions", marker="tx-head")
+    assert not on(user, "breakdown-row-0")
+    user.find(marker="breakdown-row-1").click()
+    await user.should_see("1 transaction", marker="tx-head")
+    user.find(marker="breakdown-row-1").click()
+    await user.should_see("31 transactions", marker="tx-head")
+
+
+async def test_a_month_picked_keeps_the_term_and_lists_its_own_transactions(
+    busy: Store, no_sync, user: User
+):
+    await open_months(user)
+    user.find(marker="term-spending").click()
+    await user.should_see("31 transactions", marker="tx-head")
+    user.find(marker="breakdown-row-0").click()
+    await user.should_see("30 transactions", marker="tx-head")
+    chart = user.find(marker="months-chart")
+    keys = chart.elements.copy().pop().options["xAxis"]["data"]
+    month = ago(1).strftime("%Y-%m")
+    # The groceries of that month and, when it falls in it, the rent
+    in_month = sum(1 for days in [*range(1, 31), 18] if ago(days).strftime("%Y-%m") == month)
+
+    chart.trigger("componentClick", {"componentType": "series", "dataIndex": keys.index(month)})
+
+    await user.should_see(marker="period-clear")
+    await user.should_see(flows.count_text("spending", in_month), marker="tx-head")
+    assert on(user, "term-spending")
+    await user.should_not_see(marker="tx-all")
+
+
+async def test_the_i_of_the_waterfall_says_what_the_three_words_mean(
+    synced: Store, no_sync, user: User
+):
+    await open_months(user)
+
+    user.find(marker="terms-info").click()
+
+    await user.should_see(marker="terms-dialog")
+    assert texts(user, "term-meaning-income").startswith(
+        "Income Money that arrived in your budget accounts from someone else"
+    )
+    assert "-240.00€" in texts(user, "refund-example")
+    await user.should_see(marker="growth-story")
+    assert len(user.find(marker="growth-steps").elements.pop().default_slot.children) == 4
+    user.find(marker="terms-done").click()
+    await user.should_not_see(marker="terms-dialog")
 
 
 async def test_clicking_a_month_shows_it_and_clicking_it_again_shows_the_range(
@@ -407,16 +555,6 @@ def test_a_return_over_part_of_the_range_is_marked_and_says_how_much():
     assert flows.rate_text(replace(move, rate=0.21, rate_days=730), 1_000) == "+10.0%/yr*"
 
 
-def test_the_drawer_lists_only_accounts_that_moved():
-    still = AccountMove("still", 10, 10, Flows(), None)
-    moved = AccountMove("moved", 10, 30, Flows(income=20), None)
-    period = Period(
-        dt.date(2026, 4, 1), dt.date(2026, 4, 30), Flows(income=20), 20, 40, (), (moved, still)
-    )
-
-    assert flows.moved(period) == [moved]
-
-
 def test_only_the_two_ends_of_a_month_bar_are_rounded():
     months = [
         (dt.date(2026, 4, 1), Flows(income=3_000, spending=-1_000, assets=500)),
@@ -449,7 +587,7 @@ def test_the_waterfall_starts_each_step_where_the_last_one_ended_and_the_net_at_
         FORMATTER.currency_format,
     )
 
-    assert [point["value"][1:] for point in options["series"][0]["data"]] == [
+    assert [point["value"][1:3] for point in options["series"][0]["data"]] == [
         [0, 3_000],
         [3_000, 2_000],
         [2_000, 1_600],
@@ -470,7 +608,7 @@ def test_spending_larger_than_income_takes_the_waterfall_below_zero():
         FORMATTER.currency_format,
     )
 
-    assert [point["value"][1:] for point in options["series"][0]["data"]] == [
+    assert [point["value"][1:3] for point in options["series"][0]["data"]] == [
         [0, 4_600],
         [4_600, -6_500],
         [-6_500, -6_300],

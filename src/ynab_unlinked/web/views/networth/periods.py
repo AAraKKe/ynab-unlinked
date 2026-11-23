@@ -28,7 +28,7 @@ from ynab_unlinked.web.state import state
 from ynab_unlinked.web.theme import KEEP_PROP, OUTSIDE_EVENT, OUTSIDE_PROP, Palette
 from ynab_unlinked.web.views.networth import flows as words
 from ynab_unlinked.web.views.networth.data import Snapshot, signed
-from ynab_unlinked.web.views.networth.period_panel import period_panel
+from ynab_unlinked.web.views.networth.period_panel import PeriodPanel
 from ynab_unlinked.web.views.networth.return_story import show_return_story
 
 
@@ -43,6 +43,8 @@ class PeriodTabs:
         self.panel: ui.element | None = None
         self.selected: int | None = None
         self.month: Period | None = None
+        self.term = words.DEFAULT_TERM
+        """What the panel lists, kept as months are picked."""
 
     def draw(
         self,
@@ -106,15 +108,19 @@ class PeriodTabs:
             return
         self.panel.clear()
         with self.panel:
-            period_panel(
+            PeriodPanel(
                 shown,
                 words.account_names(self.snapshot),
-                self._closed(),
                 state().require_formatter(),
                 self.palette,
+                term=self.term,
+                on_term=self._keep_term,
                 selected=self.month is not None,
                 on_clear=self.clear,
-            )
+            ).draw()
+
+    def _keep_term(self, term: str) -> None:
+        self.term = term
 
     def _restyle_chart(self) -> None:
         chart, period, palette = self.chart, self.period, self.palette

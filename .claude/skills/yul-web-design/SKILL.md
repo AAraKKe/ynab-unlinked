@@ -54,7 +54,8 @@ same change. Never update a document to describe something you did not build.
     colours for series, never Quasar colour props. Accent gradient for the one primary
     action per screen.
 12. **Motion** is the existing set (page enter, stagger, count up, shimmer, check draw, the
-    category detail's slide in, the pulse of a page still loading).
+    category detail's slide in, the pulse of a page still loading, the Growth explainer's
+    loop behind the "i" of Net worth › Months).
     Do not add new animations; `prefers-reduced-motion` must stay instant.
 
 ## Building blocks (use these, do not restyle Quasar by hand)
@@ -142,7 +143,8 @@ The printed link carries the session token. Check dark and light (toggle in the 
 every palette (Settings › Appearance) and narrow windows: under 1000px Home becomes one
 column, under 960px the sidebar is the rail, under 640px a bar of icons along the bottom.
 `uv run --with playwright python scripts/readme_screenshots.py` runs the app on a made-up
-budget and takes a picture of every page.
+budget and takes a picture of every page. With `--demo` (no Playwright needed) it prints the link
+and keeps that app running until Ctrl+C, a scratch home and no keychain.
 
 ## Checklist before you commit
 

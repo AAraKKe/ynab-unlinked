@@ -1161,6 +1161,51 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-nwm-info .yul-info { width: 18px; height: 18px; }
 /* The Return explainer (views/networth/return_story.py) */
 .yul-dialog.yul-story { width: min(560px, 94vw); }
+/* What Income, Spending and Growth mean (views/networth/terms_story) */
+.yul-dialog.yul-terms { width: min(980px, 94vw); max-width: min(980px, 94vw) !important; }
+.yul-terms-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 6px 0 14px; }
+.yul-term {
+  display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; font-size: 13px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-2); line-height: 1.5;
+}
+.yul-term > .yul-term-title { margin: 0; color: var(--text); font-size: 13px; text-transform: none; letter-spacing: 0; }
+.yul-term-list { list-style: none; margin: 0; padding: 8px 0 0; border-top: 1px solid var(--hair); display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.yul-term-list > li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; }
+.yul-term-list > li::before { font-weight: 700; }
+.yul-term-list > li.yes::before { content: "✓"; color: var(--good); }
+.yul-term-list > li.no::before { content: "✕"; color: var(--text-3); }
+.yul-term-example {
+  display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 10px; font-size: 12.5px;
+  background: color-mix(in oklab, var(--series-1) 9%, transparent);
+}
+.yul-term-example > .yul-row { gap: 8px; }
+.yul-term-example > :first-child { margin-bottom: 4px; color: var(--text); }
+.yul-term-example > :last-child { margin-top: 4px; }
+/* The Growth animation: what the account is worth against what was put in, the gap shaded */
+.yul-gs-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.yul-gs-gap > .up { fill: var(--good); opacity: .22; }
+.yul-gs-gap > .down { fill: var(--bad); opacity: .22; }
+.yul-gs-put { fill: none; stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.yul-gs-worth { fill: none; stroke: var(--series-5); stroke-width: 2; stroke-linejoin: round; }
+.yul-gs-dot { fill: var(--text); stroke: var(--series-5); stroke-width: 2; }
+.yul-gs-label { fill: var(--text); font: 600 10.5px var(--font); transition: opacity .4s; }
+.yul-gs.playing .yul-gs-label { opacity: 0; }
+.yul-gs.playing.deposit .yul-gs-label { opacity: 1; }
+.yul-gs-live { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; min-height: 58px; }
+.yul-gs-caption { color: var(--text); font-size: 12.5px; }
+.yul-gs-figure { display: flex; flex-direction: column; align-items: flex-end; flex: none; }
+.yul-gs-value { font-size: 16px; font-weight: 700; }
+.yul-gs-steps { display: none; margin: 0; padding-left: 18px; font-size: 12.5px; }
+.yul-gs-legend { display: flex; gap: 14px; }
+.yul-gs-legend i { display: inline-block; width: 14px; height: 0; margin-right: 6px; vertical-align: middle; }
+.yul-gs-legend i.put { border-top: 2px dashed var(--text-2); }
+.yul-gs-legend i.worth { border-top: 2px solid var(--series-5); }
+/* No motion: the finished chart, and the four captions as a list instead of one at a time */
+@media (prefers-reduced-motion: reduce) {
+  .yul-gs-caption { display: none; }
+  .yul-gs-live { min-height: 0; justify-content: flex-end; }
+  .yul-gs-steps { display: block; }
+}
 .yul-story-step { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 14px; min-height: 172px; }
 .yul-story-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .yul-story-tiles .yul-tile-v { font-size: clamp(18px, 4.6vw, 23px); white-space: nowrap; }
@@ -1180,7 +1225,7 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 .yul-nwp-panel { padding: 16px 18px; margin-top: 10px; }
 .yul-nwp-head { align-items: flex-start; gap: 12px; }
 .yul-nwp-figure { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
-.yul-nwp-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 4px 28px; }
+.yul-nwp-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 28px; }
 .yul-nwm-change { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; align-items: center; }
 .yul-nwm-change > .yul-num { text-align: right; }
 .yul-nwm-dbar { position: relative; height: 10px; }
@@ -1194,11 +1239,45 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
 /* Change = Your money + Growth: each sign at the start of its column, its title at the end */
 .yul-nwm-term { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 .yul-nwm-op { color: var(--text-3); opacity: .7; font-weight: 600; }
-.yul-nwp-move {
-  display: flex; gap: 10px; align-items: flex-start; padding: 7px 0;
-  border-bottom: 1px solid var(--hair); font-size: 13px;
+/* The waterfall is the menu: the bars, and these buttons under them, pick what is listed */
+.yul-nwp-terms {
+  display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding-top: 12px; border-top: 1px solid var(--hair);
 }
-.yul-nwp-move:last-child { border-bottom: 0; }
+.yul-nwp-term {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font: 600 13px/1.2 var(--font);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.yul-nwp-term:hover, .yul-nwp-term:focus-visible { color: var(--text); background: var(--surface-2); outline: none; }
+.yul-nwp-term.on { background: var(--pill-acc-bg); color: var(--pill-acc-text); border-color: var(--pill-acc-border); }
+.yul-nwp-below { margin-top: 12px; }
+.yul-nwp-colhead {
+  display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size: 11.5px; font-weight: 600;
+  color: var(--text-3); text-transform: uppercase; letter-spacing: .06em;
+}
+.yul-nwp-total { color: var(--text); font-size: 13px; letter-spacing: 0; }
+.yul-nwp-narrowed { text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yul-nwp-colhead .yul-link { background: none; border: 0; padding: 0; cursor: pointer; font: 600 12px/1.2 var(--font); text-transform: none; letter-spacing: 0; }
+.yul-nwp-row {
+  display: flex; flex-direction: column; gap: 4px; padding: 8px 8px; margin: 0 -8px; border-radius: 10px;
+  cursor: pointer; font-size: 13px; transition: background .15s;
+}
+.yul-nwp-row:hover, .yul-nwp-row:focus-visible { background: var(--surface-2); outline: none; }
+.yul-nwp-row.on { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent-solid); }
+.yul-nwp-row-top { align-items: flex-start; gap: 10px; }
+.yul-nwp-name { display: flex; flex-direction: column; min-width: 0; }
+.yul-nwp-name > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yul-nwp-row > .yul-nw-bar { flex: none; }
+.yul-nwp-tx {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+  padding: 7px 0; border-bottom: 1px solid var(--hair); font-size: 13px;
+}
+.yul-nwp-tx:last-of-type { border-bottom: 0; }
+.yul-nwp-tx-who { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.yul-nwp-tx-who > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yul-nwp-tx-who > :first-child { flex: 0 1 auto; }
+.yul-nwp-tx-who > :last-child { flex: 0 10 auto; }
+.yul-nwp-tx + .yul-btn { margin-top: 8px; }
 /* The waterfall's values for screen readers: the bars already carry them */
 .yul-nwp-steps { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .yul-nwp-step { display: inline-flex; gap: 6px; color: var(--text-2); }
@@ -1371,7 +1450,8 @@ body.body--light .yul-imp-body { background: rgba(15, 23, 42, .03); }
   .yul-sp-numbers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .yul-sp-row { grid-template-columns: minmax(0, 1fr) 90px minmax(0, 1fr); }
   .yul-sp-row > :nth-child(3), .yul-sp-row > :nth-child(4) { display: none; }
-  .yul-nwp-cols { grid-template-columns: minmax(0, 1fr); }
+  .yul-nwp-cols { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .yul-terms-grid { grid-template-columns: minmax(0, 1fr); }
   .yul-nw-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .yul-nwm-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 76px; }
   .yul-nwm-row > :nth-child(3), .yul-nwm-row > :nth-child(4) { display: none; }
