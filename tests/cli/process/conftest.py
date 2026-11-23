@@ -38,10 +38,11 @@ def existing_in_ynab(ynab: YnabClientStub):
 
 
 @pytest.fixture
-def rejected_as_duplicates(ynab: YnabClientStub):
+def refused_by_ynab(ynab: YnabClientStub):
+    """YNAB refuses these import ids, as it does those of a transaction deleted there."""
+
     def setup(import_ids: list[str]) -> None:
-        api = ynab.api("transactions")
-        api.create_transaction.return_value.data.duplicate_import_ids = import_ids
+        ynab.refuse_import_ids(*import_ids)
 
     return setup
 

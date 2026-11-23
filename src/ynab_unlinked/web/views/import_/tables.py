@@ -93,7 +93,7 @@ def _rows(
                 note = None
                 if status is RowStatus.MAYBE_IN_YNAB and row.twin is not None:
                     note = (twin_note(row.twin, formatter), f"row-twin-{key}-{index}")
-                _cells(row.transaction, formatter, note).mark(f"row-amount-{key}-{index}")
+                row_cells(row.transaction, formatter, note).mark(f"row-amount-{key}-{index}")
                 with ui.element("td").classes("r c-status"):
                     _status(status).mark(f"row-status-{key}-{index}")
                 if actions is not None:
@@ -138,7 +138,7 @@ def transactions_table(transactions: Sequence[Transaction], formatter: Formatter
         _header()
         for transaction in transactions:
             with ui.element("tr"):
-                _cells(transaction, formatter)
+                row_cells(transaction, formatter)
                 with ui.element("td").classes("r c-status"):
                     ui.label("…").classes("yul-faint")
 
@@ -152,7 +152,7 @@ def _header(actions: bool = False) -> None:
             ui.element("th")
 
 
-def _cells(
+def row_cells(
     transaction: Transaction, formatter: Formatter, note: tuple[str, str] | None = None
 ) -> ui.label:
     """The date, payee and amount (returned); `note` is a line under the payee and its marker.

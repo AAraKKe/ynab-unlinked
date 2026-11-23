@@ -18,7 +18,28 @@ def name_list(names: Sequence[str]) -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
-def import_message(created: int, account_name: str, file: str, excluded: int) -> str:
-    """The message of an `import` activity entry, saying how many rows were left out."""
+def import_message(
+    created: int, account_name: str, file: str, excluded: int, refused: int = 0
+) -> str:
+    """The message of an `import` activity entry, saying how many rows YNAB did not take
+    and how many were left out."""
     message = f"Imported {plural(created, 'transaction')} to {account_name} from {file}"
-    return f"{message} · {excluded} left out" if excluded else message
+    if refused:
+        message += f" · YNAB did not take {refused}"
+    if excluded:
+        message += f" · {excluded} left out"
+    return message
+
+
+def refused_why(count: int) -> str:
+    """Why YNAB did not take rows yul sent, for the import screens of both frontends.
+
+    The usual cause, not the only one: YNAB also turns away a row it still holds when yul
+    could not see it there (its date was moved in YNAB far from the one in the file).
+    """
+    one = count == 1
+    return (
+        f"YNAB answered that {'it was' if one else 'they were'} imported before. That usually "
+        f"happens when a transaction was imported and then deleted in YNAB: YNAB will not "
+        f"take {'it' if one else 'them'} again, now or on any later import."
+    )

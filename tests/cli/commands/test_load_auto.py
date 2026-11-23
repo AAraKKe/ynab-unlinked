@@ -285,18 +285,23 @@ def test_yes_keeps_the_rows_left_out_of_every_file(
     assert len(created(ynab)[OTHER_ACCOUNT_ID]) == 2
 
 
-def test_transactions_ynab_rejects_are_reported_across_files(
+def test_the_rows_ynab_refuses_are_named_under_their_file_and_account(
     yul: CliRunner, accounts, ynab: YnabClientStub
 ):
-    api = ynab.api("transactions")
-    api.create_transaction.return_value.data.duplicate_import_ids = ["YNAB:-1000:2025-05-01:1"]
+    # One row of each file was imported and deleted in YNAB since
+    ynab.refuse_import_ids("YNAB:-48000:2026-04-25:1", "YNAB:-2500:2025-05-02:1")
 
     result = yul("load", "--yes", "auto", SABADELL, COBEE, env=WIDE)
 
     assert result.exit_code == 0, result.output
-    # One rejected per file: 5 sent, 3 created
-    assert "YNAB rejected 2 of them as already imported" in result.output
-    assert "All done! 3 transactions imported." in result.output
+    output = " ".join(result.output.split())
+    assert (
+        f"YNAB did not take 2 rows yul sent: movements.txt → {ACCOUNT_ID} "
+        f"• 25/04/2026 Barberia Docklands -48.00€ transactions.html → {OTHER_ACCOUNT_ID} "
+        "• 02/05/2025 Cafeteria Lolina -2.50€ YNAB answered that they were imported before."
+    ) in output
+    assert output.count("deleted in YNAB") == 1
+    assert "All done! 3 transactions imported." in output
 
 
 def test_each_imported_file_is_noted_in_the_activity_log(
@@ -323,10 +328,9 @@ def sent_import_ids(ynab: YnabClientStub) -> list[list[str]]:
     ]
 
 
-def test_overlapping_exports_of_one_bank_send_the_shared_row_under_the_same_id(
-    tmp_path: Path, yul: CliRunner, accounts, ynab: YnabClientStub
-):
-    # Numbered over both files the shared row was :1 and :2, and YNAB created it twice
+@pytest.fixture
+def overlapping(tmp_path: Path) -> tuple[Path, Path]:
+    """Two Cobee exports that share Restaurante Botin."""
     first, second = tmp_path / "first.html", tmp_path / "second.html"
     first.write_text(
         cobee_export(["Transacciones", "15 May 2025", "Restaurante Botin", "-34.80 €"])
@@ -344,14 +348,48 @@ def test_overlapping_exports_of_one_bank_send_the_shared_row_under_the_same_id(
             ]
         )
     )
+    return first, second
+
+
+def test_a_row_two_overlapping_exports_share_is_sent_once_and_not_called_refused(
+    yul: CliRunner, accounts, ynab: YnabClientStub, overlapping: tuple[Path, Path], store_file: Path
+):
+    # Both files are read before anything is sent, so both have the shared row as new, under
+    # the same id (numbered over both files it was :1 and :2, and YNAB created it twice).
+    # Sent again with the second file, YNAB answers it as a duplicate of the one just created.
+    ynab.refuse_import_ids()
+    first, second = overlapping
 
     result = yul("load", "--yes", "auto", str(first), str(second), env=WIDE)
 
     assert result.exit_code == 0, result.output
-    assert sent_import_ids(ynab) == [
-        ["YNAB:-34800:2025-05-15:1"],
-        ["YNAB:-2100:2025-05-16:1", "YNAB:-34800:2025-05-15:1"],
-    ]
+    assert sent_import_ids(ynab) == [["YNAB:-34800:2025-05-15:1"], ["YNAB:-2100:2025-05-16:1"]]
+    output = " ".join(result.output.split())
+    assert f"1 to import into {OTHER_ACCOUNT_ID}, 0 already in YNAB, 1 in a file above" in output
+    assert "YNAB did not take" not in output
+    assert "All done! 2 transactions imported." in output
+    entries = Store(store_file).activity(BUDGET_ID, kind="import")
+    assert sorted(
+        (e.details["file"], e.details["created"], e.details["repeated"], e.details["duplicates"])
+        for e in entries
+    ) == [("first.html", 1, 0, 0), ("second.html", 1, 1, 0)]
+
+
+def test_a_row_ynab_refuses_is_named_once_when_two_exports_share_it(
+    yul: CliRunner, accounts, ynab: YnabClientStub, overlapping: tuple[Path, Path]
+):
+    # Restaurante Botin was imported and deleted in YNAB since
+    ynab.refuse_import_ids("YNAB:-34800:2025-05-15:1")
+    first, second = overlapping
+
+    result = yul("load", "--yes", "auto", str(first), str(second), env=WIDE)
+
+    assert result.exit_code == 0, result.output
+    assert sent_import_ids(ynab) == [["YNAB:-34800:2025-05-15:1"], ["YNAB:-2100:2025-05-16:1"]]
+    output = " ".join(result.output.split())
+    assert "YNAB did not take 1 row yul sent:" in output
+    assert output.count("• 15/05/2025 Restaurante Botin -34.80€") == 1
+    assert "All done! 1 transaction imported." in output
 
 
 def test_the_same_file_given_twice_is_imported_once(

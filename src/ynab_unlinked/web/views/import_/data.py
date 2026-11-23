@@ -9,7 +9,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 from ynab_unlinked.config import LatestConfig, LoaderConfig
 from ynab_unlinked.core.accounts import AccountState, account_state
@@ -17,16 +16,16 @@ from ynab_unlinked.core.detect import Candidate, Detection
 from ynab_unlinked.core.imported_files import Imported, Removal, shown
 from ynab_unlinked.core.importing import (
     ImportPlan,
-    ImportResult,
     ImportRow,
     RowStatus,
     Twin,
+    rows_to_send,
 )
 from ynab_unlinked.entities.registry import AUTO, LoaderOption, LoaderSpec
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.models import Transaction, milliunits
 from ynab_unlinked.store import ExcludedRow, StoredAccount
-from ynab_unlinked.text import import_message, name_list
+from ynab_unlinked.text import name_list, refused_why
 from ynab_unlinked.web.wording import plural
 
 STEPS = ("Files", "Review", "Done")
@@ -283,6 +282,13 @@ def held_count(plan: ImportPlan) -> int:
     return len(plan.with_status(RowStatus.MAYBE_IN_YNAB))
 
 
+def send_counts(ready: Sequence[ImportFile]) -> list[int]:
+    """How many rows each of these files sends, in the order they are committed: a row two
+    files share goes to an account with the first of them only (`core.importing.rows_to_send`)."""
+    plans = [item.plan for item in ready if item.plan is not None]
+    return [len(rows_to_send(plan, plans[:index])) for index, plan in enumerate(plans)]
+
+
 def twin_note(twin: Twin, formatter: Formatter) -> str:
     """Why a row may be in YNAB: the transaction there it looks like."""
     return (
@@ -302,13 +308,11 @@ def excluded_row(account_id: str, row: ImportRow) -> ExcludedRow:
     )
 
 
-def done_summary(
-    duplicates: int, skipped: int, failed: int, left_out: int = 0, held: int = 0
-) -> str:
-    """The line under the Done title: duplicates YNAB rejected, rows skipped, left out and
+def done_summary(refused: int, skipped: int, failed: int, left_out: int = 0, held: int = 0) -> str:
+    """The line under the Done title: rows YNAB did not take, rows skipped, left out and
     held back, files failed."""
-    lede = (
-        f"YNAB rejected {duplicates} as duplicate{'' if duplicates == 1 else 's'}. "
+    lede = f"YNAB did not take {refused}, see below. " if refused else ""
+    lede += (
         f"{skipped} {'was' if skipped == 1 else 'were'} already there and "
         f"{'was' if skipped == 1 else 'were'} skipped."
     )
@@ -319,6 +323,22 @@ def done_summary(
     if failed:
         lede += f" {plural(failed, 'file')} failed, see above."
     return lede
+
+
+def refused_title(count: int) -> str:
+    """The title of the warning under the Done card."""
+    return f"YNAB did not take {plural(count, 'row')}"
+
+
+def refused_lede(count: int) -> str:
+    """Why YNAB did not take the rows, and what leaving them out does."""
+    one = count == 1
+    return (
+        f"You asked for {'it' if one else 'them'} to be imported and yul sent "
+        f"{'it' if one else 'them'}, but {refused_why(count)} Until you leave "
+        f"{'it' if one else 'them'} out, every import of this statement offers "
+        f"{'it' if one else 'them'} as new."
+    )
 
 
 def imported_files(done: Sequence[ImportFile], files: Sequence[ImportFile]) -> list[Imported]:
@@ -372,23 +392,3 @@ def removed_line(removal: Removal) -> str:
 
 def not_removed_lines(removal: Removal) -> list[str]:
     return [f"Could not remove {shown(path)}: {why}." for path, why in removal.failed]
-
-
-def import_log(
-    loader: str, file: str, account_name: str, plan: ImportPlan, result: ImportResult
-) -> tuple[str, dict[str, Any]]:
-    """The activity log message and details of one committed file (ARCHITECTURE 3.4)."""
-    details: dict[str, Any] = {
-        "loader": loader,  # the config key, what Home looks up
-        "account_id": plan.account_id,
-        "account_name": account_name,
-        "file": file,
-        "created": result.created,
-        "duplicates": len(result.duplicate_import_ids),
-        "skipped": plan.already_imported_count,
-        "matched": len(plan.with_status(RowStatus.MATCHED)),
-        "excluded": left_out_count(plan),
-        "held": held_count(plan),
-    }
-    message = import_message(result.created, account_name, file, details["excluded"])
-    return message, details

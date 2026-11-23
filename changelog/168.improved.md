@@ -1,0 +1,1 @@
+When YNAB does not take rows of an import because a transaction imported before was deleted there, the Import's Done step and `yul load` now list those rows and say why, and the app lets you stop importing them for good, one by one or all at once.
