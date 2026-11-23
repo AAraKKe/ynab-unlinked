@@ -1,5 +1,7 @@
 import datetime as dt
+import threading
 import uuid
+from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -29,6 +31,7 @@ from ynab_unlinked.web.state import AppState
 from ynab_unlinked.web.theme import palette_for
 from ynab_unlinked.web.views.networth import flows
 from ynab_unlinked.web.views.networth.period_panel import ONE_COLUMN, scroll_to_script
+from ynab_unlinked.web.views.networth.periods import PeriodTabs
 from ynab_unlinked.ynab_api import Client
 
 pytestmark = pytest.mark.version("V4")
@@ -316,6 +319,84 @@ async def test_a_month_picked_keeps_the_term_and_lists_its_own_transactions(
     await heads(user, flows.count_text("spending", in_month))
     assert on(user, "term-spending")
     await user.should_not_see(marker="tx-all")
+
+
+class SlowMonth:
+    """Holds the read of one month until `release()`, and notes each pick that has finished."""
+
+    def __init__(self, mocker: MockerFixture) -> None:
+        self.gate = threading.Event()
+        self.held: dt.date | None = None
+        self.finished: list[int] = []
+        read, pick = flows.load_period, PeriodTabs.pick
+
+        def load(store, config, snapshot, start: dt.date, end: dt.date):
+            if (start, end) == flows.month_bounds(start, dt.date.today()) and start == self.held:
+                self.gate.wait()
+            return read(store, config, snapshot, start, end)
+
+        async def tracked(tabs: PeriodTabs, index: int) -> None:
+            await pick(tabs, index)
+            self.finished.append(index)
+
+        mocker.patch.object(flows, "load_period", load)
+        mocker.patch.object(PeriodTabs, "pick", tracked)
+
+    def release(self) -> None:
+        self.gate.set()
+
+
+@pytest.fixture
+def slow_month(mocker: MockerFixture) -> Iterator[SlowMonth]:
+    slow = SlowMonth(mocker)
+    yield slow
+    slow.release()
+
+
+def month_keys(user: User) -> list[str]:
+    return user.find(marker="months-chart").elements.copy().pop().options["xAxis"]["data"]
+
+
+def click_month(user: User, index: int) -> None:
+    user.find(marker="months-chart").trigger(
+        "componentClick", {"componentType": "series", "dataIndex": index}
+    )
+
+
+async def test_a_month_that_takes_long_to_read_does_not_replace_the_one_picked_after_it(
+    synced: Store, no_sync, slow_month: SlowMonth, user: User
+):
+    await open_months(user)
+    first, second = (dt.date.fromisoformat(f"{key}-01") for key in month_keys(user)[:2])
+    slow_month.held = first
+
+    click_month(user, 0)
+    click_month(user, 1)
+    await eventually(lambda: slow_month.finished == [1])
+    assert texts(user, "period-title") == second.strftime("%B %Y")
+
+    slow_month.release()
+
+    await eventually(lambda: slow_month.finished == [1, 0])
+    assert texts(user, "period-title") == second.strftime("%B %Y")
+
+
+async def test_a_month_read_while_the_range_changes_is_not_shown_in_the_new_range(
+    synced: Store, no_sync, slow_month: SlowMonth, user: User
+):
+    await open_months(user)
+    shown = month_keys(user)
+    slow_month.held = dt.date.fromisoformat(f"{shown[0]}-01")
+
+    click_month(user, 0)
+    user.find(marker="range-1Y").click()
+    await eventually(lambda: len(month_keys(user)) > len(shown))
+
+    slow_month.release()
+
+    await eventually(lambda: slow_month.finished == [0])
+    await user.should_not_see(marker="period-clear")
+    await user.should_not_see(marker="period-title")
 
 
 async def test_the_i_of_the_waterfall_says_what_the_three_words_mean(

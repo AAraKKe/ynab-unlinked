@@ -45,6 +45,9 @@ class PeriodTabs:
         self.month: Period | None = None
         self.term = words.DEFAULT_TERM
         """What the panel lists, kept as months are picked."""
+        self.asked = 0
+        """Counts what was asked of the selection (a month, the whole range, another range).
+        A month is read off the loop: it is shown only if nothing was asked since."""
 
     def draw(
         self,
@@ -59,6 +62,8 @@ class PeriodTabs:
         config, _ = state().require()
         formatter = state().require_formatter()
         if self.period is None or period.months != self.period.months:
+            # A month still being read was picked by its place in the months that are gone
+            self.asked += 1
             self.selected, self.month = None, None
         self.snapshot, self.period, self.palette = snapshot, period, palette
         self.chart = self.panel = None
@@ -147,9 +152,13 @@ class PeriodTabs:
         if wanted is None:
             self.clear()
             return
+        self.asked += 1
+        asked = self.asked
         config, _ = state().require()
         start, end = words.month_bounds(period.months[wanted][0], dt.date.today())
         month = await run.io_bound(words.load_period, state().store, config, snapshot, start, end)
+        if asked != self.asked:
+            return  # another month, the whole range or another range was asked for meanwhile
         if self.panel is None or self.panel.is_deleted:
             return
         self.selected, self.month = wanted, month
@@ -158,6 +167,7 @@ class PeriodTabs:
 
     def clear(self) -> None:
         """Back to the whole range."""
+        self.asked += 1
         if self.selected is None:
             return
         self.selected, self.month = None, None
