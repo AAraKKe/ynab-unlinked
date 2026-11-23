@@ -125,21 +125,21 @@ def test_yes_with_everything_already_in_ynab_is_a_success(
     ynab.api("transactions").create_transaction.assert_not_called()
 
 
-def test_yes_with_rows_rejected_as_duplicates_is_a_success(
+def test_yes_with_rows_refused_by_ynab_is_a_success(
     config_file: Path,
     yul: CliRunner,
     load_entity: LoadEntityCallback,
-    rejected_as_duplicates,
+    refused_by_ynab,
 ):
     transaction = TransactionFactory(date=THREE_DAYS_AGO, **COFFEE)
     [pending] = assign_import_ids([transaction])
-    rejected_as_duplicates([pending.import_id])
+    refused_by_ynab([pending.import_id])
     load_entity(TODAY, [transaction])
 
     result = yul("load --yes test")
 
     assert result.exit_code == 0, result.output
-    assert "rejected 1" in result.output
+    assert "YNAB did not take 1 row" in result.output
 
 
 def test_yes_stops_when_the_saved_account_is_closed_in_ynab(

@@ -12,12 +12,13 @@ from nicegui import ui
 from ynab_unlinked.core.importing import ImportResult
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.web import shell
-from ynab_unlinked.web.components import button, check, glass_card, pill, spinner
+from ynab_unlinked.web.components import button, check, glass_card, icon, pill, spinner
 from ynab_unlinked.web.views.import_.data import (
     ImportFile,
     done_summary,
     held_count,
     left_out_count,
+    send_counts,
 )
 from ynab_unlinked.web.views.import_.tables import RowActions, badge, plan_table
 from ynab_unlinked.web.wording import plural
@@ -32,7 +33,7 @@ def files_footer(
     """The sticky footer of Files: what is ready, and Review once every file is settled."""
     blocked = any(item.blocking for item in files)
     transactions = sum(len(item.plan.rows) for item in ready if item.plan)
-    new = sum(len(item.plan.new_rows) for item in ready if item.plan)
+    new = sum(send_counts(ready))
     held = sum(held_count(item.plan) for item in ready if item.plan)
     left_out = sum(left_out_count(item.plan) for item in ready if item.plan)
     already = sum(item.plan.already_imported_count for item in ready if item.plan)
@@ -64,7 +65,7 @@ def review_footer(
     on_import: Callable[[], Any],
 ) -> None:
     """The sticky footer of Review: the totals, "import as reconciled", Back and Import."""
-    new = sum(len(item.plan.new_rows) for item in ready if item.plan)
+    new = sum(send_counts(ready))
     left_out = sum(left_out_count(item.plan) for item in ready if item.plan)
     held = sum(held_count(item.plan) for item in ready if item.plan)
     accounts = {item.account_id for item in ready if item.plan and item.plan.new_rows}
@@ -149,26 +150,28 @@ class Progress:
         self.fill.style("width:100%")
         self.status.clear()
         with self.status:
-            text = f"{result.created} created"
-            if result.duplicate_import_ids:
-                text += f" · {plural(len(result.duplicate_import_ids), 'duplicate')}"
-            ui.label(text).classes("yul-good")
+            ui.label(f"{result.created} created").classes("yul-good")
+            if result.refused:
+                ui.label("·").classes("yul-faint")
+                ui.label(f"YNAB did not take {len(result.refused)}").classes("yul-warn").mark(
+                    f"commit-refused-{self.key}"
+                )
 
 
-def progress_card(item: ImportFile, account_name: str) -> Progress:
-    """A file's card in Done, waiting (or "nothing new") until its turn comes."""
-    assert item.plan is not None
+def progress_card(item: ImportFile, account_name: str, sending: int) -> Progress:
+    """A file's card in Done, waiting (or "nothing new") until its turn comes to send its
+    `sending` rows."""
     with glass_card().classes("yul-imp-card").mark(f"progress-{item.key}"):
         # One line when wide. On a phone the account and the status share the first line and
         # the file goes under them.
         with ui.element("div").classes("yul-imp-prog-head"):
             ui.label(account_name).classes("yul-imp-prog-account")
-            ui.label(f"{plural(len(item.plan.new_rows), 'transaction')} · {item.name}").classes(
+            ui.label(f"{plural(sending, 'transaction')} · {item.name}").classes(
                 "yul-imp-prog-file yul-muted"
             )
             status = ui.element("div").classes("yul-imp-prog-status yul-row yul-small")
         with status:
-            ui.label("waiting" if item.plan.new_rows else "nothing new").classes("yul-muted")
+            ui.label("waiting" if sending else "nothing new").classes("yul-muted")
         with ui.element("div").classes("yul-prog") as bar:
             fill = ui.element("i").style("width:0%")
     return Progress(key=item.key, status=status, bar=bar, fill=fill)
@@ -176,7 +179,7 @@ def progress_card(item: ImportFile, account_name: str) -> Progress:
 
 def done_card(
     created: int,
-    duplicates: int,
+    refused: int,
     skipped: int,
     failed: int,
     left_out: int,
@@ -185,11 +188,16 @@ def done_card(
 ) -> None:
     """What the commit did, with Reconcile next and "Import more"."""
     with glass_card().classes("yul-imp-done").mark("done-card"):
-        check(big=True)
+        if created or not refused:
+            check(big=True)
+        else:
+            # Nothing went in: no check that says it all worked
+            with ui.element("div").classes("yul-imp-done-alert").mark("done-alert"):
+                icon("alert", 44)
         ui.label(f"{plural(created, 'transaction')} imported").classes("yul-h2").mark("done-title")
-        ui.label(done_summary(duplicates, skipped, failed, left_out, held)).classes(
-            "yul-lede"
-        ).mark("done-summary")
+        ui.label(done_summary(refused, skipped, failed, left_out, held)).classes("yul-lede").mark(
+            "done-summary"
+        )
         with ui.element("div").classes("yul-imp-done-acts"):
             button(
                 "Reconcile these accounts",

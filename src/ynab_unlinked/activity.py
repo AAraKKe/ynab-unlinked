@@ -15,8 +15,9 @@ from typing import Any
 from ynab_unlinked.cli import display
 from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.core.imported_files import REMOVE_KIND, Original, removal_log
+from ynab_unlinked.core.importing import ImportPlan, ImportResult, import_entry
 from ynab_unlinked.store import Store, store_path
-from ynab_unlinked.text import import_message, plural
+from ynab_unlinked.text import plural
 
 logger = logging.getLogger(__name__)
 
@@ -64,41 +65,16 @@ def log_import(
     config: LatestConfig,
     *,
     loader: str,
-    account_id: str,
-    file: str,
-    created: int,
-    duplicates: int,
-    skipped: int,
-    matched: int,
-    excluded: int,
-    held: int = 0,
+    plan: ImportPlan,
+    result: ImportResult,
 ) -> None:
-    """One `import` entry; `loader` is the config key of the bank (`Entity.name()`).
-
-    `matched` counts the rows of `skipped` YNAB holds through a match only, `excluded` the
-    rows the user left out of imports, `held` the ones not sent because they may be in YNAB.
-    """
+    """One `import` entry of a committed plan; `loader` is the config key of the bank
+    (`Entity.name()`)."""
     if (store := _open_store()) is None:
         return
-    account_name = _account_name(store, config, account_id)
-    _write(
-        store,
-        config.budget.id,
-        "import",
-        import_message(created, account_name, file, excluded),
-        {
-            "loader": loader,
-            "account_id": account_id,
-            "account_name": account_name,
-            "file": file,
-            "created": created,
-            "duplicates": duplicates,
-            "skipped": skipped,
-            "matched": matched,
-            "excluded": excluded,
-            "held": held,
-        },
-    )
+    account_name = _account_name(store, config, plan.account_id)
+    message, details = import_entry(loader, plan.input_file.name, account_name, plan, result)
+    _write(store, config.budget.id, "import", message, details)
 
 
 def log_reconcile(config: LatestConfig, accounts: Sequence[tuple[str, str, int]]) -> None:

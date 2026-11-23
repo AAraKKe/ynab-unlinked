@@ -129,7 +129,9 @@ class ImportPlan:
 @dataclass(frozen=True)
 class ImportResult:
     created: int
-    duplicate_import_ids: tuple[str, ...]
+    refused: tuple[ImportRow, ...] = ()   # sent, and YNAB did not take them (below)
+    repeated: tuple[ImportRow, ...] = ()  # new, not sent: an earlier file of the import
+                                          # sent them to the account (rows_to_send)
 
 IMPORT_BUFFER_DAYS = 15     # also the `yul load --buffer` default and YnabUnlinkedContext's
 MATCH_WINDOW_DAYS = 10      # how far apart YNAB matches an import with a hand entered one
@@ -160,15 +162,42 @@ def unique_files(files: Sequence[Path]) -> tuple[list[Path], list[tuple[Path, Pa
     # imported one gives its shared rows the same ids and YNAB rejects them; a second copy
     # in one batch would only be rejected once the first is in, so both frontends drop it.
 
+def rows_to_send(plan: ImportPlan, earlier: Sequence[ImportPlan] = ()) -> tuple[ImportRow, ...]
+    # plan.new_rows without the ones a plan of `earlier` with the same account has as new:
+    # the rule of an import of several files, one for both frontends. Every plan is built
+    # before anything is sent, so two exports that overlap (not byte identical, which
+    # `unique_files` drops) both have the shared rows as new; sent again with the second
+    # file, YNAB answers them as duplicates of the ones it just created and they would be
+    # called refused. `earlier` are the plans committed so far (a file that failed is not
+    # one of them), or, to count before anything is sent, the plans before this one. A row
+    # the first file sent and YNAB refused is so reported once, by that file.
+
 def commit_import_plan(
     client: Client, budget_id: str, plan: ImportPlan, cleared: TransactionClearedStatus,
     progress: Progress = NullProgress(), store: Store | None = None,
+    earlier: Sequence[ImportPlan] = (),
 ) -> ImportResult
-    # creates plan.new_rows, returns created count and the duplicates YNAB rejected.
+    # creates rows_to_send(plan, earlier), returns the created count, the rows YNAB refused
+    # and the new rows it did not send (`repeated`).
     # `Client.create_transactions` answers `Created(transactions, duplicate_import_ids)`;
+    # the rows sent with one of those ids are `refused`. YNAB keeps the import id of every
+    # transaction it imported, deleted ones too, and never takes it again; yul reads only
+    # live transactions and never asks for deleted ones (a budget has many), so such a row
+    # is planned NEW every time and learnt about only when YNAB refuses it. That is the
+    # usual cause, not the only one (YNAB also refuses a row it holds live where yul did not
+    # read it, its date moved far from the file's), so the words say "usually". Both frontends
+    # list the refused rows with why (`text.refused_why`) and how to stop it: leaving them
+    # out (`Store.exclude`), from the app's Done step or its Review; the CLI has no way to
+    # leave a row out and points at the app. Nothing is left out without the user.
     # the transactions go to `store.save_transactions` at once, so a match made in YNAB
     # before the next sync can still be named. A store that fails only warns on `progress`.
-    # A plan with no new rows returns ImportResult(0, ()) without calling YNAB.
+    # A plan with nothing to send returns ImportResult(0) without calling YNAB.
+
+def import_entry(
+    loader: str, file: str, account_name: str, plan: ImportPlan, result: ImportResult
+) -> tuple[str, dict]
+    # the `import` activity entry of one committed file (3.4), the same from `yul load`
+    # (`activity.log_import`) and the app's Import.
 ```
 
 ```python
@@ -1107,15 +1136,21 @@ web/
     import_/           /import      Files -> Review -> Done on core.detect and core.importing
       data.py          Status, ImportFile, same_file, mark_repeated, take_candidate,
                        forget_gone_account, account_label, problem_text, option_choices, read_file,
-                       chosen_accounts, done_summary, import_log, left_out_count,
-                       held_count, excluded_row, STATUS_LABELS, STATUS_MEANINGS,
-                       statuses_shown, twin_note
+                       chosen_accounts, done_summary, refused_title, refused_lede, left_out_count,
+                       held_count, send_counts (rows each ready file sends: rows_to_send),
+                       excluded_row, STATUS_LABELS, STATUS_MEANINGS, statuses_shown, twin_note
       view.py          ImportFlow (lifecycle, detection, the three steps, leave out / include /
                        import anyway, commit and log) and the view
       rows.py          draw_row(flow, item): a file row of step Files and its body
       tables.py        badge, status_legend(plans), plan_table(plan, formatter, key,
-                       actions=None), RowActions, transactions_table
-      cards.py         files_footer, review_footer, review_card, progress_card -> Progress, done_card
+                       actions=None), RowActions, transactions_table, row_cells(transaction,
+                       formatter, note=None) (the date, payee and amount cells of a row)
+      cards.py         files_footer, review_footer, review_card,
+                       progress_card(item, account_name, sending) -> Progress, done_card
+      refused.py       RefusedFile, RefusedCard: the rows YNAB did not take, under the Done
+                       card, with "Don't import again" and its undo
+      removal.py       offer_removal(files, box): removing the imported files from this
+                       computer once they are in YNAB
     cashflow/          /cashflow    tiles, income and spending, savings rate, came in from
       data.py          DEFAULT_RANGE, CashFlowPage, load, percent, rate_change, runway,
                        runway_text, spending_hint, complete_note
@@ -1417,7 +1452,7 @@ that number in the message and shows `file` in mono.
 
 | kind | message | details |
 |---|---|---|
-| `import` | `Imported {plural(created, "transaction")} to {account_name} from {file}`, plus ` · {excluded} left out` when excluded > 0 (`text.import_message`) | `loader` (config key), `account_id`, `account_name`, `file`, `created`, `duplicates`, `skipped` (already in YNAB, matched included), `matched`, `excluded`, `held` (may be in YNAB, not sent) |
+| `import` | `Imported {plural(created, "transaction")} to {account_name} from {file}`, plus ` · YNAB did not take {refused}` when YNAB refused rows and ` · {excluded} left out` when excluded > 0 (`text.import_message`, built by `core.importing.import_entry`) | `loader` (config key), `account_id`, `account_name`, `file`, `created`, `duplicates` (how many YNAB refused), `refused` (those rows: `[{import_id, date (ISO), amount (milliunits), payee}]`; missing on entries written before it was added), `skipped` (already in YNAB, matched included), `repeated` (new rows not sent because an earlier file of the same import sent them; missing on entries written before it was added), `matched`, `excluded`, `held` (may be in YNAB, not sent) |
 | `exclude` | `Left {payee} ({amount}, {date}) out of imports to {account_name}` | `account_id`, `account_name`, `import_id`, `date` (ISO), `amount` (milliunits), `payee` |
 | `include` | `Included {payee} ({amount}, {date}) in imports to {account_name} again` | as `exclude` |
 | `reconcile` | `Reconciled {count} transactions in {n} accounts` | `count`, `accounts: [{id, name, count}]` |
@@ -1427,8 +1462,9 @@ that number in the message and shows `file` in mono.
 | `config` | free text | free |
 
 Amounts in messages are formatted with `state().formatter`; in details they are milliunits.
-`exclude` and `include` come from `web.wording.left_out_entry`, logged by the Import review
-and Settings › Data & privacy after the registry write, both through `run.io_bound`.
+`exclude` and `include` come from `web.wording.left_out_entry`, logged by the Import review,
+the rows YNAB did not take on Import's Done step and Settings › Data & privacy after the
+registry write, all through `run.io_bound`.
 `remove` is logged once per removal that deleted something, by the Import view and by
 `yul load`; Home shows its paths in mono, as it does an imported file.
 The CLI writes `import` (after each committed file of `yul load <bank>` and `yul load auto`),
@@ -1645,6 +1681,19 @@ each category row with the marker, a dash and the category id.
 their index in the plan, so the markers below keep their numbers whatever is hidden, and
 `hidden-{file key}` is the line under a table counting what is (`data.hidden_note`). The
 choice is the browser preference `yul.import_show_all`.
+
+Done: a file's card shows `commit-refused-{file key}` ("YNAB did not take N") next to what it
+created; the Done card has `done-alert` in place of the check when YNAB took nothing and
+refused some. The rows YNAB refused are in `refused` (`views/import_/refused.py`,
+`RefusedCard`), under the Done card: `refused-title`, `refused-why`, `refused-file-{file
+key}` (bank, account, file), `refused-amount-{file key}-{index}` (index in that file's
+`ImportResult.refused`; a row two files share is under the first only, `rows_to_send`),
+`never-{file key}-{index}` ("Don't import again"), once chosen
+`never-done-{file key}-{index}` and `undo-never-{file key}-{index}`; `never-all` (two rows
+or more, while some are not chosen) and `never-all-done` once every one is. A choice is
+`ImportFlow.note_left_out` (`Store.exclude` or `include`, then an `exclude` or `include`
+entry, 3.4) and a status line; a failed save toasts and leaves the row as it was. Nothing
+goes to YNAB, so no `shell.confirm` and no `state().invalidate()`.
 
 After an import: `removal` is the element under the Done card with one line per outcome,
 `removal-done` (what was removed), `removal-failed-{index}`, `removal-missing` (files not

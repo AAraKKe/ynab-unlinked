@@ -78,20 +78,27 @@ def test_two_identical_rows_of_one_export_are_both_imported(
     ]
 
 
-def test_the_import_ids_ynab_rejects_as_duplicates_are_reported(
+def test_the_rows_ynab_refuses_are_named_with_why_instead_of_their_import_ids(
     config_file: Path,
     yul: CliRunner,
     load_entity: LoadEntityCallback,
-    rejected_as_duplicates,
+    refused_by_ynab,
 ):
     coffee = TransactionFactory(date=THREE_DAYS_AGO, **COFFEE)
     bakery = TransactionFactory(date=YESTERDAY, **BAKERY)
     rejected = import_ids(coffee, bakery)[0]
-    rejected_as_duplicates([rejected])
+    refused_by_ynab([rejected])
     load_entity(TODAY, [coffee, bakery])
 
     result = yul("load test", input="y\n")
 
     assert result.exit_code == 0, result.output
-    assert rejected in result.output
-    assert "1 transaction imported" in result.output
+    output = " ".join(result.output.split())
+    assert "YNAB did not take 1 row yul sent: • 12/05/2025 Coffee Shop -12.34€" in output
+    assert (
+        "That usually happens when a transaction was imported and then deleted in YNAB: "
+        "YNAB will not take it again"
+    ) in output
+    assert "leave it out in the review of an import in `yul app`" in output
+    assert rejected not in output
+    assert "1 transaction imported" in output

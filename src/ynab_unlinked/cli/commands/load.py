@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from ynab_unlinked.cli.context_object import YnabUnlinkedContext
     from ynab_unlinked.core.detect import Candidate, Detection
-    from ynab_unlinked.core.importing import ImportPlan
+    from ynab_unlinked.core.importing import ImportPlan, ImportResult
     from ynab_unlinked.models import Transaction
 
 load = typer.Typer(
@@ -137,6 +137,7 @@ def auto(
         open_store,
         originals,
         plan_notes,
+        refused_notes,
     )
     from ynab_unlinked.cli.utils import display_import_table, display_transaction_table
     from ynab_unlinked.core.detect import detect_loaders
@@ -144,6 +145,7 @@ def auto(
         RowStatus,
         build_import_plan,
         commit_import_plan,
+        rows_to_send,
         unique_files,
     )
     from ynab_unlinked.ynab_api.client import Client
@@ -231,26 +233,30 @@ def auto(
                 )
             )
 
-    for plan, (input_file, candidate) in zip(plans, chosen, strict=True):
+    # A row two files share is sent with the first one only
+    sends = [len(rows_to_send(plan, plans[:index])) for index, plan in enumerate(plans)]
+    for plan, send, (input_file, candidate) in zip(plans, sends, chosen, strict=True):
         display.console().rule(f"{input_file.name}: {candidate.loader.title}")
         display_import_table(plan.rows, ctx.formatter)
         plan_notes(plan, ctx.formatter)
         excluded = len(plan.with_status(RowStatus.EXCLUDED))
         held = len(plan.with_status(RowStatus.MAYBE_IN_YNAB))
+        repeated = len(plan.new_rows) - send
         display.info(
-            f"{len(plan.new_rows)} to import into {_account_name(plan.account_id, ctx)}, "
+            f"{send} to import into {_account_name(plan.account_id, ctx)}, "
             f"{plan.already_imported_count} already in YNAB"
+            + (f", {repeated} in a file above" if repeated else "")
             + (f", {excluded} left out" if excluded else "")
             + (f", {held} may be in YNAB" if held else "")
         )
 
-    to_import = [plan for plan in plans if plan.new_rows]
+    to_import = [plan for plan, send in zip(plans, sends, strict=True) if send]
     if not to_import:
         display.info("🎉 All done! Nothing to do.")
         offer_removal(ctx.config, read, interactive=not ctx.yes)
         return
 
-    count = sum(len(plan.new_rows) for plan in to_import)
+    count = sum(sends)
     question = (
         f"Create {plural(count, 'transaction')} from {plural(len(to_import), 'file')} in YNAB?"
     )
@@ -261,9 +267,9 @@ def auto(
         TransactionClearedStatus.RECONCILED if ctx.reconcile else TransactionClearedStatus.CLEARED
     )
     created: dict[str, int] = {}
-    duplicates: list[str] = []
-    for plan, (_, candidate) in zip(plans, chosen, strict=True):
-        if not plan.new_rows:
+    committed: list[tuple[ImportPlan, ImportResult]] = []
+    for plan, send, (_, candidate) in zip(plans, sends, chosen, strict=True):
+        if not send:
             continue
         with display.CliProgress() as progress:
             result = commit_import_plan(
@@ -273,25 +279,25 @@ def auto(
                 cleared=cleared,
                 progress=progress,
                 store=store,
+                earlier=[done for done, _ in committed],
             )
-        log_import(
-            ctx.config,
-            loader=candidate.loader.name,
-            account_id=plan.account_id,
-            file=plan.input_file.name,
-            created=result.created,
-            duplicates=len(result.duplicate_import_ids),
-            skipped=plan.already_imported_count,
-            matched=len(plan.with_status(RowStatus.MATCHED)),
-            excluded=len(plan.with_status(RowStatus.EXCLUDED)),
-            held=len(plan.with_status(RowStatus.MAYBE_IN_YNAB)),
-        )
+        log_import(ctx.config, loader=candidate.loader.name, plan=plan, result=result)
         created[plan.account_id] = created.get(plan.account_id, 0) + result.created
-        duplicates.extend(result.duplicate_import_ids)
+        committed.append((plan, result))
 
-    if duplicates:
-        display.warning(f"YNAB rejected {len(duplicates)} of them as already imported:")
-        display.console().print(display.bullet_list(duplicates))
+    several = len(to_import) > 1
+    refused_notes(
+        [
+            (
+                f"{plan.input_file.name} → {_account_name(plan.account_id, ctx)}"
+                if several
+                else "",
+                result.refused,
+            )
+            for plan, result in committed
+        ],
+        ctx.formatter,
+    )
 
     total = sum(created.values())
     display.success(f"🎉 All done! {plural(total, 'transaction')} imported.")
