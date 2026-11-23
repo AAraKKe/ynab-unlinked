@@ -6,6 +6,20 @@ To help us keep our books in order, these release notes are automatically genera
 
 <!-- towncrier release notes start -->
 
+## ynab-unlinked 1.5.0 (2026-11-23)
+
+### Polished Until It Shines
+* [[#171](https://github.com/AAraKKe/ynab-unlinked/issues/171)] The panel under the Months chart lists every payee, category or account behind Income, Spending or Growth (pick one on the waterfall) and their transactions, and an "i" explains what each counts.
+* [[#168](https://github.com/AAraKKe/ynab-unlinked/issues/168)] When YNAB does not take rows of an import because a transaction imported before was deleted there, the Import's Done step and `yul load` now list those rows and say why, and the app lets you stop importing them for good, one by one or all at once.
+
+### Bugs Squashed, Peace Restored
+* [[#168](https://github.com/AAraKKe/ynab-unlinked/issues/168)] A row that two files of one import have for the same account is sent to YNAB once, with the first file, instead of being sent again and turned away as a duplicate.
+* [[#167](https://github.com/AAraKKe/ynab-unlinked/issues/167)] Net worth › Movers puts "Change" over the change figure, shows that it is Your money + Growth, and says under each account what it holds now.
+* [[#171](https://github.com/AAraKKe/ynab-unlinked/issues/171)] The net worth figure on Home and Net worth counts up as it appears again.
+
+### For the Builders: Dev Experience Upgrades
+* [[#171](https://github.com/AAraKKe/ynab-unlinked/issues/171)] Web tests fail when a click handler, a timer or a background task of the app raised, instead of passing on a page that still looks right.
+
 ## ynab-unlinked 1.4.0 (2026-11-15)
 
 ### Fresh Out of the Feature Oven
