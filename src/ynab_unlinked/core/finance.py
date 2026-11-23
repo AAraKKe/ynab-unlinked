@@ -104,7 +104,7 @@ class CategorySpend:
     category_id: str | None
     name: str
     amount: int
-    """Spent in the period: negative, or positive when refunds outweigh it."""
+    """Spent in the period, always negative: a refund is income and does not lower it."""
 
 
 @dataclass(frozen=True)
