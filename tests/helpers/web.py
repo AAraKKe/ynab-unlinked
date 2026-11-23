@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
+import httpx
 from nicegui import ElementFilter, ui
 from nicegui.testing import User as NiceGUIUser
 from nicegui.testing.general import nicegui_reset_globals
@@ -90,7 +91,31 @@ class User(NiceGUIUser):
     there and looks for the text anywhere on the page, so the check passes on a toast or on
     another card: too early for what the test reads next, or for the wrong reason altogether.
     A text with `kind` or `content` cannot be honoured and is refused.
+
+    `raised` holds every exception the app handled instead of the code that was running: one
+    out of a click handler, a timer or a background task. NiceGUI logs those and carries on,
+    so the page a test reads can look right while the handler died half way. The `guest`
+    fixture fails a test that leaves one there (`check_raised`); a test about such a failure
+    asserts on `raised` and clears it. `scripts` holds the code sent to the browser.
     """
+
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        super().__init__(client)  # type: ignore[arg-type]
+        self.raised: list[Exception] = []
+        self.scripts: list[str] = []
+
+    def check_raised(self) -> None:
+        """Fail when the app handled an exception the test did not account for."""
+        if self.raised:
+            lines = "\n".join(f"  {type(error).__name__}: {error}" for error in self.raised)
+            raise AssertionError(
+                "The app handled an exception a handler raised (the traceback is in the "
+                f"captured log):\n{lines}"
+            )
+
+    def _simulate_javascript(self, code: str) -> None:
+        self.scripts.append(code)
+        super()._simulate_javascript(code)
 
     def _sees(
         self,

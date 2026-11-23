@@ -72,7 +72,12 @@ async def guest(
             async with core.app.router.lifespan_context(core.app):
                 transport = httpx.ASGITransport(core.app)
                 async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
-                    yield User(client)
+                    browser = User(client)
+                    core.app.on_exception(browser.raised.append)
+                    yield browser
+                    # NiceGUI logs what a handler raises and carries on: a page that still
+                    # looks right would hide it
+                    browser.check_raised()
         finally:
             os.environ.pop("NICEGUI_USER_SIMULATION", None)
 

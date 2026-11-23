@@ -8,7 +8,9 @@ axis, grid, tooltip and compact ticks as `history_chart`. A transparent column b
 month takes the clicks, so the whole height of a month picks it, not only its thin bars.
 
 `bridge_chart` is the period panel's waterfall: income up from zero, each next step from where
-the one before ended, joined by dashed lines, and the net change as a bar from zero.
+the one before ended, joined by dashed lines, and the net change as a bar from zero. Income,
+Spending and Growth are the panel's menu: a click on one picks it, and the one picked is
+outlined.
 
 `story_options` is the chart of the Return explainer: what a made-up account holds after each
 step as bars, what was put in as a line, the steps not reached yet empty.
@@ -254,6 +256,16 @@ def months_chart(
 
 BRIDGE_HEIGHT = 220
 _BRIDGE_COLOURS = {"income": SAVED_SLOT, "spending": 1, "assets": ASSETS_SLOT}
+PICKABLE = frozenset(_BRIDGE_COLOURS)
+"""The steps a click on the waterfall picks."""
+
+
+def step_colour(kind: str, palette: Palette) -> str:
+    """The colour of a waterfall step, which the rows of its breakdown share."""
+    slot = _BRIDGE_COLOURS.get(kind)
+    if slot is not None:
+        return palette.series[slot]
+    return palette.text_2 if kind == "net" else palette.text_3
 
 
 def _bridge_js(labels: Sequence[str], connector: str, text: str) -> str:
@@ -267,7 +279,7 @@ def _bridge_js(labels: Sequence[str], connector: str, text: str) -> str:
         "const width = api.size([1, 0])[0] * 0.56;"
         "const top = Math.min(a[1], b[1]), height = Math.max(Math.abs(b[1] - a[1]), 1);"
         "const children = [{type: 'rect', shape: {x: a[0] - width / 2, y: top, width: width,"
-        " height: height, r: 3}, style: api.style()},"
+        " height: height, r: 3}, style: api.style(), cursor: api.value(3) ? 'pointer' : 'default'},"
         " {type: 'text', style: {text: labels[i], x: a[0], y: top - 6, align: 'center',"
         f" verticalAlign: 'bottom', fill: {json.dumps(text)}, fontSize: 11,"
         " fontFamily: 'Inter, system-ui'}}];"
@@ -287,27 +299,29 @@ def bridge_options(
     labels: Sequence[str],
     palette: Palette,
     currency_format: CurrencyFormat,
+    selected: str | None = None,
 ) -> dict[str, Any]:
     """A waterfall of `steps` (label, milliunits, kind), the last one the net change.
 
     Each step but the last starts where the one before it ended; the net starts at zero.
-    `labels` are the values written over the bars.
+    `labels` are the values written over the bars. The `selected` step is outlined and the
+    other steps a click picks are faded a little; with no bar for it (a month with no
+    income) nothing is outlined, so nothing is faded either.
     """
+    drawn = any(kind == selected for _, _, kind in steps)
     data: list[dict[str, Any]] = []
     running = 0
     for index, (_, amount, kind) in enumerate(steps):
         start = 0 if kind == "net" else running
         end = amount if kind == "net" else running + amount
         running = end if kind != "net" else running
-        slot = _BRIDGE_COLOURS.get(kind)
-        color = (
-            palette.series[slot]
-            if slot is not None
-            else palette.text_2
-            if kind == "net"
-            else palette.text_3
-        )
-        data.append({"value": [index, start / 1000, end / 1000], "itemStyle": {"color": color}})
+        style: dict[str, Any] = {"color": step_colour(kind, palette)}
+        if kind == selected:
+            style |= {"borderColor": palette.text, "borderWidth": 2}
+        elif drawn and kind in PICKABLE:
+            style["opacity"] = 0.55
+        pickable = 1 if kind in PICKABLE else 0
+        data.append({"value": [index, start / 1000, end / 1000, pickable], "itemStyle": style})
     axis_label = {"color": palette.text_3, "fontSize": 11, "fontFamily": "Inter, system-ui"}
     return {
         "animationDuration": 400,
@@ -355,10 +369,25 @@ def bridge_chart(
     labels: Sequence[str],
     palette: Palette,
     currency_format: CurrencyFormat,
+    selected: str | None = None,
+    on_pick: Callable[[str], Any] | None = None,
 ) -> ui.echart:
-    return ui.echart(bridge_options(steps, labels, palette, currency_format), renderer="svg").style(
-        f"height:{BRIDGE_HEIGHT}px;width:100%"
-    )
+    """The waterfall, as wide as its parent. A click on a step in `PICKABLE` calls `on_pick`
+    with its kind."""
+    kinds = [kind for _, _, kind in steps]
+
+    def clicked(event: events.GenericEventArguments) -> Any:
+        index = event.args.get("dataIndex")
+        if on_pick is None or not isinstance(index, int) or not 0 <= index < len(kinds):
+            return None
+        if kinds[index] in PICKABLE:
+            return on_pick(kinds[index])
+        return None
+
+    options = bridge_options(steps, labels, palette, currency_format, selected)
+    chart = ui.echart(options, renderer="svg")
+    chart.on("componentClick", clicked, ["componentType", "dataIndex"])
+    return chart.style(f"height:{BRIDGE_HEIGHT}px;width:100%")
 
 
 STORY_HEIGHT = 200

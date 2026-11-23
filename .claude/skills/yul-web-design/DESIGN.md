@@ -305,13 +305,45 @@ is about today's balances, leaves them out.
   months fade); clicking the same month again, a click anywhere else on the page (the panel
   of the month keeps it), or the ghost "× Whole range" in the panel goes back. The panel has no head of its own (the tiles and the
   chart already give the range and its change): a picked month is named next to "Where the
-  change came from", with "× Whole range". Two columns: a vertical waterfall (Income up from zero in series 1, Spending
-  hanging from its top in series 2, Growth in series 5, Other in text-3, each starting where the
-  one before ended and joined to the next by a dashed line, then Net as a text-2 bar from zero;
-  each bar's value over it, and the values as text for screen readers) and "Accounts that moved most"
-  (five, each with why: "income +4,850.00€ · spending -3,650.00€ · transfers -1,520.00€");
-  "Came in from" (five payees: income is by payee) and "Spent most on" (five categories).
-  One column under 860px. A sync that changes nothing does not redraw the tab.
+  change came from", with "× Whole range", and a quiet "i" next to that title. Under 640px
+  the month goes under the title as a line of its own: its name in the text colour (15px,
+  600) to the left, "× Whole range" to the right. A vertical
+  waterfall (Income up from zero in series 1, Spending hanging from its top in series 2,
+  Growth in series 5, Other in text-3, each starting where the one before ended and joined to
+  the next by a dashed line, then Net as a text-2 bar from zero; each bar's value over it, and
+  the values as text for screen readers). **The waterfall is the menu**: Income, Spending and
+  Growth are clickable bars, and a row of three buttons under the chart (a swatch and the
+  word, the one picked in the accent pill style) does the same with Tab and Enter. One of the
+  three is always picked, Income at first; its bar is outlined in the text colour and the
+  other two fade a little (a month with no bar for the picked term outlines none and fades
+  none). Net and Other are not picked. The term stays picked when another
+  month is. Reached with the keyboard, a button and a row show the app's focus ring, the
+  picked button over its accent colours and the narrowed row next to its accent edge.
+  Under it, two columns (one under 860px):
+  - left, every row of the term (no top five), its share bar in the term's colour, the
+    amount, and "62% · 6 transactions" ("<1%" for a sliver): Income by payee with "into
+    Everyday" (the accounts it arrived in) faint under it; Spending by category; Growth by
+    account, with its return for the range ("+8.9% return") when it is followed, and "value
+    changes" instead of "transactions". A total in the column's head.
+  - right, the transactions behind it, newest first: date, payee, the account faint,
+    `components.amount`. A click on a row narrows them to it (the row highlighted with an
+    accent edge), again or "all" widens them; in one column the page scrolls down to them.
+    Twelve show first, then "Show 50 more" (or the rest) adds the next ones. Picking another
+    term or month starts the list over.
+  A sync that changes nothing does not redraw the tab.
+- **What Income, Spending and Growth mean**: the "i" of the panel opens one wide dialog
+  (980px; one column under 860px), a card per term with its swatch: a sentence of what it
+  is, then what counts (✓, good) and what does not (✕, faint). Income ends with a worked
+  ticket: paid 240 (Spending -240), paid back by work (Income +240), saved 0, so both read
+  higher than what you earned and what it cost. Growth has the one looping animation of the
+  app: a made-up account's worth (series 5 line) against what was put in (dashed text-2),
+  the gap shaded good or bad, a dot at the moving edge, a caption per phase and a live
+  "Growth" figure. Prices rise (4s) · 500 put in, both lines rising together over a second
+  and holding almost 3s with "+500,00€ you put in" on the chart while Growth stays put ·
+  prices fall below what was put in (4s) · they recover (4s), then 1.5s still and again
+  (about 20s a loop). The scale keeps the deposit about the size of the price moves. With
+  `prefers-reduced-motion` the chart is drawn finished and the four captions are a list.
+  Its clicks do not count as clicks outside the month picked.
 - **Movers**: one row per counted account (closed ones that held money in the range too),
   largest change first: name, with a faint line under it saying what the account held at
   the end of the range ("now 47,633.21€", "on 31 Oct: 47,633.21€" for a range that ends
@@ -667,7 +699,11 @@ not a field shows the same 3px ring (`--ring`). Scrollbars are thin and in the t
 - Hover: 150ms; press: scale .98.
 - A page still reading its data shows soft blocks that pulse slowly where the content
   will be, never a blank column.
-- `prefers-reduced-motion`: everything instant.
+- The Growth explainer in Net worth › Months (its "i") loops a small chart of an account's
+  worth against what was put in (about 20s, every phase long enough to read). The only
+  looping animation; approved for that dialog alone.
+- `prefers-reduced-motion`: everything instant; the Growth explainer shows its chart
+  finished and its captions as a list.
 
 ### Charts
 
@@ -754,6 +790,7 @@ repeats them for agents with the build contract and the test routine; keep the t
    or an error is a toast: top center under the bar, 6s, solid card, colour bar per kind.
 10. **Colour carries meaning only**: series colours for series, status colours for status,
     the accent gradient for the one primary action per screen.
-11. **Motion** is the existing set; `prefers-reduced-motion` stays instant.
+11. **Motion** is the existing set (section 4, Motion, the Growth explainer's loop
+    included); `prefers-reduced-motion` stays instant.
 12. **Every palette, light and dark, from the same tokens**; never a literal colour outside
     the token blocks.

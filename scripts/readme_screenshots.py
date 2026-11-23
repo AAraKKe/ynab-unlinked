@@ -2,22 +2,28 @@
 
     uv run --with playwright python scripts/readme_screenshots.py
     uv run --with playwright python scripts/readme_screenshots.py plan cashflow   # only these
+    uv run python scripts/readme_screenshots.py --demo   # just run the app to click around
 
 The app runs on a scratch home (`YUL_HOME` in a temporary folder, no keychain) with a YNAB
 client that answers from the fake budget below, so it never talks to YNAB or touches your
 config. Playwright drives the Chrome installed on this computer and writes the pictures to
-`docs/screenshots/`.
+`docs/screenshots/`. With `--demo` it takes no pictures: it prints the app's link and keeps it
+running until Ctrl+C, then removes the scratch home.
 """
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import json
 import os
 import random
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 import uuid
@@ -199,6 +205,13 @@ def build_ledger(today: dt.date) -> Ledger:
             ledger.add(CHECKING, date, 3_450 if month.year < 2025 else 3_620, "Acme Corp", READY)
         if month.month == 3 and (date := on(month, 26)):
             ledger.add(CHECKING, date, 4_200, "Acme Corp", READY, memo="Bonus")
+        if month.month == 6 and (date := on(month, 20)):
+            ledger.add(CHECKING, date, 615.4, "Tax agency", READY, memo="Tax refund")
+        if month.month % 4 == 1 and (date := on(month, 17)):
+            ledger.add(CHECKING, date, round(rng.uniform(25, 140), 2), "Wallapop", READY)
+        if month.month in (4, 10) and (date := on(month, 27)):
+            # A work trip paid by card and paid back by work: income and spending alike
+            ledger.add(CHECKING, date, 240, "Acme Corp", "Travel", memo="Trip refund")
         if date := on(month, 1):
             ledger.add(MEAL_CARD, date, 160, "Cobee", READY)
         if month.month in (2, 5, 8, 11) and (date := on(month, 15)):
@@ -279,6 +292,8 @@ def build_ledger(today: dt.date) -> Ledger:
                 move = round(shares * rng.gauss(0.01, 0.06), 2)
                 shares += move
                 ledger.add(SHARES, date, move, "Market value")
+        if date := on(month, 28):
+            ledger.add(SAVINGS, date, round(rng.uniform(8, 16), 2), "Balance Adjustment")
         if month.month in (3, 6, 9, 12) and (date := on(month, 28)):
             ledger.add(PENSION, date, round(rng.uniform(600, 1_100), 2), "Balance Adjustment")
     # Imported card rows carry YNAB's import id, as a file import gives them
@@ -505,7 +520,8 @@ def serve(home: Path) -> None:
         "finances": {
             "not_spending": [],
             "goal_category_id": _id("category/Emergency fund"),
-            "returns": {},
+            # The interest of the savings account is what it earned, not income
+            "returns": {SAVINGS.id: True},
         },
         "version": "V4",
     }
@@ -620,10 +636,25 @@ def shoot(only: list[str]) -> None:
         browser.close()
 
 
+def _follow_parent(home: Path) -> None:
+    """Stop the app, and remove its scratch home, once the process that started it is gone:
+    killed, it could not do either."""
+    parent = os.getppid()
+    while os.getppid() == parent:
+        time.sleep(1)
+    shutil.rmtree(home, ignore_errors=True)
+    os._exit(0)
+
+
 def main() -> None:
     if sys.argv[1:2] == ["--serve"]:
-        serve(Path(os.environ["YUL_HOME"]))
+        home = Path(os.environ["YUL_HOME"])
+        threading.Thread(target=_follow_parent, args=(home,), daemon=True).start()
+        serve(home)
         return
+    demo = sys.argv[1:2] == ["--demo"]
+    # Stopped by a signal, it still stops the app and removes the scratch home
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     with tempfile.TemporaryDirectory(prefix="yul-screenshots-") as home:
         env = os.environ | {"YUL_HOME": home, "YUL_NO_KEYCHAIN": "1"}
         server = subprocess.Popen([sys.executable, __file__, "--serve"], env=env)
@@ -636,10 +667,23 @@ def main() -> None:
                     break
                 except OSError:
                     time.sleep(0.2)
-            shoot(sys.argv[1:])
+            if not demo:
+                shoot(sys.argv[1:])
+                return
+            print(f"\nThe demo budget: http://127.0.0.1:{PORT}/?token={TOKEN}")
+            print("Ctrl+C stops it and removes its scratch home.", flush=True)
+            with contextlib.suppress(KeyboardInterrupt):
+                server.wait()
         finally:
+            # A second signal (Ctrl+C reaches both, uv forwards another) must not leave the app
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
             server.terminate()
-            server.wait()
+            try:
+                server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.wait()
 
 
 if __name__ == "__main__":

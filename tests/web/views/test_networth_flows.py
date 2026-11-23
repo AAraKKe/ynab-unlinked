@@ -1,11 +1,12 @@
 import datetime as dt
+import threading
 import uuid
+from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from nicegui.testing.user import User
 from pytest_mock import MockerFixture
 from ynab import (
     AccountsResponse,
@@ -15,12 +16,13 @@ from ynab import (
 )
 
 from tests.factories import AccountFactory, TransactionDetailFactory
+from tests.helpers.web import User, eventually
 from tests.helpers.ynab_api import YnabClientStub
 from tests.web.views.test_networth import serve_note, texts, tooltip
 from ynab_unlinked.buckets import Bucket
 from ynab_unlinked.config import LatestConfig, TrackedAccount
 from ynab_unlinked.config.models.v2 import CurrencyFormat
-from ynab_unlinked.core.finance import AccountMove, Flows, Period
+from ynab_unlinked.core.finance import AccountMove, Flows
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store
 from ynab_unlinked.web import theme
@@ -28,6 +30,8 @@ from ynab_unlinked.web.components.flow_chart import bridge_options, months_optio
 from ynab_unlinked.web.state import AppState
 from ynab_unlinked.web.theme import palette_for
 from ynab_unlinked.web.views.networth import flows
+from ynab_unlinked.web.views.networth.period_panel import ONE_COLUMN, scroll_to_script
+from ynab_unlinked.web.views.networth.periods import PeriodTabs
 from ynab_unlinked.ynab_api import Client
 
 pytestmark = pytest.mark.version("V4")
@@ -128,6 +132,25 @@ def noted(synced: Store, ynab_api: YnabClientStub) -> Store:
     return synced
 
 
+def on(user: User, marker: str) -> bool:
+    return "on" in user.find(marker=marker).elements.copy().pop().classes
+
+
+def outlined(user: User) -> str:
+    """The step of the waterfall drawn as picked."""
+    options = user.find(marker="bridge").elements.copy().pop().options
+    names = options["xAxis"]["data"]
+    data = options["series"][0]["data"]
+    (picked,) = [n for n, p in zip(names, data, strict=True) if p["itemStyle"].get("borderWidth")]
+    return picked
+
+
+async def heads(user: User, text: str) -> None:
+    """Wait for the transactions to be headed by exactly `text`: `should_see` looks for a part,
+    and "1 transaction" is one of "31 transactions"."""
+    await eventually(lambda: texts(user, "tx-head") == text)
+
+
 async def open_months(user: User) -> None:
     await user.open("/networth?tab=months")
     await user.should_see(marker="period-panel", retries=20)
@@ -171,11 +194,227 @@ async def test_the_panel_shows_the_whole_range_until_a_month_is_picked(
     assert texts(user, "step-income") == "+3,000.00€"
     assert texts(user, "step-spending") == "-900.00€"
     assert texts(user, "step-net") == "+1,700.00€"
-    assert "growth -400.00€" in texts(user, f"moved-{FUND}")
-    assert texts(user, f"moved-{OLD}").startswith("💰 Old savings closed")
-    assert texts(user, "came-in") == "Employer 3,000.00€"
     await user.should_not_see(marker="period-clear")
     await user.should_not_see(marker="period-title")
+
+
+async def test_the_panel_lists_income_by_payee_until_another_bar_is_picked(
+    synced: Store, no_sync, user: User
+):
+    await open_months(user)
+
+    assert on(user, "term-income")
+    assert texts(user, "breakdown-row-0").split() == [
+        "Employer",
+        "into",
+        "💶",
+        "Checking",
+        "+3,000.00€",
+        "100%",
+        "·",
+        "1",
+        "transaction",
+    ]
+    assert texts(user, "tx-head") == "1 transaction"
+    assert texts(user, "tx-row").split()[-4:] == ["Employer", "💶", "Checking", "+3,000.00€"]
+    assert outlined(user) == "Income"
+
+    user.find(marker="term-assets").click()
+
+    await heads(user, "1 value change")
+    assert on(user, "term-assets") and not on(user, "term-income")
+    fund = texts(user, "breakdown-row-0").split()
+    assert fund[:2] == ["📈", "Fund"] and fund[3:5] == ["return", "-400.00€"]
+    assert fund[-3:] == ["1", "value", "change"]
+    assert outlined(user) == "Growth"
+
+
+async def test_a_click_on_a_bar_of_the_waterfall_picks_it(synced: Store, no_sync, user: User):
+    await open_months(user)
+    chart = user.find(marker="bridge")
+    names = chart.elements.copy().pop().options["xAxis"]["data"]
+
+    chart.trigger("componentClick", {"componentType": "series", "dataIndex": names.index("Net")})
+    chart.trigger(
+        "componentClick", {"componentType": "series", "dataIndex": names.index("Spending")}
+    )
+
+    await user.should_see("Landlord", marker="tx-row")
+    assert on(user, "term-spending")
+    assert texts(user, "breakdown-total") == "-900.00€"
+
+
+@pytest.fixture
+def busy(synced: Store, ynab_api: YnabClientStub) -> Store:
+    """`synced` with thirty days of groceries on top of the rent."""
+    transactions = ynab_api.api("transactions").get_transactions.return_value.data.transactions
+    transactions += [
+        TransactionDetailFactory(
+            id=f"g{n}",
+            account_id=uuid.UUID(CHECKING),
+            var_date=ago(n),
+            amount=-50_000,
+            payee_name="Market",
+            category_id=uuid.UUID(int=300),
+            category_name="Groceries",
+        )
+        for n in range(1, 31)
+    ]
+    synced.sync(Client("api-key"), BUDGET_ID)
+    return synced
+
+
+async def test_a_row_narrows_the_transactions_and_a_long_list_shows_more(
+    busy: Store, no_sync, user: User
+):
+    await open_months(user)
+    user.find(marker="term-spending").click()
+    await heads(user, "31 transactions")
+    assert len(user.find(marker="tx-row").elements) == flows.PAGE
+    assert texts(user, "breakdown-row-0").startswith("Groceries -1,500.00€")
+
+    user.find(marker="tx-more").click()
+
+    await user.should_not_see(marker="tx-more")
+    assert len(user.find(marker="tx-row").elements) == 31
+
+    user.find(marker="breakdown-row-0").click()
+
+    await heads(user, "30 transactions")
+    assert on(user, "breakdown-row-0")
+    # In one column the list is under every row: the page is taken down to it
+    box = user.find(marker="transactions").elements.pop()
+    await eventually(lambda: scroll_to_script(box.id) in user.scripts)
+    # Narrowing starts the list over
+    assert len(user.find(marker="tx-row").elements) == flows.PAGE
+    assert texts(user, "tx-more") == f"Show {30 - flows.PAGE} more"
+
+    user.find(marker="tx-all").click()
+
+    await heads(user, "31 transactions")
+    assert not on(user, "breakdown-row-0")
+    user.find(marker="breakdown-row-1").click()
+    await heads(user, "1 transaction")
+    user.find(marker="breakdown-row-1").click()
+    await heads(user, "31 transactions")
+
+
+async def test_a_month_picked_keeps_the_term_and_lists_its_own_transactions(
+    busy: Store, no_sync, user: User
+):
+    await open_months(user)
+    user.find(marker="term-spending").click()
+    await heads(user, "31 transactions")
+    user.find(marker="breakdown-row-0").click()
+    await heads(user, "30 transactions")
+    chart = user.find(marker="months-chart")
+    keys = chart.elements.copy().pop().options["xAxis"]["data"]
+    month = ago(1).strftime("%Y-%m")
+    # The groceries of that month and, when it falls in it, the rent
+    in_month = sum(1 for days in [*range(1, 31), 18] if ago(days).strftime("%Y-%m") == month)
+
+    chart.trigger("componentClick", {"componentType": "series", "dataIndex": keys.index(month)})
+
+    await user.should_see(marker="period-clear")
+    await heads(user, flows.count_text("spending", in_month))
+    assert on(user, "term-spending")
+    await user.should_not_see(marker="tx-all")
+
+
+class SlowMonth:
+    """Holds the read of one month until `release()`, and notes each pick that has finished."""
+
+    def __init__(self, mocker: MockerFixture) -> None:
+        self.gate = threading.Event()
+        self.held: dt.date | None = None
+        self.finished: list[int] = []
+        read, pick = flows.load_period, PeriodTabs.pick
+
+        def load(store, config, snapshot, start: dt.date, end: dt.date):
+            if (start, end) == flows.month_bounds(start, dt.date.today()) and start == self.held:
+                self.gate.wait()
+            return read(store, config, snapshot, start, end)
+
+        async def tracked(tabs: PeriodTabs, index: int) -> None:
+            await pick(tabs, index)
+            self.finished.append(index)
+
+        mocker.patch.object(flows, "load_period", load)
+        mocker.patch.object(PeriodTabs, "pick", tracked)
+
+    def release(self) -> None:
+        self.gate.set()
+
+
+@pytest.fixture
+def slow_month(mocker: MockerFixture) -> Iterator[SlowMonth]:
+    slow = SlowMonth(mocker)
+    yield slow
+    slow.release()
+
+
+def month_keys(user: User) -> list[str]:
+    return user.find(marker="months-chart").elements.copy().pop().options["xAxis"]["data"]
+
+
+def click_month(user: User, index: int) -> None:
+    user.find(marker="months-chart").trigger(
+        "componentClick", {"componentType": "series", "dataIndex": index}
+    )
+
+
+async def test_a_month_that_takes_long_to_read_does_not_replace_the_one_picked_after_it(
+    synced: Store, no_sync, slow_month: SlowMonth, user: User
+):
+    await open_months(user)
+    first, second = (dt.date.fromisoformat(f"{key}-01") for key in month_keys(user)[:2])
+    slow_month.held = first
+
+    click_month(user, 0)
+    click_month(user, 1)
+    await eventually(lambda: slow_month.finished == [1])
+    assert texts(user, "period-title") == second.strftime("%B %Y")
+
+    slow_month.release()
+
+    await eventually(lambda: slow_month.finished == [1, 0])
+    assert texts(user, "period-title") == second.strftime("%B %Y")
+
+
+async def test_a_month_read_while_the_range_changes_is_not_shown_in_the_new_range(
+    synced: Store, no_sync, slow_month: SlowMonth, user: User
+):
+    await open_months(user)
+    shown = month_keys(user)
+    slow_month.held = dt.date.fromisoformat(f"{shown[0]}-01")
+
+    click_month(user, 0)
+    user.find(marker="range-1Y").click()
+    await eventually(lambda: len(month_keys(user)) > len(shown))
+
+    slow_month.release()
+
+    await eventually(lambda: slow_month.finished == [0])
+    await user.should_not_see(marker="period-clear")
+    await user.should_not_see(marker="period-title")
+
+
+async def test_the_i_of_the_waterfall_says_what_the_three_words_mean(
+    synced: Store, no_sync, user: User
+):
+    await open_months(user)
+
+    user.find(marker="terms-info").click()
+
+    await user.should_see(marker="terms-dialog")
+    assert texts(user, "term-meaning-income").startswith(
+        "Income Money that arrived in your budget accounts from someone else"
+    )
+    assert "-240.00€" in texts(user, "refund-example")
+    await user.should_see(marker="growth-story")
+    assert len(user.find(marker="growth-steps").elements.pop().default_slot.children) == 4
+    user.find(marker="terms-done").click()
+    await user.should_not_see(marker="terms-dialog")
 
 
 async def test_clicking_a_month_shows_it_and_clicking_it_again_shows_the_range(
@@ -337,6 +576,13 @@ async def test_tabs_switch_without_leaving_the_page(synced: Store, no_sync, user
     await user.should_see(marker="nw-figure", retries=20)
 
 
+def test_the_scroll_to_the_transactions_only_happens_in_one_column():
+    script = scroll_to_script(7)
+
+    assert script.startswith(f"if (innerWidth <= {ONE_COLUMN}) getHtmlElement(7)?.scrollIntoView(")
+    assert "prefers-reduced-motion" in script
+
+
 @pytest.mark.parametrize(
     ("current", "clicked", "expected"),
     [(None, 3, 3), (3, 5, 5), (3, 3, None), (3, None, None)],
@@ -407,16 +653,6 @@ def test_a_return_over_part_of_the_range_is_marked_and_says_how_much():
     assert flows.rate_text(replace(move, rate=0.21, rate_days=730), 1_000) == "+10.0%/yr*"
 
 
-def test_the_drawer_lists_only_accounts_that_moved():
-    still = AccountMove("still", 10, 10, Flows(), None)
-    moved = AccountMove("moved", 10, 30, Flows(income=20), None)
-    period = Period(
-        dt.date(2026, 4, 1), dt.date(2026, 4, 30), Flows(income=20), 20, 40, (), (moved, still)
-    )
-
-    assert flows.moved(period) == [moved]
-
-
 def test_only_the_two_ends_of_a_month_bar_are_rounded():
     months = [
         (dt.date(2026, 4, 1), Flows(income=3_000, spending=-1_000, assets=500)),
@@ -449,12 +685,48 @@ def test_the_waterfall_starts_each_step_where_the_last_one_ended_and_the_net_at_
         FORMATTER.currency_format,
     )
 
-    assert [point["value"][1:] for point in options["series"][0]["data"]] == [
+    assert [point["value"][1:3] for point in options["series"][0]["data"]] == [
         [0, 3_000],
         [3_000, 2_000],
         [2_000, 1_600],
         [0, 1_600],
     ]
+
+
+@pytest.mark.parametrize(
+    ("picked", "styles"),
+    [
+        ("spending", {"Spending": "outlined", "Growth": "faded", "Net": "plain"}),
+        # A month with no income has no Income bar: nothing stands out, so nothing steps back
+        ("income", {"Spending": "plain", "Growth": "plain", "Net": "plain"}),
+        (None, {"Spending": "plain", "Growth": "plain", "Net": "plain"}),
+    ],
+    ids=["a bar is picked", "the picked term has no bar", "nothing picked"],
+)
+def test_the_other_bars_of_the_waterfall_fade_only_next_to_the_picked_one(picked, styles):
+    steps = [
+        (step.label, step.amount, step.kind)
+        for step in flows.bridge(Flows(spending=-1_000_000, assets=-400_000))
+    ]
+
+    options = bridge_options(
+        steps,
+        ["a", "b", "c"],
+        palette_for(theme.DEFAULT_THEME, True),
+        FORMATTER.currency_format,
+        picked,
+    )
+
+    def look(style: dict) -> str:
+        if style.get("borderWidth"):
+            return "outlined"
+        return "faded" if "opacity" in style else "plain"
+
+    drawn = {
+        label: look(point["itemStyle"])
+        for (label, _, _), point in zip(steps, options["series"][0]["data"], strict=True)
+    }
+    assert drawn == styles
 
 
 def test_spending_larger_than_income_takes_the_waterfall_below_zero():
@@ -470,7 +742,7 @@ def test_spending_larger_than_income_takes_the_waterfall_below_zero():
         FORMATTER.currency_format,
     )
 
-    assert [point["value"][1:] for point in options["series"][0]["data"]] == [
+    assert [point["value"][1:3] for point in options["series"][0]["data"]] == [
         [0, 4_600],
         [4_600, -6_500],
         [-6_500, -6_300],

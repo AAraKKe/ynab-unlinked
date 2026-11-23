@@ -15,7 +15,9 @@ from ynab_unlinked.config import LatestConfig
 from ynab_unlinked.core.finance import (
     DAYS_IN_YEAR,
     AccountMove,
+    Breakdown,
     Flows,
+    Group,
     Period,
     Rules,
     annualised,
@@ -23,17 +25,15 @@ from ynab_unlinked.core.finance import (
 from ynab_unlinked.core.finance import period as read_period
 from ynab_unlinked.formatter import Formatter
 from ynab_unlinked.store import Store
+from ynab_unlinked.text import name_list, plural
 from ynab_unlinked.web import finances
 from ynab_unlinked.web.finances import RANGE_MONTHS, months_range, period_title
-from ynab_unlinked.web.views.networth.data import Snapshot, signed
+from ynab_unlinked.web.views.networth.data import Snapshot
 from ynab_unlinked.web.wording import short_date
 
 TABS = {"overview": "Overview", "months": "Months", "movers": "Movers"}
 
 __all__ = ["RANGE_MONTHS", "months_range", "period_title"]
-
-TOP_ACCOUNTS = 5
-TOP_CATEGORIES = 5
 
 
 def rules(snapshot: Snapshot, config: LatestConfig) -> Rules:
@@ -57,7 +57,7 @@ def load_period(
 
 @dataclass(frozen=True)
 class Step:
-    """One bar of the drawer's bridge: what took net worth from the start to the end."""
+    """One bar of the panel's waterfall: what took net worth from the start to the end."""
 
     label: str
     amount: int
@@ -77,26 +77,6 @@ def bridge(flows: Flows) -> list[Step]:
         Step("Other", flows.other + flows.transfers, "other"),
     ]
     return [step for step in steps if step.amount] + [Step("Net", flows.change, "net")]
-
-
-def why(move: AccountMove, formatter: Formatter) -> str:
-    """What moved one account: `income +4,850 · spending −3,650 · transfers −1,520`."""
-    flows = move.flows
-    parts = [
-        ("income", flows.income),
-        ("spending", flows.spending),
-        ("set aside", flows.set_aside),
-        ("transfers", flows.transfers),
-        ("growth", flows.assets),
-        ("from outside", flows.outside),
-    ]
-    text = " · ".join(f"{label} {signed(formatter, amount)}" for label, amount in parts if amount)
-    return text or "no change"
-
-
-def moved(period: Period, limit: int = TOP_ACCOUNTS) -> list[AccountMove]:
-    """The accounts that moved most, either way; the ones that did not move are left out."""
-    return [move for move in period.accounts if move.change or move.flows.transfers][:limit]
 
 
 CHANGE_SUM = "Change = Your money + Growth"
@@ -256,3 +236,70 @@ def share_of_change(part: int, flows: Flows) -> str | None:
 def spread(moves: Sequence[AccountMove]) -> int:
     """The largest change of `moves`, either way: the full width of their bars."""
     return max((abs(move.change) for move in moves), default=0)
+
+
+# ---------------------------------------------------------------------------------------------
+# The breakdown under the waterfall: one of Income, Spending and Growth, row by row
+
+TERMS = {"income": "Income", "spending": "Spending", "assets": "Growth"}
+"""The bars of the waterfall that pick what the panel lists, by their `Flows` name."""
+DEFAULT_TERM = "income"
+BY = {"income": "By payee", "spending": "By category", "assets": "By account"}
+PAGE = 12
+"""Transactions shown before "Show N more"."""
+MORE = 50
+"""Transactions each "Show N more" adds."""
+
+
+def count_text(kind: str, count: int) -> str:
+    """`3 transactions`; Growth's lines are not purchases: `3 value changes`."""
+    return plural(count, "value change" if kind == "assets" else "transaction")
+
+
+def share(group: Group, breakdown: Breakdown) -> float:
+    """The part of the breakdown a row is, either way: Growth's rows can point both ways."""
+    whole = sum(abs(other.amount) for other in breakdown.groups)
+    return abs(group.amount) / whole if whole else 0.0
+
+
+def row_caption(kind: str, group: Group, breakdown: Breakdown) -> str:
+    """`62% · 6 transactions`; a row too small to round to 1% says `<1%`, not `0%`."""
+    part = share(group, breakdown) * 100
+    percent = "<1%" if 0 < part < 0.5 else f"{part:.0f}%"
+    return f"{percent} · {count_text(kind, group.count)}"
+
+
+def row_name(kind: str, group: Group, names: dict[str, str]) -> str:
+    """The row's title: Growth's rows are accounts, named here."""
+    return names.get(group.key, "Account") if kind == "assets" else group.name
+
+
+def row_subtitle(
+    kind: str, group: Group, names: dict[str, str], moves: dict[str, AccountMove], days: int
+) -> str | None:
+    """Income: the accounts it arrived in (`into Checking`). Growth: the account's return over
+    the period, when it is followed (`+7.4% return`)."""
+    if kind == "income":
+        return "into " + name_list([names.get(account, "Account") for account in group.accounts])
+    if kind == "assets" and (move := moves.get(group.key)) is not None and move.rate is not None:
+        return f"{rate_text(move, days)} return"
+    return None
+
+
+def list_head(kind: str, breakdown: Breakdown, key: str | None) -> str:
+    """Over the transactions: `42 transactions`, or the narrowed row's count."""
+    count = len(breakdown.entries_of(key))
+    return count_text(kind, count)
+
+
+def more_count(shown: int, total: int) -> int:
+    """How many the next "Show N more" adds."""
+    return max(0, min(MORE, total - shown))
+
+
+def empty_text(kind: str) -> str:
+    return {
+        "income": "No income in this period.",
+        "spending": "No spending in this period.",
+        "assets": "No account gained or lost value on its own in this period.",
+    }[kind]

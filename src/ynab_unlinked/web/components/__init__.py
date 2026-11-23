@@ -301,7 +301,7 @@ def count_up(label: ui.label, milliunits: int, currency_format: CurrencyFormat) 
         f"const money = {money_js(currency_format)};"
         "let tries = 0;"
         "const start = () => {"
-        f"  const el = document.getElementById('c{label.id}');"
+        f"  const el = getHtmlElement({label.id});"
         "  if (!el) { if (tries++ < 40) setTimeout(start, 25); return; }"
         "  const final = el.textContent; const t0 = performance.now();"
         "  const tick = (t) => {"

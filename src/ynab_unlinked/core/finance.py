@@ -104,7 +104,7 @@ class CategorySpend:
     category_id: str | None
     name: str
     amount: int
-    """Spent in the period: negative, or positive when refunds outweigh it."""
+    """Spent in the period, always negative: a refund is income and does not lower it."""
 
 
 @dataclass(frozen=True)
@@ -151,14 +151,16 @@ class Period:
     """Every calendar month the period touches, by its first day, oldest first."""
     accounts: tuple[AccountMove, ...] = field(default=())
     """Largest change first, either way."""
-    spending: tuple[CategorySpend, ...] = field(default=())
-    """By category, most spent first."""
-    income: tuple[PayeeIncome, ...] = field(default=())
-    """By payee, most first."""
+    breakdowns: tuple[Breakdown, ...] = field(default=())
+    """Income, spending and assets, row by row and line by line (`breakdowns`)."""
 
     @property
     def days(self) -> int:
         return (self.end - self.start).days + 1
+
+    def breakdown(self, kind: str) -> Breakdown:
+        """The breakdown of `kind` (`income`, `spending` or `assets`); empty when it has none."""
+        return next((b for b in self.breakdowns if b.kind == kind), Breakdown(kind, (), ()))
 
 
 def month_start(day: dt.date) -> dt.date:
@@ -234,6 +236,128 @@ def income_by_payee(lines: Iterable[Line], rules: Rules) -> list[PayeeIncome]:
         (PayeeIncome(name, amount) for name, amount in amounts.items()),
         key=lambda income: (-income.amount, income.name),
     )
+
+
+BREAKDOWN_KINDS = ("income", "spending", "assets")
+"""The kinds a breakdown lists, as `Flows` names them."""
+
+
+@dataclass(frozen=True)
+class Entry:
+    """One line behind a breakdown, as a list of transactions shows it."""
+
+    transaction_id: str
+    date: dt.date
+    payee: str
+    account_id: str
+    amount: int
+    category: str | None
+    group: str
+    """The key of the `Group` it adds to."""
+
+
+@dataclass(frozen=True)
+class Group:
+    """One row of a breakdown: a payee (income), a category (spending) or an account (assets)."""
+
+    key: str
+    """The payee's name, the category's id (`""` for none) or the account's id."""
+    name: str
+    """The payee, the category as it is named now; for assets the account's id, which the
+    caller names."""
+    amount: int
+    count: int
+    """How many lines add up to `amount`."""
+    accounts: tuple[str, ...]
+    """The accounts its lines are in, most money first."""
+
+
+@dataclass(frozen=True)
+class Breakdown:
+    """Every line of one kind of a period, grouped. The groups and the lines add up to the
+    `Flows` field of the same name exactly."""
+
+    kind: str
+    groups: tuple[Group, ...]
+    """Income most first, spending most spent first, assets largest either way first."""
+    entries: tuple[Entry, ...]
+    """Newest first."""
+
+    @property
+    def total(self) -> int:
+        return sum(group.amount for group in self.groups)
+
+    def entries_of(self, key: str | None) -> list[Entry]:
+        """The lines of one group, or of all of them when `key` is None."""
+        return [e for e in self.entries if key is None or e.group == key]
+
+
+def _group_key(kind: str, line: Line) -> str:
+    if kind == "income":
+        return line.payee_name or "No payee"
+    if kind == "spending":
+        return line.category_id or ""
+    return line.account_id
+
+
+def breakdowns(
+    lines: Iterable[Line], rules: Rules, names: Mapping[str, str] | None = None
+) -> tuple[Breakdown, ...]:
+    """Income by payee, spending by category and assets by account, with the lines behind
+    each row. `names` (category id to name) wins over a line's category name.
+
+    Each line goes where `Rules.kind` puts it, so every breakdown adds up to its `Flows` field.
+    Lines of no amount are left out: they move nothing.
+    """
+    names = names or {}
+    found: dict[str, list[Entry]] = {kind: [] for kind in BREAKDOWN_KINDS}
+    titles: dict[str, str] = {}
+    for line in lines:
+        kind = rules.kind(line)
+        if kind not in found or not line.amount:
+            continue
+        key = _group_key(kind, line)
+        if kind == "spending":
+            titles.setdefault(key, names.get(key, line.category_name or "Uncategorized"))
+        found[kind].append(
+            Entry(
+                line.transaction_id,
+                line.date,
+                line.payee_name or "No payee",
+                line.account_id,
+                line.amount,
+                line.category_name,
+                key,
+            )
+        )
+    order = {
+        "income": lambda group: (-group.amount, group.name),
+        "spending": lambda group: (group.amount, group.name),
+        "assets": lambda group: (-abs(group.amount), group.name),
+    }
+    result: list[Breakdown] = []
+    for kind, entries in found.items():
+        by_key: dict[str, list[Entry]] = {}
+        for entry in entries:
+            by_key.setdefault(entry.group, []).append(entry)
+        groups: list[Group] = []
+        for key, members in by_key.items():
+            into: dict[str, int] = {}
+            for entry in members:
+                into[entry.account_id] = into.get(entry.account_id, 0) + abs(entry.amount)
+            groups.append(
+                Group(
+                    key,
+                    titles.get(key, key),
+                    sum(entry.amount for entry in members),
+                    len(members),
+                    tuple(sorted(into, key=lambda account: (-into[account], account))),
+                )
+            )
+        groups.sort(key=order[kind])
+        newest = sorted(entries, key=lambda entry: entry.date, reverse=True)
+        result.append(Breakdown(kind, tuple(groups), tuple(newest)))
+    return tuple(result)
 
 
 @dataclass(frozen=True)
@@ -367,6 +491,5 @@ def period(
         end_worth=sum(move.end_balance for move in moves),
         months=months,
         accounts=tuple(moves),
-        spending=tuple(spending_by_category(lines, rules, names)),
-        income=tuple(income_by_payee(lines, rules)),
+        breakdowns=breakdowns(lines, rules, names),
     )
