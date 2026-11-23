@@ -35,6 +35,15 @@ ONE_COLUMN = 860
 """The width under which the breakdown and its transactions are one column (`yul.css`)."""
 
 
+def scroll_to_script(element_id: int) -> str:
+    """The script that brings an element to the top of the page where the panel is one column."""
+    return (
+        f"if (innerWidth <= {ONE_COLUMN}) getHtmlElement({element_id})"
+        "?.scrollIntoView({block: 'start', behavior:"
+        " matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'})"
+    )
+
+
 class PeriodPanel:
     """The panel of one period. The term picked outlives it (the caller keeps it across months);
     the row narrowing the transactions and how many are shown do not."""
@@ -73,7 +82,7 @@ class PeriodPanel:
                     explain_button(terms.TERMS_TITLE, self.explain, marker="terms-info")
                 if self.selected:
                     ui.label(words.period_title(self.period.start, self.period.end)).classes(
-                        "yul-small"
+                        "yul-small yul-nwp-month"
                     ).mark("period-title")
                     button(
                         "Whole range",
@@ -162,11 +171,9 @@ class PeriodPanel:
         self.shown = words.PAGE
         self._draw_below()
         if self.key is not None and self.list_box is not None:
-            ui.run_javascript(
-                f"if (innerWidth <= {ONE_COLUMN}) getHtmlElement({self.list_box.id})"
-                "?.scrollIntoView({block: 'start', behavior:"
-                " matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'})"
-            )
+            # Sent from the new list: the row clicked, whose context this runs in, is gone
+            with self.list_box:
+                ui.run_javascript(scroll_to_script(self.list_box.id))
 
     def more(self) -> None:
         breakdown = self.period.breakdown(self.term)

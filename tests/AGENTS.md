@@ -48,6 +48,15 @@ fixes. What keeps the suite that way:
   (`tests.helpers.web.User`). NiceGUI's own `User` drops the marker and finds the text
   anywhere on the page, a toast included, so the check returned too early or passed for
   the wrong reason. A text with `kind=` or `content=` is refused.
+  The text is looked for as a part: "1 transaction" is in "31 transactions". Where one
+  text can hold the other, wait for the whole text, `eventually(lambda: texts(user,
+  "tx-head") == "1 transaction")`.
+- **A handler that raises fails the test.** NiceGUI logs what a click handler, a timer or
+  a background task raises and carries on, so the page can look right while the handler
+  died half way. `user` and `guest` keep those exceptions in `user.raised` and fail the
+  test that leaves one there; a test about such a failure asserts on `user.raised` and
+  clears it. What a handler sends to the browser besides the page (`ui.run_javascript`) is
+  in `user.scripts`: assert on it, a script that was never sent leaves nothing on screen.
 - **No real time, no real machine.** Dates come from `today`, intervals are module
   constants a test patches down, and the autouse fixtures keep every test off the real
   config, keychain, PyPI and disk (`yul_home`, `no_keychain`, `no_newer_yul`,

@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from nicegui.testing.user import User
 from pytest_mock import MockerFixture
 from ynab import (
     AccountsResponse,
@@ -15,6 +14,7 @@ from ynab import (
 )
 
 from tests.factories import AccountFactory, TransactionDetailFactory
+from tests.helpers.web import User, eventually
 from tests.helpers.ynab_api import YnabClientStub
 from tests.web.views.test_networth import serve_note, texts, tooltip
 from ynab_unlinked.buckets import Bucket
@@ -28,6 +28,7 @@ from ynab_unlinked.web.components.flow_chart import bridge_options, months_optio
 from ynab_unlinked.web.state import AppState
 from ynab_unlinked.web.theme import palette_for
 from ynab_unlinked.web.views.networth import flows
+from ynab_unlinked.web.views.networth.period_panel import ONE_COLUMN, scroll_to_script
 from ynab_unlinked.ynab_api import Client
 
 pytestmark = pytest.mark.version("V4")
@@ -141,6 +142,12 @@ def outlined(user: User) -> str:
     return picked
 
 
+async def heads(user: User, text: str) -> None:
+    """Wait for the transactions to be headed by exactly `text`: `should_see` looks for a part,
+    and "1 transaction" is one of "31 transactions"."""
+    await eventually(lambda: texts(user, "tx-head") == text)
+
+
 async def open_months(user: User) -> None:
     await user.open("/networth?tab=months")
     await user.should_see(marker="period-panel", retries=20)
@@ -211,7 +218,7 @@ async def test_the_panel_lists_income_by_payee_until_another_bar_is_picked(
 
     user.find(marker="term-assets").click()
 
-    await user.should_see("1 value change", marker="tx-head")
+    await heads(user, "1 value change")
     assert on(user, "term-assets") and not on(user, "term-income")
     fund = texts(user, "breakdown-row-0").split()
     assert fund[:2] == ["📈", "Fund"] and fund[3:5] == ["return", "-400.00€"]
@@ -259,7 +266,7 @@ async def test_a_row_narrows_the_transactions_and_a_long_list_shows_more(
 ):
     await open_months(user)
     user.find(marker="term-spending").click()
-    await user.should_see("31 transactions", marker="tx-head")
+    await heads(user, "31 transactions")
     assert len(user.find(marker="tx-row").elements) == flows.PAGE
     assert texts(user, "breakdown-row-0").startswith("Groceries -1,500.00€")
 
@@ -270,20 +277,23 @@ async def test_a_row_narrows_the_transactions_and_a_long_list_shows_more(
 
     user.find(marker="breakdown-row-0").click()
 
-    await user.should_see("30 transactions", marker="tx-head")
+    await heads(user, "30 transactions")
     assert on(user, "breakdown-row-0")
+    # In one column the list is under every row: the page is taken down to it
+    box = user.find(marker="transactions").elements.pop()
+    await eventually(lambda: scroll_to_script(box.id) in user.scripts)
     # Narrowing starts the list over
     assert len(user.find(marker="tx-row").elements) == flows.PAGE
     assert texts(user, "tx-more") == f"Show {30 - flows.PAGE} more"
 
     user.find(marker="tx-all").click()
 
-    await user.should_see("31 transactions", marker="tx-head")
+    await heads(user, "31 transactions")
     assert not on(user, "breakdown-row-0")
     user.find(marker="breakdown-row-1").click()
-    await user.should_see("1 transaction", marker="tx-head")
+    await heads(user, "1 transaction")
     user.find(marker="breakdown-row-1").click()
-    await user.should_see("31 transactions", marker="tx-head")
+    await heads(user, "31 transactions")
 
 
 async def test_a_month_picked_keeps_the_term_and_lists_its_own_transactions(
@@ -291,9 +301,9 @@ async def test_a_month_picked_keeps_the_term_and_lists_its_own_transactions(
 ):
     await open_months(user)
     user.find(marker="term-spending").click()
-    await user.should_see("31 transactions", marker="tx-head")
+    await heads(user, "31 transactions")
     user.find(marker="breakdown-row-0").click()
-    await user.should_see("30 transactions", marker="tx-head")
+    await heads(user, "30 transactions")
     chart = user.find(marker="months-chart")
     keys = chart.elements.copy().pop().options["xAxis"]["data"]
     month = ago(1).strftime("%Y-%m")
@@ -303,7 +313,7 @@ async def test_a_month_picked_keeps_the_term_and_lists_its_own_transactions(
     chart.trigger("componentClick", {"componentType": "series", "dataIndex": keys.index(month)})
 
     await user.should_see(marker="period-clear")
-    await user.should_see(flows.count_text("spending", in_month), marker="tx-head")
+    await heads(user, flows.count_text("spending", in_month))
     assert on(user, "term-spending")
     await user.should_not_see(marker="tx-all")
 
@@ -483,6 +493,13 @@ async def test_tabs_switch_without_leaving_the_page(synced: Store, no_sync, user
     await user.should_see(marker="movers", retries=20)
     user.find(marker="nw-tab-overview").click()
     await user.should_see(marker="nw-figure", retries=20)
+
+
+def test_the_scroll_to_the_transactions_only_happens_in_one_column():
+    script = scroll_to_script(7)
+
+    assert script.startswith(f"if (innerWidth <= {ONE_COLUMN}) getHtmlElement(7)?.scrollIntoView(")
+    assert "prefers-reduced-motion" in script
 
 
 @pytest.mark.parametrize(
