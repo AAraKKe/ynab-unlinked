@@ -305,8 +305,10 @@ def bridge_options(
 
     Each step but the last starts where the one before it ended; the net starts at zero.
     `labels` are the values written over the bars. The `selected` step is outlined and the
-    other steps a click picks are faded a little.
+    other steps a click picks are faded a little; with no bar for it (a month with no
+    income) nothing is outlined, so nothing is faded either.
     """
+    drawn = any(kind == selected for _, _, kind in steps)
     data: list[dict[str, Any]] = []
     running = 0
     for index, (_, amount, kind) in enumerate(steps):
@@ -314,9 +316,9 @@ def bridge_options(
         end = amount if kind == "net" else running + amount
         running = end if kind != "net" else running
         style: dict[str, Any] = {"color": step_colour(kind, palette)}
-        if selected is not None and kind == selected:
+        if kind == selected:
             style |= {"borderColor": palette.text, "borderWidth": 2}
-        elif selected is not None and kind in PICKABLE:
+        elif drawn and kind in PICKABLE:
             style["opacity"] = 0.55
         pickable = 1 if kind in PICKABLE else 0
         data.append({"value": [index, start / 1000, end / 1000, pickable], "itemStyle": style})

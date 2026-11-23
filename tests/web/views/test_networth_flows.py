@@ -612,6 +612,42 @@ def test_the_waterfall_starts_each_step_where_the_last_one_ended_and_the_net_at_
     ]
 
 
+@pytest.mark.parametrize(
+    ("picked", "styles"),
+    [
+        ("spending", {"Spending": "outlined", "Growth": "faded", "Net": "plain"}),
+        # A month with no income has no Income bar: nothing stands out, so nothing steps back
+        ("income", {"Spending": "plain", "Growth": "plain", "Net": "plain"}),
+        (None, {"Spending": "plain", "Growth": "plain", "Net": "plain"}),
+    ],
+    ids=["a bar is picked", "the picked term has no bar", "nothing picked"],
+)
+def test_the_other_bars_of_the_waterfall_fade_only_next_to_the_picked_one(picked, styles):
+    steps = [
+        (step.label, step.amount, step.kind)
+        for step in flows.bridge(Flows(spending=-1_000_000, assets=-400_000))
+    ]
+
+    options = bridge_options(
+        steps,
+        ["a", "b", "c"],
+        palette_for(theme.DEFAULT_THEME, True),
+        FORMATTER.currency_format,
+        picked,
+    )
+
+    def look(style: dict) -> str:
+        if style.get("borderWidth"):
+            return "outlined"
+        return "faded" if "opacity" in style else "plain"
+
+    drawn = {
+        label: look(point["itemStyle"])
+        for (label, _, _), point in zip(steps, options["series"][0]["data"], strict=True)
+    }
+    assert drawn == styles
+
+
 def test_spending_larger_than_income_takes_the_waterfall_below_zero():
     steps = [
         (step.label, step.amount, step.kind)
